@@ -722,11 +722,11 @@ namespace Microsoft.Unity.VisualStudio.Editor
 
 			// Add DotRush configuration if installed and not already present
 			if (DotRushExtensionState.IsInstalled && 
-			    !configurations.Linq.Any(entry => entry.Value[typeKey].Value == "dotrush"))
+			    !configurations.Linq.Any(entry => entry.Value[typeKey].Value == "unity"))
 			{
 				var dotRushConfig = new JSONObject();
 				dotRushConfig.Add(nameKey, "Attach to Unity with DotRush");
-				dotRushConfig.Add(typeKey, "dotrush");
+				dotRushConfig.Add(typeKey, "unity");
 				dotRushConfig.Add(requestKey, "attach");
 				configurations.Add(dotRushConfig);
 				patched = true;
@@ -874,7 +874,7 @@ namespace Microsoft.Unity.VisualStudio.Editor
 			const string nestingEnabledKey = "explorer.fileNesting.enabled";
 			const string nestingPatternsKey = "explorer.fileNesting.patterns";
 			const string solutionKey = "dotnet.defaultSolution";
-			
+
 			var patched = false;
 
 			// Add default files.exclude settings
@@ -892,10 +892,13 @@ namespace Microsoft.Unity.VisualStudio.Editor
 				"**/.DS_Store", "**/.git", "**/.vs", "**/.gitmodules", "**/.vsconfig",
 				"**/*.booproj", "**/*.pidb", "**/*.suo", "**/*.user", "**/*.userprefs", "**/*.unityproj",
 				"**/*.dll", "**/*.exe", "**/*.pdf", "**/*.mid", "**/*.midi", "**/*.wav",
-				"**/*.gif", "**/*.ico", "**/*.jpg", "**/*.jpeg", "**/*.png", "**/*.psd", "**/*.tga", "**/*.tif", "**/*.tiff",
-				"**/*.3ds", "**/*.3DS", "**/*.fbx", "**/*.FBX", "**/*.lxo", "**/*.LXO", "**/*.ma", "**/*.MA", "**/*.obj", "**/*.OBJ",
+				"**/*.gif", "**/*.ico", "**/*.jpg", "**/*.jpeg", "**/*.png", "**/*.psd", "**/*.tga", "**/*.tif",
+				"**/*.tiff",
+				"**/*.3ds", "**/*.3DS", "**/*.fbx", "**/*.FBX", "**/*.lxo", "**/*.LXO", "**/*.ma", "**/*.MA",
+				"**/*.obj", "**/*.OBJ",
 				"**/*.asset", "**/*.cubemap", "**/*.flare", "**/*.mat", "**/*.meta", "**/*.prefab", "**/*.unity",
-				"build/", "Build/", "Library/", "library/", "obj/", "Obj/", "Logs/", "logs/", "ProjectSettings/", "UserSettings/", "temp/", "Temp/"
+				"build/", "Build/", "Library/", "library/", "obj/", "Obj/", "Logs/", "logs/", "ProjectSettings/",
+				"UserSettings/", "temp/", "Temp/"
 			};
 
 			foreach (var pattern in defaultExcludePatterns)
@@ -1015,6 +1018,27 @@ namespace Microsoft.Unity.VisualStudio.Editor
 			{
 				settings[solutionKey] = solutionFile;
 				patched = true;
+			}
+
+			// Check dotrush.roslyn.projectOrSolutionFiles setting
+			if (DotRushExtensionState.IsInstalled)
+			{
+				const string dotRushSolutionKey = "dotrush.roslyn.projectOrSolutionFiles";
+				var dotRushSolutionSetting = settings[dotRushSolutionKey];
+				var absoluteSolutionPath = ProjectGenerator.SolutionFile();
+				
+				if (dotRushSolutionSetting is JSONArray { Count: 1 } arr && arr[0] is JSONString str &&
+				    str.Value == absoluteSolutionPath)
+				{
+					// the same, do nothing
+				}
+				else
+				{
+					var solutionPathArray = new JSONArray();
+					solutionPathArray.Add(absoluteSolutionPath);
+					settings[dotRushSolutionKey] = solutionPathArray;
+					patched = true;
+				}
 			}
 
 			return patched;
