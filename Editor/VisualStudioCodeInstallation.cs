@@ -17,11 +17,126 @@ using Debug = UnityEngine.Debug;
 namespace Microsoft.Unity.VisualStudio.Editor
 {
 	/// <summary>
-	/// Represents a Visual Studio Code installation on the system.
+	/// Defines the data structure for a Visual Studio Code fork.
+	/// </summary>
+	public class CodeForkData
+	{
+		/// <summary>
+		/// The name of the fork.
+		/// </summary>
+		public string Name { get; set; }
+
+		/// <summary>
+		/// The default folder name for a fork used on Windows (typically in Program Files or Local AppData).
+		/// </summary>
+		public string WindowsDefaultFolderName { get; set; }
+
+		/// <summary>
+		/// The executable name on Windows (without .exe extension).
+		/// </summary>
+		public string WindowsExeName { get; set; }
+
+		/// <summary>
+		/// The app name on macOS (without .app extension).
+		/// </summary>
+		public string MacAppName { get; set; }
+
+		/// <summary>
+		/// The executable name on Linux.
+		/// </summary>
+		public string LinuxExeName { get; set; }
+
+		/// <summary>
+		/// The extensions directory name in the user profile (including the leading dot).
+		/// </summary>
+		public string ExtensionsDirName { get; set; }
+
+		/// <summary>
+		/// The latest C# language version supported by this fork.
+		/// </summary>
+		public Version LatestLanguageVersion { get; set; }
+
+		/// <summary>
+		/// True if this fork is always a pre-release version, otherwise false(then is prelease version will be checked dynamically)
+		/// </summary>
+		public bool IsPrerelease { get; set; }
+	}
+
+	/// <summary>
+	/// Represents a Visual Studio Code fork installation.
 	/// Provides functionality for discovering, interacting with, and configuring VS Code.
 	/// </summary>
 	 internal class VisualStudioCodeInstallation : VisualStudioInstallation
 	{
+		/// <summary>
+		/// The fork data for this installation.
+		/// </summary>
+		private CodeForkData ForkData { get; set; }
+
+		/// <summary>
+		/// Static array of supported Visual Studio Code forks.<br/>
+		/// VS Code Insiders is treated as a fork because it have a different executable name than the stable version<br/>
+		/// If for a fork, a prerelease version and the stable version have same executable name, then it should be treated as the same fork
+		/// </summary>
+		private static readonly CodeForkData[] Forks = new[]
+		{
+			new CodeForkData
+			{
+				Name = "Visual Studio Code",
+				WindowsDefaultFolderName = "Microsoft VS Code",
+				WindowsExeName = "Code",
+				MacAppName = "Visual Studio Code",
+				LinuxExeName = "code",
+				ExtensionsDirName = ".vscode",
+				LatestLanguageVersion = new Version(13, 0),
+				IsPrerelease = false
+			},
+			new CodeForkData
+			{
+				Name = "Visual Studio Code Insiders",
+				WindowsDefaultFolderName = "Microsoft VS Code Insiders",
+				WindowsExeName = "Code - Insiders",
+				MacAppName = "Visual Studio Code - Insiders",
+				LinuxExeName = "code-insiders",
+				ExtensionsDirName = ".vscode-insiders",
+				LatestLanguageVersion = new Version(13, 0), // Same as regular VS Code
+				IsPrerelease = true
+			},
+			new CodeForkData
+			{
+				Name = "Cursor",
+				WindowsDefaultFolderName = "Cursor",
+				WindowsExeName = "Cursor",
+				MacAppName = "Cursor",
+				LinuxExeName = "cursor",
+				ExtensionsDirName = ".cursor",
+				LatestLanguageVersion = new Version(12, 0), // Cursor supports up to C# 12.0
+				IsPrerelease = false
+			},
+			new CodeForkData
+			{
+				Name = "Windsurf",
+				WindowsDefaultFolderName = "Windsurf",
+				WindowsExeName = "Windsurf",
+				MacAppName = "Windsurf",
+				LinuxExeName = "windsurf",
+				ExtensionsDirName = ".windsurf",
+				LatestLanguageVersion = new Version(11, 0), // Windsurf supports up to C# 11.0
+				IsPrerelease = false
+			},
+			new CodeForkData
+			{
+				Name = "Trae",
+				WindowsDefaultFolderName = "Trae",
+				WindowsExeName = "Trae",
+				MacAppName = "Trae",
+				LinuxExeName = "trae",
+				ExtensionsDirName = ".trae",
+				LatestLanguageVersion = new Version(12, 0), // Trae supports up to C# 12.0
+				IsPrerelease = false
+			}
+		};
+
 		/// <summary>
 		/// The generator instance used for creating project files.
 		/// </summary>
@@ -42,12 +157,13 @@ namespace Microsoft.Unity.VisualStudio.Editor
 		/// <summary>
 		/// Gets the latest C# language version supported by this VS Code installation.
 		/// </summary>
-		/// <returns>Version object representing C# 13.0.</returns>
+		/// <returns>The fork-specific latest supported C# language version.</returns>
 		public override Version LatestLanguageVersionSupported
 		{
 			get
 			{
-				return new Version(13, 0);
+				// Return the fork-specific language version if set, otherwise default to 11.0
+				return ForkData?.LatestLanguageVersion ?? new Version(11, 0);
 			}
 		}
 
@@ -57,8 +173,9 @@ namespace Microsoft.Unity.VisualStudio.Editor
 		/// <returns>The path to the extension directory or null if not found.</returns>
 		private string GetExtensionPath()
 		{
-			var vscode = IsPrerelease ? ".vscode-insiders" : ".vscode";
-			var extensionsPath = IOPath.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), vscode, "extensions");
+			var extensionsDirName = ForkData.ExtensionsDirName;
+			
+			var extensionsPath = IOPath.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), extensionsDirName, "extensions");
 			if (!Directory.Exists(extensionsPath))
 				return null;
 
@@ -78,7 +195,8 @@ namespace Microsoft.Unity.VisualStudio.Editor
 			if (string.IsNullOrEmpty(vstuPath))
 				return Array.Empty<string>();
 
-			return GetAnalyzers(vstuPath); }
+			return GetAnalyzers(vstuPath); 
+		}
 
 		/// <summary>
 		/// Gets the project generator for this VS Code installation.
@@ -90,22 +208,6 @@ namespace Microsoft.Unity.VisualStudio.Editor
 			{
 				return _generator;
 			}
-		}
-
-		/// <summary>
-		/// Determines if the specified path is a candidate for VS Code discovery.
-		/// </summary>
-		/// <param name="path">The path to check.</param>
-		/// <returns>True if the path is a potential VS Code installation; otherwise, false.</returns>
-		private static bool IsCandidateForDiscovery(string path)
-		{
-#if UNITY_EDITOR_OSX
-			return Directory.Exists(path) && Regex.IsMatch(path, ".*Code.*.app$", RegexOptions.IgnoreCase);
-#elif UNITY_EDITOR_WIN
-			return File.Exists(path) && Regex.IsMatch(path, ".*Code.*.exe$", RegexOptions.IgnoreCase);
-#else
-			return File.Exists(path) && path.EndsWith("code", StringComparison.OrdinalIgnoreCase);
-#endif
 		}
 
 		/// <summary>
@@ -125,32 +227,83 @@ namespace Microsoft.Unity.VisualStudio.Editor
 		}
 
 		/// <summary>
-		/// Attempts to create a Visual Studio Code installation from the specified path
+		/// Identifies the VS Code fork based on the executable path.
 		/// </summary>
-		/// <param name="editorPath">The path of the Visual Studio Code executable.</param>
-		/// <param name="installation">When this method returns, contains the discovered installation if successful; otherwise, null.</param>
-		/// <returns>True if a VS Code installation was found at the specified path; otherwise, false.</returns>
-		public static bool TryDiscoverInstallation(string editorPath, out IVisualStudioInstallation installation)
+		/// <param name="exePath">The path to the VS Code executable.</param>
+		/// <returns>The VSCodeForkData if a supported fork is identified; otherwise, null.</returns>
+		private static CodeForkData GetForkDataByPath(string exePath)
 		{
-			//Debug.Log($"trying to discover vs code installation at {editorPath}");
-			installation = null;
+			if (string.IsNullOrEmpty(exePath))
+				return null;
 
-			if (string.IsNullOrEmpty(editorPath))
-				return false;
+#if UNITY_EDITOR_OSX
+			if (!Directory.Exists(exePath))
+				return null;
 
-			if (!IsCandidateForDiscovery(editorPath))
-				return false;
-
-			Version version = null;
-			var isPrerelease = false;
-
-			try
+			// Check if the path ends with any of the supported fork app names
+			foreach (var fork in SupportedForks)
 			{
-				var manifestBase = GetRealPath(editorPath);
+				if (exePath.EndsWith($"{fork.MacAppName}.app", StringComparison.OrdinalIgnoreCase))
+				{
+					return fork;
+				}
+			}
+
+#elif UNITY_EDITOR_WIN
+			if (!File.Exists(exePath))
+				return null;
+
+			// Check if the path ends with any of the supported fork executable names
+			foreach (var fork in Forks)
+			{
+				if (exePath.EndsWith($"{fork.WindowsExeName}.exe", StringComparison.OrdinalIgnoreCase))
+				{
+					return fork;
+				}
+			}
+#else
+			if (!File.Exists(exePath))
+				return null;
+
+			// Check if the path ends with any of the supported fork executable names
+			foreach (var fork in SupportedForks)
+			{
+				if (exePath.EndsWith(fork.LinuxExeName, StringComparison.OrdinalIgnoreCase) ||
+				    exePath.EndsWith($"{fork.LinuxExeName}.desktop"))
+				{
+					return fork;
+				}
+			}
+#endif
+
+			return null;
+		}
+
+        public static bool TryDiscoverInstallation(string exePath, out IVisualStudioInstallation installation)
+        {
+            Debug.Log($"trying to get the vs code fork installation at {exePath}"); 
+            installation = null;
+
+            if (string.IsNullOrEmpty(exePath))
+                return false;
+
+            CodeForkData forkData = GetForkDataByPath(exePath);
+
+            if (forkData == null)
+                return false;
+
+            Version version = null;
+
+            bool isPrerelease = forkData.IsPrerelease;
+            string prereleaseKeyword = null;
+
+            try
+            {
+                var manifestBase = GetRealPath(exePath);
 
 #if UNITY_EDITOR_WIN
-				// on Windows, editorPath is a file, resources as subdirectory
-				manifestBase = IOPath.GetDirectoryName(manifestBase);
+                // on Windows, editorPath is a file, resources as subdirectory
+                manifestBase = IOPath.GetDirectoryName(manifestBase);
 #elif UNITY_EDITOR_OSX
 				// on Mac, editorPath is a directory
 				manifestBase = IOPath.Combine(manifestBase, "Contents");
@@ -161,33 +314,62 @@ namespace Microsoft.Unity.VisualStudio.Editor
 				manifestBase = parent?.Name == "bin" ? parent.Parent?.FullName : parent?.FullName;
 #endif
 
-				if (manifestBase == null)
-					return false;
+                if (manifestBase == null)
+                    return false;
 
-				var manifestFullPath = IOPath.Combine(manifestBase, "resources", "app", "package.json");
-				if (File.Exists(manifestFullPath))
-				{
-					var manifest = JsonUtility.FromJson<VisualStudioCodeManifest>(File.ReadAllText(manifestFullPath));
-					Version.TryParse(manifest.version.Split('-').First(), out version);
-					isPrerelease = manifest.version.ToLower().Contains("insider");
-				}
-			}
-			catch (Exception)
-			{
-				// do not fail if we are not able to retrieve the exact version number
-			}
+                var manifestFullPath = IOPath.Combine(manifestBase, "resources", "app", "package.json");
+                if (File.Exists(manifestFullPath))
+                {
+                    var manifest = JsonUtility.FromJson<VisualStudioCodeManifest>(File.ReadAllText(manifestFullPath));
+                    Version.TryParse(manifest.version.Split('-').First(), out version);
 
-			isPrerelease = isPrerelease || editorPath.ToLower().Contains("insider");
-			installation = new VisualStudioCodeInstallation()
-			{
-				IsPrerelease = isPrerelease,
-				Name = "Visual Studio Code" + (isPrerelease ? " - Insider" : string.Empty) + (version != null ? $" [{version.ToString(3)}]" : string.Empty),
-				Path = editorPath,
-				Version = version ?? new Version()
-			};
+                    // If fork is not marked as prerelease, check manifest version for prerelease indicators
+                    if (!isPrerelease && !string.IsNullOrEmpty(manifest.version))
+                    {
+                        var versionLower = manifest.version.ToLowerInvariant();
+                        string[] prereleaseKeywords = { "alpha", "beta", "rc", "preview", "dev", "nightly", "canary", "pre" };
 
-			return true;
-		}
+                        foreach (var keyword in prereleaseKeywords)
+                        {
+                            if (versionLower.Contains(keyword))
+                            {
+                                isPrerelease = true;
+                                prereleaseKeyword = keyword;
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
+            catch (Exception)
+            {
+                // do not fail if we are not able to retrieve the exact version number
+            }
+
+            var name = forkData.Name;
+            if (isPrerelease != forkData.IsPrerelease && !string.IsNullOrEmpty(prereleaseKeyword))
+            {
+                name += $" ({prereleaseKeyword})";
+            }
+
+            if (version != null)
+            {
+                name += $" [{version.ToString(3)}]";
+            }
+
+            installation = new VisualStudioCodeInstallation()
+            {
+                ForkData = forkData,
+                IsPrerelease = isPrerelease,
+                Name = name,
+                Path = exePath,
+                Version = version ?? new Version()
+            };
+
+            Debug.Log($"discovered vs code installation {name} at {installation.Path}");
+
+            return true;
+        }
 
 		/// <summary>
 		/// Gets all Visual Studio Code installations detected on the system.
@@ -203,17 +385,27 @@ namespace Microsoft.Unity.VisualStudio.Editor
 
 			foreach (var basePath in new[] {localAppPath, programFiles})
 			{
-				candidates.Add(IOPath.Combine(basePath, "Microsoft VS Code", "Code.exe"));
-				candidates.Add(IOPath.Combine(basePath, "Microsoft VS Code Insiders", "Code - Insiders.exe"));
+				foreach (var fork in Forks)
+				{
+					candidates.Add(IOPath.Combine(basePath, fork.WindowsDefaultFolderName, $"{fork.WindowsExeName}.exe"));
+				}
 			}
 #elif UNITY_EDITOR_OSX
 			var appPath = IOPath.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles));
-			candidates.AddRange(Directory.EnumerateDirectories(appPath, "Visual Studio Code*.app"));
+			
+			// Add specific fork app patterns
+			foreach (var fork in SupportedForks)
+			{
+				candidates.AddRange(Directory.EnumerateDirectories(appPath, $"{fork.MacAppName}*.app"));
+			}
 #elif UNITY_EDITOR_LINUX
-			// Well known locations
-			candidates.Add("/usr/bin/code");
-			candidates.Add("/bin/code");
-			candidates.Add("/usr/local/bin/code");
+			// Well known locations for all forks
+			foreach (var fork in SupportedForks)
+			{
+				candidates.Add($"/usr/bin/{fork.LinuxExeName}");
+				candidates.Add($"/bin/{fork.LinuxExeName}");
+				candidates.Add($"/usr/local/bin/{fork.LinuxExeName}");
+			}
 
 			// Preference ordered base directories relative to which desktop files should be searched
 			candidates.AddRange(GetXdgCandidates());
@@ -233,9 +425,9 @@ namespace Microsoft.Unity.VisualStudio.Editor
 		private static readonly Regex DesktopFileExecEntry = new Regex(@"Exec=(\S+)", RegexOptions.Singleline | RegexOptions.Compiled);
 
 		/// <summary>
-		/// Gets candidate VS Code paths from XDG data directories on Linux.
+		/// Gets candidate VS Code fork paths from XDG data directories on Linux.
 		/// </summary>
-		/// <returns>An enumerable collection of potential VS Code executable paths.</returns>
+		/// <returns>An enumerable collection of potential VS Code fork executable paths.</returns>
 		private static IEnumerable<string> GetXdgCandidates()
 		{
 			var envdirs = Environment.GetEnvironmentVariable("XDG_DATA_DIRS");
@@ -245,27 +437,30 @@ namespace Microsoft.Unity.VisualStudio.Editor
 			var dirs = envdirs.Split(':');
 			foreach(var dir in dirs)
 			{
-				Match match = null;
-
-				try
+				foreach (var fork in SupportedForks)
 				{
-					var desktopFile = IOPath.Combine(dir, "applications/code.desktop");
-					if (!File.Exists(desktopFile))
+					Match match = null;
+					var desktopFileName = $"{fork.LinuxExeName}.desktop";
+
+					try
+					{
+						var desktopFile = IOPath.Combine(dir, $"applications/{desktopFileName}");
+						if (!File.Exists(desktopFile))
+							continue;
+					
+						var content = File.ReadAllText(desktopFile);
+						match = DesktopFileExecEntry.Match(content);
+					}
+					catch
+					{
+						// do not fail if we cannot read desktop file
+					}
+
+					if (match == null || !match.Success)
 						continue;
-				
-					var content = File.ReadAllText(desktopFile);
-					match = DesktopFileExecEntry.Match(content);
-				}
-				catch
-				{
-					// do not fail if we cannot read desktop file
-				}
 
-				if (match == null || !match.Success)
-					continue;
-
-				yield return match.Groups[1].Value;
-				break;
+					yield return match.Groups[1].Value;
+				}
 			}
 		}
 
