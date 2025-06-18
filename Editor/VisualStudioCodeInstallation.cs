@@ -808,6 +808,40 @@ namespace Microsoft.Unity.VisualStudio.Editor
 		}
 
 		/// <summary>
+		/// Creates an empty settings.json content with minimal structure.
+		/// </summary>
+		/// <returns>A JSON string containing the empty settings structure.</returns>
+		private static string CreateEmptySettingsContent()
+		{
+			return @"{
+}";
+		}
+
+		/// <summary>
+		/// Generates the settings.json content based on project settings.
+		/// </summary>
+		/// <returns>A JSON string containing the appropriate settings.</returns>
+		private string GenerateSettingsFileContent()
+		{
+			try
+			{
+				var emptyContent = CreateEmptySettingsContent();
+				var settingsJson = JSONNode.Parse(emptyContent);
+
+				// Apply patches to the empty settings
+				PatchSettingsFileImpl(settingsJson);
+
+				return settingsJson.ToString(aIndent: 4);
+			}
+			catch (Exception ex)
+			{
+				// This should not happen with our controlled input, but handle it just in case
+				Debug.LogError($"Error generating settings file content: {ex.Message}");
+				return CreateEmptySettingsContent(); // Fallback to empty content
+			}
+		}
+
+		/// <summary>
 		/// Creates or patches the settings.json file in the VS Code directory.
 		/// </summary>
 		/// <param name="vscodeDirectory">The .vscode directory path.</param>
@@ -823,80 +857,167 @@ namespace Microsoft.Unity.VisualStudio.Editor
 				return;
 			}
 
-			const string excludes = @"    ""files.exclude"": {
-        ""**/.DS_Store"": true,
-        ""**/.git"": true,
-        ""**/.vs"": true,
-        ""**/.gitmodules"": true,
-        ""**/.vsconfig"": true,
-        ""**/*.booproj"": true,
-        ""**/*.pidb"": true,
-        ""**/*.suo"": true,
-        ""**/*.user"": true,
-        ""**/*.userprefs"": true,
-        ""**/*.unityproj"": true,
-        ""**/*.dll"": true,
-        ""**/*.exe"": true,
-        ""**/*.pdf"": true,
-        ""**/*.mid"": true,
-        ""**/*.midi"": true,
-        ""**/*.wav"": true,
-        ""**/*.gif"": true,
-        ""**/*.ico"": true,
-        ""**/*.jpg"": true,
-        ""**/*.jpeg"": true,
-        ""**/*.png"": true,
-        ""**/*.psd"": true,
-        ""**/*.tga"": true,
-        ""**/*.tif"": true,
-        ""**/*.tiff"": true,
-        ""**/*.3ds"": true,
-        ""**/*.3DS"": true,
-        ""**/*.fbx"": true,
-        ""**/*.FBX"": true,
-        ""**/*.lxo"": true,
-        ""**/*.LXO"": true,
-        ""**/*.ma"": true,
-        ""**/*.MA"": true,
-        ""**/*.obj"": true,
-        ""**/*.OBJ"": true,
-        ""**/*.asset"": true,
-        ""**/*.cubemap"": true,
-        ""**/*.flare"": true,
-        ""**/*.mat"": true,
-        ""**/*.meta"": true,
-        ""**/*.prefab"": true,
-        ""**/*.unity"": true,
-        ""build/"": true,
-        ""Build/"": true,
-        ""Library/"": true,
-        ""library/"": true,
-        ""obj/"": true,
-        ""Obj/"": true,
-        ""Logs/"": true,
-        ""logs/"": true,
-        ""ProjectSettings/"": true,
-        ""UserSettings/"": true,
-        ""temp/"": true,
-        ""Temp/"": true
-    }";
-
-			var content = @"{
-" + excludes + @",
-    ""files.associations"": {
-        ""*.asset"": ""yaml"",
-        ""*.meta"": ""yaml"",
-        ""*.prefab"": ""yaml"",
-        ""*.unity"": ""yaml"",
-    },
-    ""explorer.fileNesting.enabled"": true,
-    ""explorer.fileNesting.patterns"": {
-        ""*.sln"": ""*.csproj"",
-    },
-    ""dotnet.defaultSolution"": """ + IOPath.GetFileName(ProjectGenerator.SolutionFile()) + @"""
-}";
-
+			// Generate content based on project settings
+			var content = GenerateSettingsFileContent();
 			File.WriteAllText(settingsFile, content);
+		}
+
+		/// <summary>
+		/// Applies patches to a settings.json file represented as a JSONNode.
+		/// </summary>
+		/// <param name="settings">The JSON node representing the settings.json content.</param>
+		/// <returns>True if any changes were made to the JSON, false otherwise.</returns>
+		private bool PatchSettingsFileImpl(JSONNode settings)
+		{
+			const string excludesKey = "files.exclude";
+			const string associationsKey = "files.associations";
+			const string nestingEnabledKey = "explorer.fileNesting.enabled";
+			const string nestingPatternsKey = "explorer.fileNesting.patterns";
+			const string solutionKey = "dotnet.defaultSolution";
+			
+			var patched = false;
+
+			// Add default files.exclude settings
+			var excludes = settings[excludesKey] as JSONObject;
+			if (excludes == null)
+			{
+				excludes = new JSONObject();
+				settings[excludesKey] = excludes;
+				patched = true;
+			}
+
+			// Add default exclude patterns if they don't exist
+			string[] defaultExcludePatterns = new string[]
+			{
+				"**/.DS_Store", "**/.git", "**/.vs", "**/.gitmodules", "**/.vsconfig",
+				"**/*.booproj", "**/*.pidb", "**/*.suo", "**/*.user", "**/*.userprefs", "**/*.unityproj",
+				"**/*.dll", "**/*.exe", "**/*.pdf", "**/*.mid", "**/*.midi", "**/*.wav",
+				"**/*.gif", "**/*.ico", "**/*.jpg", "**/*.jpeg", "**/*.png", "**/*.psd", "**/*.tga", "**/*.tif", "**/*.tiff",
+				"**/*.3ds", "**/*.3DS", "**/*.fbx", "**/*.FBX", "**/*.lxo", "**/*.LXO", "**/*.ma", "**/*.MA", "**/*.obj", "**/*.OBJ",
+				"**/*.asset", "**/*.cubemap", "**/*.flare", "**/*.mat", "**/*.meta", "**/*.prefab", "**/*.unity",
+				"build/", "Build/", "Library/", "library/", "obj/", "Obj/", "Logs/", "logs/", "ProjectSettings/", "UserSettings/", "temp/", "Temp/"
+			};
+
+			foreach (var pattern in defaultExcludePatterns)
+			{
+				if (!excludes.HasKey(pattern))
+				{
+					excludes[pattern] = true;
+					patched = true;
+				}
+			}
+
+			// Add default files.associations settings
+			var associations = settings[associationsKey] as JSONObject;
+			if (associations == null)
+			{
+				associations = new JSONObject();
+				settings[associationsKey] = associations;
+				patched = true;
+			}
+
+			// Add default file associations if they don't exist
+			var defaultAssociations = new Dictionary<string, string>
+			{
+				{ "*.asset", "yaml" },
+				{ "*.meta", "yaml" },
+				{ "*.prefab", "yaml" },
+				{ "*.unity", "yaml" }
+			};
+
+			// Handle .uxml and .uss associations based on installed extensions
+			// If Unity extension is not installed, add .uxml to xml and .uss to css associations
+			// If Unity extension is installed but DotRush is not, remove those associations
+			// If both Unity and DotRush are installed, keep the associations as they are
+			if (!UnityToolsExtensionState.IsInstalled)
+			{
+				// Unity extension not installed, add associations
+				defaultAssociations["*.uxml"] = "xml";
+				defaultAssociations["*.uss"] = "css";
+			}
+			else if (UnityToolsExtensionState.IsInstalled && !DotRushExtensionState.IsInstalled)
+			{
+				// Unity extension installed but DotRush is not, remove associations if they exist
+				if (associations.HasKey("*.uxml") && associations["*.uxml"] == "xml")
+				{
+					associations.Remove("*.uxml");
+					patched = true;
+				}
+
+				if (associations.HasKey("*.uss") && associations["*.uss"] == "css")
+				{
+					associations.Remove("*.uss");
+					patched = true;
+				}
+			}
+			// If both Unity and DotRush are installed, we don't modify these associations
+
+			foreach (var association in defaultAssociations)
+			{
+				if (!associations.HasKey(association.Key) || associations[association.Key] != association.Value)
+				{
+					associations[association.Key] = association.Value;
+					patched = true;
+				}
+			}
+
+			// Add explorer.fileNesting.enabled setting
+			if (!settings.HasKey(nestingEnabledKey) || settings[nestingEnabledKey].AsBool != true)
+			{
+				settings[nestingEnabledKey] = true;
+				patched = true;
+			}
+
+			// Add explorer.fileNesting.patterns settings
+			var nestingPatterns = settings[nestingPatternsKey] as JSONObject;
+			if (nestingPatterns == null)
+			{
+				nestingPatterns = new JSONObject();
+				settings[nestingPatternsKey] = nestingPatterns;
+				patched = true;
+			}
+
+			// Add default nesting pattern if it doesn't exist
+			if (!nestingPatterns.HasKey("*.sln") || nestingPatterns["*.sln"] != "*.csproj")
+			{
+				nestingPatterns["*.sln"] = "*.csproj";
+				patched = true;
+			}
+
+			// Find and collect solution+project files patterns to remove
+			// We need to collect them first to avoid modifying the collection during iteration
+			var keysToRemove = new List<string>();
+			foreach (var exclude in excludes)
+			{
+				if (!bool.TryParse(exclude.Value, out var exc) || !exc)
+					continue;
+
+				var key = exclude.Key;
+
+				if (!key.EndsWith(".sln") && !key.EndsWith(".csproj"))
+					continue;
+
+				if (!Regex.IsMatch(key, "^(\\*\\*[\\\\\\/])?\\*\\.(sln|csproj)$"))
+					continue;
+
+				keysToRemove.Add(key);
+				patched = true;
+			}
+
+			// Remove the collected keys
+			foreach (var key in keysToRemove)
+				excludes.Remove(key);
+
+			// Check default solution
+			var defaultSolution = settings[solutionKey];
+			var solutionFile = IOPath.GetFileName(ProjectGenerator.SolutionFile());
+			if (defaultSolution == null || defaultSolution.Value != solutionFile)
+			{
+				settings[solutionKey] = solutionFile;
+				patched = true;
+			}
+
+			return patched;
 		}
 
 		/// <summary>
@@ -907,57 +1028,19 @@ namespace Microsoft.Unity.VisualStudio.Editor
 		{
 			try
 			{
-				const string excludesKey = "files.exclude";
-				const string solutionKey = "dotnet.defaultSolution";
-
 				var content = File.ReadAllText(settingsFile);
 				var settings = JSONNode.Parse(content);
 
-				var excludes = settings[excludesKey] as JSONObject;
-				if (excludes == null)
-					return;
-
-				var patchList = new List<string>();
-				var patched = false;
-
-				// Remove files.exclude for solution+project files in the project root
-				foreach (var exclude in excludes)
+				// Apply patches using the common implementation
+				if (PatchSettingsFileImpl(settings))
 				{
-					if (!bool.TryParse(exclude.Value, out var exc) || !exc)
-						continue;
-
-					var key = exclude.Key;
-
-					if (!key.EndsWith(".sln") && !key.EndsWith(".csproj"))
-						continue;
-
-					if (!Regex.IsMatch(key, "^(\\*\\*[\\\\\\/])?\\*\\.(sln|csproj)$"))
-						continue;
-
-					patchList.Add(key);
-					patched = true;
+					// Only write to file if changes were made
+					WriteAllTextFromJObject(settingsFile, settings);
 				}
-
-				// Check default solution
-				var defaultSolution = settings[solutionKey];
-				var solutionFile = IOPath.GetFileName(ProjectGenerator.SolutionFile());
-				if (defaultSolution == null || defaultSolution.Value != solutionFile)
-				{
-					settings[solutionKey] = solutionFile;
-					patched = true;
-				}
-
-				if (!patched)
-					return;
-
-				foreach (var patch in patchList)
-					excludes.Remove(patch);
-
-				WriteAllTextFromJObject(settingsFile, settings);
 			}
-			catch (Exception)
+			catch
 			{
-				// do not fail if we cannot patch the settings.json file
+				// do nothing
 			}
 		}
 
@@ -977,14 +1060,37 @@ namespace Microsoft.Unity.VisualStudio.Editor
 		private const string DotRushExtensionId = "nromanov.dotrush";
 
 		/// <summary>
-		/// The default content for the extensions.json file.
+		/// Creates an empty extensions.json content with minimal structure.
 		/// </summary>
-		private const string DefaultRecommendedExtensionsContent = @"{
-    ""recommendations"": [
-      """ + MicrosoftUnityExtensionId + @"""
-    ]
-}
-";
+		/// <returns>A JSON string containing the empty extensions structure.</returns>
+		private static string CreateEmptyExtensionsContent()
+		{
+			return @"{
+}";
+		}
+
+		/// <summary>
+		/// Generates the extensions.json content based on installed extensions.
+		/// </summary>
+		/// <returns>A JSON string containing the appropriate extension recommendations.</returns>
+		private static string GenerateRecommendedExtensionsContent()
+		{
+			try
+			{
+				var emptyContent = CreateEmptyExtensionsContent();
+				var extensionsJson = JSONNode.Parse(emptyContent);
+
+				PatchRecommendedExtensionsFileImpl(extensionsJson);
+
+				return extensionsJson.ToString(aIndent: 4);
+			}
+			catch (Exception ex)
+			{
+				// This should not happen with our controlled input, but handle it just in case
+				Debug.LogError($"Error generating extensions file content: {ex.Message}");
+				return CreateEmptyExtensionsContent(); // Fallback to empty content
+			}
+		}
 
 		/// <summary>
 		/// Creates or patches the extensions.json file in the VS Code directory.
@@ -1003,7 +1109,8 @@ namespace Microsoft.Unity.VisualStudio.Editor
 				return;
 			}
 
-			File.WriteAllText(extensionFile, DefaultRecommendedExtensionsContent);
+			// Create a new extensions file with generated content
+			File.WriteAllText(extensionFile, GenerateRecommendedExtensionsContent());
 		}
 
 		/// <summary>
@@ -1014,28 +1121,54 @@ namespace Microsoft.Unity.VisualStudio.Editor
 		{
 			try
 			{
-				const string recommendationsKey = "recommendations";
-
 				var content = File.ReadAllText(extensionFile);
 				var extensions = JSONNode.Parse(content);
 
-				var recommendations = extensions[recommendationsKey] as JSONArray;
-				if (recommendations == null)
+				// Apply patches using the common implementation
+				if (PatchRecommendedExtensionsFileImpl(extensions))
 				{
-					recommendations = new JSONArray();
-					extensions.Add(recommendationsKey, recommendations);
+					// Only write to file if changes were made
+					WriteAllTextFromJObject(extensionFile, extensions);
 				}
-
-				if (recommendations.Linq.Any(entry => entry.Value.Value == MicrosoftUnityExtensionId))
-					return;
-
-				recommendations.Add(MicrosoftUnityExtensionId);
-				WriteAllTextFromJObject(extensionFile, extensions);
 			}
-			catch (Exception)
+			catch (Exception ex)
 			{
-				// do not fail if we cannot patch the extensions.json file
+				// Handle parsing errors for malformed extensions.json files
+				Debug.LogError($"Error patching extensions file at {extensionFile}: {ex.Message}");
+				
+				// Create a new extensions file with generated content as fallback
+				File.WriteAllText(extensionFile, GenerateRecommendedExtensionsContent());
 			}
+		}
+
+		/// <summary>
+		/// Applies patches to an extensions.json file represented as a JSONNode.
+		/// </summary>
+		/// <param name="extensions">The JSON node representing the extensions.json content.</param>
+		/// <returns>True if any changes were made to the JSON, false otherwise.</returns>
+		private static bool PatchRecommendedExtensionsFileImpl(JSONNode extensions)
+		{
+			const string recommendationsKey = "recommendations";
+			
+			var patched = false;
+
+			// Ensure recommendations array exists
+			var recommendations = extensions[recommendationsKey] as JSONArray;
+			if (recommendations == null)
+			{
+				recommendations = new JSONArray();
+				extensions.Add(recommendationsKey, recommendations);
+				patched = true;
+			}
+
+			// Add Microsoft Unity extension if not already present
+			if (!recommendations.Linq.Any(entry => entry.Value.Value == MicrosoftUnityExtensionId))
+			{
+				recommendations.Add(MicrosoftUnityExtensionId);
+				patched = true;
+			}
+
+			return patched;
 		}
 
 		/// <summary>
