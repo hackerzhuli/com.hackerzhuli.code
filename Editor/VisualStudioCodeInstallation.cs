@@ -99,7 +99,7 @@ namespace Microsoft.Unity.VisualStudio.Editor
 				MacAppName = "Visual Studio Code - Insiders",
 				LinuxExeName = "code-insiders",
 				ExtensionsDirName = ".vscode-insiders",
-				LatestLanguageVersion = new Version(13, 0), // Same as regular VS Code
+				LatestLanguageVersion = new Version(13, 0),
 				IsPrerelease = true
 			},
 			new CodeForkData
@@ -110,7 +110,7 @@ namespace Microsoft.Unity.VisualStudio.Editor
 				MacAppName = "Cursor",
 				LinuxExeName = "cursor",
 				ExtensionsDirName = ".cursor",
-				LatestLanguageVersion = new Version(12, 0), // Cursor supports up to C# 12.0
+				LatestLanguageVersion = new Version(11, 0),
 				IsPrerelease = false
 			},
 			new CodeForkData
@@ -121,8 +121,19 @@ namespace Microsoft.Unity.VisualStudio.Editor
 				MacAppName = "Windsurf",
 				LinuxExeName = "windsurf",
 				ExtensionsDirName = ".windsurf",
-				LatestLanguageVersion = new Version(11, 0), // Windsurf supports up to C# 11.0
+				LatestLanguageVersion = new Version(11, 0),
 				IsPrerelease = false
+			},
+			new CodeForkData
+			{
+				Name = "Windsurf Next",
+				WindowsDefaultFolderName = "Windsurf Next",
+				WindowsExeName = "Windsurf - Next",
+				MacAppName = "Windsurf - Next",
+				LinuxExeName = "windsurf-next",
+				ExtensionsDirName = ".windsurf-next",
+				LatestLanguageVersion = new Version(11, 0),
+				IsPrerelease = true
 			},
 			new CodeForkData
 			{
@@ -132,7 +143,7 @@ namespace Microsoft.Unity.VisualStudio.Editor
 				MacAppName = "Trae",
 				LinuxExeName = "trae",
 				ExtensionsDirName = ".trae",
-				LatestLanguageVersion = new Version(12, 0), // Trae supports up to C# 12.0
+				LatestLanguageVersion = new Version(11, 0),
 				IsPrerelease = false
 			}
 		};
