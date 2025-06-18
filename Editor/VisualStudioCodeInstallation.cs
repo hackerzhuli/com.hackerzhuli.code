@@ -123,7 +123,7 @@ namespace Microsoft.Unity.VisualStudio.Editor
 				ExtensionsDirName = ".windsurf",
 				LatestLanguageVersion = new Version(11, 0),
 				IsPrerelease = false
-			},
+			}, 
 			new CodeForkData
 			{
 				Name = "Windsurf Next",
