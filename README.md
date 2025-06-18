@@ -1,5 +1,5 @@
 ## Description
-This is a fork of Unity's Visual Studio Editor package for Unity Editor.
+This is a fork of Visual Studio Editor package for Unity.
 
 The difference between this fork and the official package is that this fork adds support for popular Visual Studio Code forks.
 
@@ -17,7 +17,7 @@ Notes:
 - I can only personally test the VS Code forks on Windows, if you have issues on other platforms, you have to fix it yourself. If you would like, you can create a pull request to share your changes.
 - I don't personally test Visual Studio, but since the code is same as the official package, it should work as expected.
 
-## Guidelines
+## Code Guidelines
 - Try not to change unrelated files and keep the code in sync with the official package.
 
 For pull requests:
