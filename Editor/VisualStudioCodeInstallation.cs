@@ -17,9 +17,35 @@ using Debug = UnityEngine.Debug;
 namespace Microsoft.Unity.VisualStudio.Editor
 {
 	/// <summary>
+	/// Represents the state of a VS Code extension.
+	/// </summary>
+	public record CodeExtensionState
+	{
+		/// <summary>
+		/// The identifier of the extension.
+		/// </summary>
+		public string Id { get; set; }
+
+		/// <summary>
+		/// The version of the extension if installed, otherwise null.
+		/// </summary>
+		public string Version { get; set; }
+
+		/// <summary>
+		/// The relative path to the extension if installed, otherwise null.
+		/// </summary>
+		public string RelativePath { get; set; }
+
+		/// <summary>
+		/// Whether the extension is installed.
+		/// </summary>
+		public bool IsInstalled => !string.IsNullOrEmpty(RelativePath);
+	}
+
+	/// <summary>
 	/// Data for a Visual Studio Code fork.
 	/// </summary>
-	public class CodeForkData
+	public record CodeForkData
 	{
 		/// <summary>
 		/// The name of the fork (that is displayed to the user).
@@ -72,6 +98,43 @@ namespace Microsoft.Unity.VisualStudio.Editor
 		/// The fork data for this installation.
 		/// </summary>
 		private CodeForkData ForkData { get; set; }
+
+		/// <summary>
+		/// Dictionary of extension states with extension ID as the key.
+		/// </summary>
+		private Dictionary<string, CodeExtensionState> ExtensionStates { get; set; } = new();
+
+		/// <summary>
+		/// Gets the state of a specific extension. If the extension state doesn't exist in the dictionary,
+		/// a new state will be created, added to the dictionary, and returned.
+		/// </summary>
+		/// <param name="extensionId">The ID of the extension.</param>
+		/// <returns>The existing extension state or a newly created state.</returns>
+		private CodeExtensionState GetExtensionState(string extensionId)
+		{
+			if (ExtensionStates.TryGetValue(extensionId, out var state))
+				return state;
+			
+			// Create a new extension state, add it to the dictionary, and return it
+			var newState = new CodeExtensionState { Id = extensionId };
+			ExtensionStates[extensionId] = newState;
+			return newState;
+		}
+
+		/// <summary>
+		/// Gets the state of the Visual Studio Tools for Unity extension.
+		/// </summary>
+		private CodeExtensionState UnityToolsExtensionState => GetExtensionState(MicrosoftUnityExtensionId);
+
+		/// <summary>
+		/// Gets the state of the C# Dev Kit extension.
+		/// </summary>
+		private CodeExtensionState CSharpDevKitExtensionState => GetExtensionState(CSharpDevKitExtensionId);
+
+		/// <summary>
+		/// Gets the state of the DotRush extension.
+		/// </summary>
+		private CodeExtensionState DotRushExtensionState => GetExtensionState(DotRushExtensionId);
 
 		/// <summary>
 		/// Static array of supported Visual Studio Code forks.<br/>
@@ -162,22 +225,115 @@ namespace Microsoft.Unity.VisualStudio.Editor
 		public override Version LatestLanguageVersionSupported => ForkData?.LatestLanguageVersion ?? new Version(11, 0);
 
 		/// <summary>
-		/// Gets the path to the Visual Studio Tools for Unity extension for VS Code.
+		/// Gets the path to the extensions directory for this VS Code installation.
 		/// </summary>
-		/// <returns>The path to the extension directory or null if not found.</returns>
-		private string GetExtensionPath()
+		/// <returns>The path to the extensions directory or null if not found.</returns>
+		private string GetExtensionsDirectory()
 		{
 			var extensionsDirName = ForkData.UserDataDirName;
 
 			var extensionsPath = IOPath.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
 				extensionsDirName, "extensions");
-			if (!Directory.Exists(extensionsPath))
-				return null;
+			
+			return Directory.Exists(extensionsPath) ? extensionsPath : null;
+		}
 
-			return Directory
-				.EnumerateDirectories(extensionsPath, $"{MicrosoftUnityExtensionId}*") // publisherid.extensionid
-				.OrderByDescending(n => n)
-				.FirstOrDefault();
+		/// <summary>
+		/// Wrapper class for deserializing the extensions.json file.
+		/// </summary>
+		[Serializable]
+		private class ExtensionsWrapper
+		{
+			public ExtensionInfo[] extensions;
+		}
+
+		/// <summary>
+		/// Represents an extension entry in the extensions.json file.
+		/// </summary>
+		[Serializable]
+		private class ExtensionInfo
+		{
+			public ExtensionIdentifier identifier;
+			public string version;
+			public string relativeLocation;
+		}
+
+		/// <summary>
+		/// Represents the identifier of an extension.
+		/// </summary>
+		[Serializable]
+		private class ExtensionIdentifier
+		{
+			public string id;
+		}
+
+		/// <summary>
+		/// Loads extension states from the extensions.json file.
+		/// </summary>
+		/// <param name="extensionsDirectory">The directory containing the extensions.</param>
+		private void LoadExtensionStates(string extensionsDirectory)
+		{
+			// Debug.Log($"Loading extension states from {extensionsDirectory}");
+			// Initialize dictionary with default empty states for known extensions
+			// These will be updated if found in extensions.json, and any other extensions will also be added
+			ExtensionStates = new Dictionary<string, CodeExtensionState>
+			{
+				[MicrosoftUnityExtensionId] = new() { Id = MicrosoftUnityExtensionId },
+				[CSharpDevKitExtensionId] = new() { Id = CSharpDevKitExtensionId },
+				[DotRushExtensionId] = new() { Id = DotRushExtensionId }
+			};
+
+			if (string.IsNullOrEmpty(extensionsDirectory))
+			{
+				Debug.LogError($"Extensions directory is null or empty");
+				return;
+			}
+
+			try
+			{
+				var extensionsJsonPath = IOPath.Combine(extensionsDirectory, "extensions.json");
+				if (!File.Exists(extensionsJsonPath))
+					return;
+
+				var json = File.ReadAllText(extensionsJsonPath);
+				// Wrap the JSON array in an object for JsonUtility
+				json = $"{{\"extensions\":{json}}}";
+
+				var wrapper = JsonUtility.FromJson<ExtensionsWrapper>(json);
+				if (wrapper?.extensions == null)
+				{
+					Debug.LogError($"Extensions wrapper is null");
+					return;
+				}
+
+				foreach (var extension in wrapper.extensions)
+				{
+					if (extension?.identifier?.id == null || extension?.relativeLocation == null)
+						continue;
+
+					var extensionId = extension.identifier.id;
+
+					if (!ExtensionStates.ContainsKey(extensionId))
+					{
+						continue;
+					}
+
+					var state = new CodeExtensionState
+					{
+						Id = extensionId,
+						RelativePath = extension.relativeLocation,
+						Version = extension.version
+					};
+
+					ExtensionStates[extensionId] = state;
+				}
+			}
+			catch (Exception ex)
+			{
+				Debug.LogError($"Error loading extensions.json: {ex.Message}");
+			}
+
+			Debug.Log($"Loaded {ExtensionStates.Count} extension states, they are :{string.Join(", ", ExtensionStates.Select(kv => kv.Value))}");
 		}
 
 		/// <summary>
@@ -186,11 +342,10 @@ namespace Microsoft.Unity.VisualStudio.Editor
 		/// <returns>Array of analyzer assembly paths or an empty array if none found.</returns>
 		public override string[] GetAnalyzers()
 		{
-			var vstuPath = GetExtensionPath();
-			if (string.IsNullOrEmpty(vstuPath))
+			if (!UnityToolsExtensionState.IsInstalled)
 				return Array.Empty<string>();
 
-			return GetAnalyzers(vstuPath);
+			return GetAnalyzers(IOPath.Combine(GetExtensionsDirectory(), UnityToolsExtensionState.RelativePath));
 		}
 
 		/// <summary>
@@ -347,7 +502,7 @@ namespace Microsoft.Unity.VisualStudio.Editor
 				name += $" [{version.ToString(3)}]";
 			}
 
-			installation = new VisualStudioCodeInstallation()
+			var installation2 = new VisualStudioCodeInstallation()
 			{
 				ForkData = forkData,
 				IsPrerelease = isPrerelease,
@@ -355,6 +510,11 @@ namespace Microsoft.Unity.VisualStudio.Editor
 				Path = exePath,
 				Version = version ?? new Version()
 			};
+			installation = installation2;
+
+			// Load extension states
+			var extensionsDirectory = installation2.GetExtensionsDirectory();
+			installation2.LoadExtensionStates(extensionsDirectory);
 
 			Debug.Log($"discovered vs code installation {name} at {installation.Path}");
 
@@ -741,6 +901,16 @@ namespace Microsoft.Unity.VisualStudio.Editor
 		/// The identifier for the Visual Studio Tools for Unity extension for VS Code.
 		/// </summary>
 		private const string MicrosoftUnityExtensionId = "visualstudiotoolsforunity.vstuc";
+
+		/// <summary>
+		/// The identifier for the C# Dev Kit extension for VS Code.
+		/// </summary>
+		private const string CSharpDevKitExtensionId = "ms-dotnettools.csdevkit";
+
+		/// <summary>
+		/// The identifier for the DotRush extension for VS Code.
+		/// </summary>
+		private const string DotRushExtensionId = "nromanov.dotrush";
 
 		/// <summary>
 		/// The default content for the extensions.json file.
