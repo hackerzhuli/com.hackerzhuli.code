@@ -17,7 +17,7 @@ namespace Microsoft.Unity.VisualStudio.Editor
 		public static string GetPackageAssetFullPath(params string[] components)
 		{
 			// Unity has special IO handling of Packages and will resolve those path to the right package location
-			return Path.GetFullPath(Path.Combine("Packages", "com.unity.ide.visualstudio", Path.Combine(components)));
+			return Path.GetFullPath(Path.Combine("Packages", "com.hackerzhuli.ide.visualstudio", Path.Combine(components)));
 		}
 
 		public static string GetAssetFullPath(string asset)
