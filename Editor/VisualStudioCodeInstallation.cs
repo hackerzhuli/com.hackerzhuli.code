@@ -676,25 +676,94 @@ namespace Microsoft.Unity.VisualStudio.Editor
 		}
 
 		/// <summary>
-		/// The default content for the launch.json file.
+		/// Creates a default launch.json content with an empty configurations array.
 		/// </summary>
-		private const string DefaultLaunchFileContent = @"{
+		/// <returns>A JSON string containing the empty launch configuration.</returns>
+		private static string CreateEmptyLaunchContent()
+		{
+			return @"{
     ""version"": ""0.2.0"",
-    ""configurations"": [
-        {
-            ""name"": ""Attach to Unity"",
-            ""type"": ""vstuc"",
-            ""request"": ""attach""
-        }
-     ]
+    ""configurations"": []
 }";
+		}
+
+		/// <summary>
+		/// Adds extension-specific launch configurations to the provided JSON object based on installed extensions.
+		/// </summary>
+		/// <param name="launchJson">The JSON object representing the launch.json file.</param>
+		/// <returns>True if any changes were made to the JSON object; otherwise, false.</returns>
+		private bool PatchLaunchFileImpl(JSONNode launchJson)
+		{
+			const string configurationsKey = "configurations";
+			const string typeKey = "type";
+			const string nameKey = "name";
+			const string requestKey = "request";
+
+			var configurations = launchJson[configurationsKey] as JSONArray;
+			if (configurations == null)
+			{
+				configurations = new JSONArray();
+				launchJson.Add(configurationsKey, configurations);
+			}
+
+			bool patched = false;
+
+			// Add Unity Tools configuration if installed and not already present
+			if (UnityToolsExtensionState.IsInstalled && 
+			    !configurations.Linq.Any(entry => entry.Value[typeKey].Value == "vstuc"))
+			{
+				var unityToolsConfig = new JSONObject();
+				unityToolsConfig.Add(nameKey, "Attach to Unity");
+				unityToolsConfig.Add(typeKey, "vstuc");
+				unityToolsConfig.Add(requestKey, "attach");
+				configurations.Add(unityToolsConfig);
+				patched = true;
+			}
+
+			// Add DotRush configuration if installed and not already present
+			if (DotRushExtensionState.IsInstalled && 
+			    !configurations.Linq.Any(entry => entry.Value[typeKey].Value == "dotrush"))
+			{
+				var dotRushConfig = new JSONObject();
+				dotRushConfig.Add(nameKey, "Attach to Unity with DotRush");
+				dotRushConfig.Add(typeKey, "dotrush");
+				dotRushConfig.Add(requestKey, "attach");
+				configurations.Add(dotRushConfig);
+				patched = true;
+			}
+
+			return patched;
+		}
+
+		/// <summary>
+		/// Generates the launch.json content based on installed extensions.
+		/// </summary>
+		/// <returns>A JSON string containing the appropriate launch configurations.</returns>
+		private string GenerateLaunchFileContent()
+		{
+			try
+			{
+				var emptyContent = CreateEmptyLaunchContent();
+				var launchJson = JSONNode.Parse(emptyContent);
+
+				PatchLaunchFileImpl(launchJson);
+
+				return launchJson.ToString();
+			}
+			catch (Exception ex)
+			{
+				// This should not happen with our controlled input, but handle it just in case
+				Debug.LogError($"Error generating launch file content: {ex.Message}");
+				return CreateEmptyLaunchContent(); // Fallback to empty content
+			}
+		}
 
 		/// <summary>
 		/// Creates or patches the launch.json file in the VS Code directory.
 		/// </summary>
 		/// <param name="vscodeDirectory">The .vscode directory path.</param>
 		/// <param name="enablePatch">Whether to enable patching of existing files.</param>
-		private static void CreateLaunchFile(string vscodeDirectory, bool enablePatch)
+		private void CreateLaunchFile(string vscodeDirectory, bool enablePatch)
 		{
 			var launchFile = IOPath.Combine(vscodeDirectory, "launch.json");
 			if (File.Exists(launchFile))
@@ -705,41 +774,36 @@ namespace Microsoft.Unity.VisualStudio.Editor
 				return;
 			}
 
-			File.WriteAllText(launchFile, DefaultLaunchFileContent);
+			// Generate content based on installed extensions
+			var content = GenerateLaunchFileContent();
+			File.WriteAllText(launchFile, content);
 		}
 
 		/// <summary>
 		/// Patches an existing launch.json file to include Unity debugging configuration.
 		/// </summary>
 		/// <param name="launchFile">The path to the launch.json file.</param>
-		private static void PatchLaunchFile(string launchFile)
+		private void PatchLaunchFile(string launchFile)
 		{
 			try
 			{
-				const string configurationsKey = "configurations";
-				const string typeKey = "type";
-
 				var content = File.ReadAllText(launchFile);
 				var launch = JSONNode.Parse(content);
 
-				var configurations = launch[configurationsKey] as JSONArray;
-				if (configurations == null)
+				// Apply patches using the common implementation
+				if (PatchLaunchFileImpl(launch))
 				{
-					configurations = new JSONArray();
-					launch.Add(configurationsKey, configurations);
+					// Only write to file if changes were made
+					WriteAllTextFromJObject(launchFile, launch);
 				}
-
-				if (configurations.Linq.Any(entry => entry.Value[typeKey].Value == "vstuc"))
-					return;
-
-				var defaultContent = JSONNode.Parse(DefaultLaunchFileContent);
-				configurations.Add(defaultContent[configurationsKey][0]);
-
-				WriteAllTextFromJObject(launchFile, launch);
 			}
-			catch (Exception)
+			catch (Exception ex)
 			{
-				// do not fail if we cannot patch the launch.json file
+				// Handle parsing errors for malformed launch.json files
+				Debug.LogError($"Error patching launch file at {launchFile}: {ex.Message}");
+				
+				// Create a new launch file with default content as fallback
+				File.WriteAllText(launchFile, GenerateLaunchFileContent());
 			}
 		}
 
