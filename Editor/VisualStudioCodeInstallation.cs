@@ -12,13 +12,25 @@ using System.Text.RegularExpressions;
 using UnityEngine;
 using SimpleJSON;
 using IOPath = System.IO.Path;
+using Debug = UnityEngine.Debug;
 
 namespace Microsoft.Unity.VisualStudio.Editor
 {
-	internal class VisualStudioCodeInstallation : VisualStudioInstallation
+	/// <summary>
+	/// Represents a Visual Studio Code installation on the system.
+	/// Provides functionality for discovering, interacting with, and configuring VS Code.
+	/// </summary>
+	 internal class VisualStudioCodeInstallation : VisualStudioInstallation
 	{
+		/// <summary>
+		/// The generator instance used for creating project files.
+		/// </summary>
 		private static readonly IGenerator _generator = GeneratorFactory.GetInstance(GeneratorStyle.SDK);
 
+		/// <summary>
+		/// Gets whether this installation supports code analyzers.
+		/// </summary>
+		/// <returns>Always returns true for VS Code installations.</returns>
 		public override bool SupportsAnalyzers
 		{
 			get
@@ -27,6 +39,10 @@ namespace Microsoft.Unity.VisualStudio.Editor
 			}
 		}
 
+		/// <summary>
+		/// Gets the latest C# language version supported by this VS Code installation.
+		/// </summary>
+		/// <returns>Version object representing C# 13.0.</returns>
 		public override Version LatestLanguageVersionSupported
 		{
 			get
@@ -35,6 +51,10 @@ namespace Microsoft.Unity.VisualStudio.Editor
 			}
 		}
 
+		/// <summary>
+		/// Gets the path to the Microsoft Unity extension for VS Code.
+		/// </summary>
+		/// <returns>The path to the extension directory or null if not found.</returns>
 		private string GetExtensionPath()
 		{
 			var vscode = IsPrerelease ? ".vscode-insiders" : ".vscode";
@@ -48,6 +68,10 @@ namespace Microsoft.Unity.VisualStudio.Editor
 				.FirstOrDefault();
 		}
 
+		/// <summary>
+		/// Gets the array of analyzer assemblies available in this VS Code installation.
+		/// </summary>
+		/// <returns>Array of analyzer assembly paths or an empty array if none found.</returns>
 		public override string[] GetAnalyzers()
 		{
 			var vstuPath = GetExtensionPath();
@@ -56,6 +80,10 @@ namespace Microsoft.Unity.VisualStudio.Editor
 
 			return GetAnalyzers(vstuPath); }
 
+		/// <summary>
+		/// Gets the project generator for this VS Code installation.
+		/// </summary>
+		/// <returns>The generator instance for creating project files.</returns>
 		public override IGenerator ProjectGenerator
 		{
 			get
@@ -64,6 +92,11 @@ namespace Microsoft.Unity.VisualStudio.Editor
 			}
 		}
 
+		/// <summary>
+		/// Determines if the specified path is a candidate for VS Code discovery.
+		/// </summary>
+		/// <param name="path">The path to check.</param>
+		/// <returns>True if the path is a potential VS Code installation; otherwise, false.</returns>
 		private static bool IsCandidateForDiscovery(string path)
 		{
 #if UNITY_EDITOR_OSX
@@ -75,15 +108,31 @@ namespace Microsoft.Unity.VisualStudio.Editor
 #endif
 		}
 
+		/// <summary>
+		/// Represents the manifest data structure for a Visual Studio Code installation.
+		/// </summary>
 		[Serializable]
 		internal class VisualStudioCodeManifest
 		{
+			/// <summary>
+			/// The name of the VS Code application.
+			/// </summary>
 			public string name;
+			/// <summary>
+			/// The version of the VS Code application.
+			/// </summary>
 			public string version;
 		}
 
+		/// <summary>
+		/// Attempts to create a Visual Studio Code installation from the specified path
+		/// </summary>
+		/// <param name="editorPath">The path of the Visual Studio Code executable.</param>
+		/// <param name="installation">When this method returns, contains the discovered installation if successful; otherwise, null.</param>
+		/// <returns>True if a VS Code installation was found at the specified path; otherwise, false.</returns>
 		public static bool TryDiscoverInstallation(string editorPath, out IVisualStudioInstallation installation)
 		{
+			//Debug.Log($"trying to discover vs code installation at {editorPath}");
 			installation = null;
 
 			if (string.IsNullOrEmpty(editorPath))
@@ -140,6 +189,10 @@ namespace Microsoft.Unity.VisualStudio.Editor
 			return true;
 		}
 
+		/// <summary>
+		/// Gets all Visual Studio Code installations detected on the system.
+		/// </summary>
+		/// <returns>An enumerable collection of VS Code installations.</returns>
 		public static IEnumerable<IVisualStudioInstallation> GetVisualStudioInstallations()
 		{
 			var candidates = new List<string>();
@@ -174,8 +227,15 @@ namespace Microsoft.Unity.VisualStudio.Editor
 		}
 
 #if UNITY_EDITOR_LINUX
+		/// <summary>
+		/// Regular expression for extracting the executable path from Linux desktop files.
+		/// </summary>
 		private static readonly Regex DesktopFileExecEntry = new Regex(@"Exec=(\S+)", RegexOptions.Singleline | RegexOptions.Compiled);
 
+		/// <summary>
+		/// Gets candidate VS Code paths from XDG data directories on Linux.
+		/// </summary>
+		/// <returns>An enumerable collection of potential VS Code executable paths.</returns>
 		private static IEnumerable<string> GetXdgCandidates()
 		{
 			var envdirs = Environment.GetEnvironmentVariable("XDG_DATA_DIRS");
@@ -209,9 +269,21 @@ namespace Microsoft.Unity.VisualStudio.Editor
 			}
 		}
 
+		/// <summary>
+		/// Imports the readlink function from libc for resolving symbolic links on Linux.
+		/// </summary>
+		/// <param name="path">The path to the symbolic link.</param>
+		/// <param name="buffer">The buffer to store the target path.</param>
+		/// <param name="buflen">The length of the buffer.</param>
+		/// <returns>The number of bytes placed in the buffer or -1 if an error occurred.</returns>
 		[System.Runtime.InteropServices.DllImport ("libc")]
 		private static extern int readlink(string path, byte[] buffer, int buflen);
 
+		/// <summary>
+		/// Gets the real path by resolving symbolic links on Linux.
+		/// </summary>
+		/// <param name="path">The path that might be a symbolic link.</param>
+		/// <returns>The resolved path if it's a symbolic link; otherwise, the original path.</returns>
 		internal static string GetRealPath(string path)
 		{
 			byte[] buf = new byte[512];
@@ -222,12 +294,21 @@ namespace Microsoft.Unity.VisualStudio.Editor
 			return new String(cbuf, 0, chars);
 		}
 #else
+		/// <summary>
+		/// Gets the real path for non-Linux platforms (no-op implementation).
+		/// </summary>
+		/// <param name="path">The input path.</param>
+		/// <returns>The same path without modification.</returns>
 		internal static string GetRealPath(string path)
 		{
 			return path;
 		}
 #endif
 
+		/// <summary>
+		/// Creates additional configuration files for VS Code in the project directory.
+		/// </summary>
+		/// <param name="projectDirectory">The Unity project directory where the files should be created.</param>
 		public override void CreateExtraFiles(string projectDirectory)
 		{
 			try
@@ -246,6 +327,9 @@ namespace Microsoft.Unity.VisualStudio.Editor
 			}			
 		}
 
+		/// <summary>
+		/// The default content for the launch.json file.
+		/// </summary>
 		private const string DefaultLaunchFileContent = @"{
     ""version"": ""0.2.0"",
     ""configurations"": [
@@ -257,6 +341,11 @@ namespace Microsoft.Unity.VisualStudio.Editor
      ]
 }";
 
+		/// <summary>
+		/// Creates or patches the launch.json file in the VS Code directory.
+		/// </summary>
+		/// <param name="vscodeDirectory">The .vscode directory path.</param>
+		/// <param name="enablePatch">Whether to enable patching of existing files.</param>
 		private static void CreateLaunchFile(string vscodeDirectory, bool enablePatch)
 		{
 			var launchFile = IOPath.Combine(vscodeDirectory, "launch.json");
@@ -271,6 +360,10 @@ namespace Microsoft.Unity.VisualStudio.Editor
 			File.WriteAllText(launchFile, DefaultLaunchFileContent);
 		}
 
+		/// <summary>
+		/// Patches an existing launch.json file to include Unity debugging configuration.
+		/// </summary>
+		/// <param name="launchFile">The path to the launch.json file.</param>
 		private static void PatchLaunchFile(string launchFile)
 		{
 			try
@@ -302,6 +395,11 @@ namespace Microsoft.Unity.VisualStudio.Editor
 			}
 		}
 
+		/// <summary>
+		/// Creates or patches the settings.json file in the VS Code directory.
+		/// </summary>
+		/// <param name="vscodeDirectory">The .vscode directory path.</param>
+		/// <param name="enablePatch">Whether to enable patching of existing files.</param>
 		private void CreateSettingsFile(string vscodeDirectory, bool enablePatch)
 		{
 			var settingsFile = IOPath.Combine(vscodeDirectory, "settings.json");
@@ -389,6 +487,10 @@ namespace Microsoft.Unity.VisualStudio.Editor
 			File.WriteAllText(settingsFile, content);
 		}
 
+		/// <summary>
+		/// Patches an existing settings.json file to update Unity-specific settings.
+		/// </summary>
+		/// <param name="settingsFile">The path to the settings.json file.</param>
 		private void PatchSettingsFile(string settingsFile)
 		{
 			try
@@ -447,7 +549,13 @@ namespace Microsoft.Unity.VisualStudio.Editor
 			}
 		}
 
+		/// <summary>
+		/// The identifier for the Microsoft Visual Studio Tools for Unity extension for VS Code.
+		/// </summary>
 		private const string MicrosoftUnityExtensionId = "visualstudiotoolsforunity.vstuc";
+		/// <summary>
+		/// The default content for the extensions.json file.
+		/// </summary>
 		private const string DefaultRecommendedExtensionsContent = @"{
     ""recommendations"": [
       """+ MicrosoftUnityExtensionId + @"""
@@ -455,6 +563,11 @@ namespace Microsoft.Unity.VisualStudio.Editor
 }
 ";
 
+		/// <summary>
+		/// Creates or patches the extensions.json file in the VS Code directory.
+		/// </summary>
+		/// <param name="vscodeDirectory">The .vscode directory path.</param>
+		/// <param name="enablePatch">Whether to enable patching of existing files.</param>
 		private static void CreateRecommendedExtensionsFile(string vscodeDirectory, bool enablePatch)
 		{
 			// see https://tattoocoder.com/recommending-vscode-extensions-within-your-open-source-projects/
@@ -470,6 +583,10 @@ namespace Microsoft.Unity.VisualStudio.Editor
 			File.WriteAllText(extensionFile, DefaultRecommendedExtensionsContent);
 		}
 
+		/// <summary>
+		/// Patches an existing extensions.json file to include the Microsoft Unity extension.
+		/// </summary>
+		/// <param name="extensionFile">The path to the extensions.json file.</param>
 		private static void PatchRecommendedExtensionsFile(string extensionFile)
 		{
 			try
@@ -498,6 +615,11 @@ namespace Microsoft.Unity.VisualStudio.Editor
 			}
 		}
 
+		/// <summary>
+		/// Writes a JSON node to a file with proper formatting.
+		/// </summary>
+		/// <param name="file">The path to the file to write.</param>
+		/// <param name="node">The JSON node to write.</param>
 		private static void WriteAllTextFromJObject(string file, JSONNode node)
 		{
 			using (var fs = File.Open(file, FileMode.Create))
@@ -508,6 +630,14 @@ namespace Microsoft.Unity.VisualStudio.Editor
 			}
 		}
 
+		/// <summary>
+		/// Opens a file in Visual Studio Code at the specified line and column.
+		/// </summary>
+		/// <param name="path">The path to the file to open, or null to open the solution/workspace.</param>
+		/// <param name="line">The line number to navigate to.</param>
+		/// <param name="column">The column number to navigate to.</param>
+		/// <param name="solution">The path to the solution file.</param>
+		/// <returns>True if the operation was successful; otherwise, false.</returns>
 		public override bool Open(string path, int line, int column, string solution)
 		{
 			var application = Path;
@@ -527,6 +657,11 @@ namespace Microsoft.Unity.VisualStudio.Editor
 			return true;
 		}
 
+		/// <summary>
+		/// Attempts to find a VS Code workspace file in the specified directory.
+		/// </summary>
+		/// <param name="directory">The directory to search in.</param>
+		/// <returns>The path to the workspace file if found; otherwise, null.</returns>
 		private static string TryFindWorkspace(string directory)
 		{
 			var files = Directory.GetFiles(directory, "*.code-workspace", SearchOption.TopDirectoryOnly);
@@ -536,6 +671,12 @@ namespace Microsoft.Unity.VisualStudio.Editor
 			return files[0];
 		}
 
+		/// <summary>
+		/// Creates a ProcessStartInfo object for launching VS Code with the specified arguments.
+		/// </summary>
+		/// <param name="application">The path to the VS Code executable.</param>
+		/// <param name="arguments">The command-line arguments to pass to VS Code.</param>
+		/// <returns>A configured ProcessStartInfo object.</returns>
 		private static ProcessStartInfo ProcessStartInfoFor(string application, string arguments)
 		{
 #if UNITY_EDITOR_OSX
@@ -548,6 +689,9 @@ namespace Microsoft.Unity.VisualStudio.Editor
 #endif
 		}
 
+		/// <summary>
+		/// Initializes the Visual Studio Code installation.
+		/// </summary>
 		public static void Initialize()
 		{
 		}
