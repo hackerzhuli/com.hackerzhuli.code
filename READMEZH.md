@@ -13,7 +13,7 @@
 - Trae
 
 关于这些编辑器：
-所有编辑器都被当作Visual Studio Code，只是有不同的可执行文件名、扩展路径（安装扩展的位置）和其他小的差异。
+这些编辑器都被当作Visual Studio Code，只是有不同的可执行文件名、扩展路径（安装扩展的位置）和其他小的差异。
 
 注意：
 - 如果你使用其他基于VS Code的代码编辑器，你需要自己添加支持，非常简单，查看文件`VisualStudioCodeInstallation.cs`并将你的代码编辑器的数据添加到数组`Forks`中。如果你愿意，可以创建一个拉取请求来分享你的更改。
@@ -43,5 +43,5 @@
 看这个非常牛的截图，Windows上的Unity编辑器检测到的所有流行C#代码编辑器：
 ![image](Images/Unity%20Editor%20External%20Script%20Editor%20Detection.png)
 
-在你喜爱的VS Code代码编辑器中使用Dot Rush愉快地调试你的Unity游戏：
+在你喜欢的基于VS Code代码编辑器中使用Dot Rush调试你的Unity游戏（图中为Trae）：
 ![image](Images/Debug%20in%20Trae%20With%20Dot%20Rush.png)
