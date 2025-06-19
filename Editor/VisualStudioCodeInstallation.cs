@@ -892,14 +892,13 @@ namespace Microsoft.Unity.VisualStudio.Editor
 			// Add default exclude patterns if they don't exist
 			string[] defaultExcludePatterns = new string[]
 			{
-				"**/.DS_Store", "**/.git", "**/.vs", "**/.gitmodules", "**/.vsconfig",
+				"**/.DS_Store", "**/.git", "**/.vs", "**/.vsconfig",
 				"**/*.booproj", "**/*.pidb", "**/*.suo", "**/*.user", "**/*.userprefs", "**/*.unityproj",
 				"**/*.dll", "**/*.exe", "**/*.pdf", "**/*.mid", "**/*.midi", "**/*.wav",
-				"**/*.gif", "**/*.ico", "**/*.jpg", "**/*.jpeg", "**/*.png", "**/*.psd", "**/*.tga", "**/*.tif",
-				"**/*.tiff",
+				"**/*.ico", "**/*.psd", "**/*.tga", "**/*.tif", "**/*.tiff",
 				"**/*.3ds", "**/*.3DS", "**/*.fbx", "**/*.FBX", "**/*.lxo", "**/*.LXO", "**/*.ma", "**/*.MA",
 				"**/*.obj", "**/*.OBJ",
-				"**/*.asset", "**/*.cubemap", "**/*.flare", "**/*.mat", "**/*.meta", "**/*.prefab", "**/*.unity",
+				"**/*.cubemap", "**/*.flare", "**/*.mat", "**/*.meta", "**/*.prefab", "**/*.unity",
 				"build/", "Build/", "Library/", "library/", "obj/", "Obj/", "Logs/", "logs/", "ProjectSettings/",
 				"UserSettings/", "temp/", "Temp/"
 			};
