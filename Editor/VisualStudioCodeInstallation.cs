@@ -180,7 +180,6 @@ namespace Microsoft.Unity.VisualStudio.Editor
 				MacAppName = "Cursor",
 				LinuxExeName = "cursor",
 				UserDataDirName = ".cursor",
-				IsPrerelease = false
 			},
 			new CodeForkData
 			{
@@ -190,8 +189,6 @@ namespace Microsoft.Unity.VisualStudio.Editor
 				MacAppName = "Windsurf",
 				LinuxExeName = "windsurf",
 				UserDataDirName = ".windsurf",
-				IsPrerelease = false,
-				IsMicrosoft = false
 			},
 			new CodeForkData
 			{
@@ -201,8 +198,6 @@ namespace Microsoft.Unity.VisualStudio.Editor
 				MacAppName = "Windsurf - Next",
 				LinuxExeName = "windsurf-next",
 				UserDataDirName = ".windsurf-next",
-				IsPrerelease = true,
-				IsMicrosoft = false
 			},
 			new CodeForkData
 			{
@@ -212,8 +207,6 @@ namespace Microsoft.Unity.VisualStudio.Editor
 				MacAppName = "Trae",
 				LinuxExeName = "trae",
 				UserDataDirName = ".trae",
-				IsPrerelease = false,
-				IsMicrosoft = false
 			}
 		};
 
@@ -343,7 +336,7 @@ namespace Microsoft.Unity.VisualStudio.Editor
 				Debug.LogError($"Error loading extensions.json: {ex.Message}");
 			}
 
-			Debug.Log($"Loaded {ExtensionStates.Count} extension states, they are :{string.Join(", ", ExtensionStates.Select(kv => kv.Value))}");
+			//Debug.Log($"Loaded {ExtensionStates.Count} extension states, they are :{string.Join(", ", ExtensionStates.Select(kv => kv.Value))}");
 		}
 
 		/// <summary>
@@ -435,7 +428,7 @@ namespace Microsoft.Unity.VisualStudio.Editor
 
 		public static bool TryDiscoverInstallation(string exePath, out IVisualStudioInstallation installation)
 		{
-			Debug.Log($"trying to get the vs code fork installation at {exePath}");
+			//Debug.Log($"trying to get the vs code fork installation at {exePath}");
 			installation = null;
 
 			if (string.IsNullOrEmpty(exePath))
@@ -526,7 +519,7 @@ namespace Microsoft.Unity.VisualStudio.Editor
 			var extensionsDirectory = installation2.GetExtensionsDirectory();
 			installation2.LoadExtensionStates(extensionsDirectory);
 
-			Debug.Log($"discovered vs code installation {name} at {installation.Path}");
+			//Debug.Log($"discovered vs code installation {name} at {installation.Path}");
 
 			return true;
 		}
