@@ -279,6 +279,8 @@ namespace Microsoft.Unity.VisualStudio.Editor
 		private static void OnAssemblyReload()
 		{
 			Debug.Log("OnAssemblyReload");
+			// need to ensure messager is initialized, because assembly reload event can happen before first Update
+			EnsureMessagerInitialized();
 			BroadcastMessage(MessageType.CompilationFinished, "");
 		}
 
@@ -341,6 +343,23 @@ namespace Microsoft.Unity.VisualStudio.Editor
 		private static void Answer(IPEndPoint targetEndPoint, MessageType answerType, string answerValue)
 		{
 			_messager?.SendMessage(targetEndPoint, answerType, answerValue);
+		}
+
+		private static void EnsureMessagerInitialized()
+		{
+			if (_messager != null || !VisualStudioEditor.IsEnabled)
+				return;
+
+			var messagingPort = MessagingPort();
+			try
+			{
+				_messager = Messager.BindTo(messagingPort);
+				_messager.ReceiveMessage += ReceiveMessage;
+			}
+			catch (SocketException)
+			{
+				Debug.LogWarning($"Unable to use UDP port {messagingPort} for VS/Unity messaging. You should check if another process is already bound to this port or if your firewall settings are compatible.");
+			}
 		}
 
 		private static void SaveClients()
