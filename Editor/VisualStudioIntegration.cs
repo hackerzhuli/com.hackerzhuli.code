@@ -60,7 +60,7 @@ namespace Microsoft.Unity.VisualStudio.Editor
 			});
 
 			EditorApplication.update += OnUpdate;
-			CompilationPipeline.compilationFinished += OnCompilationFinished;
+			AssemblyReloadEvents.afterAssemblyReload += OnAssemblyReload;
 
 			CheckLegacyAssemblies();
 		}
@@ -259,7 +259,7 @@ namespace Microsoft.Unity.VisualStudio.Editor
 			AddMessage(message);
 		}
 
-		private static void OnCompilationFinished(object obj)
+		private static void OnAssemblyReload()
 		{
 			BroadcastMessage(MessageType.CompilationFinished, "");
 		}
@@ -286,7 +286,7 @@ namespace Microsoft.Unity.VisualStudio.Editor
 
 		private static void Shutdown()
 		{
-			CompilationPipeline.compilationFinished -= OnCompilationFinished;
+			AssemblyReloadEvents.afterAssemblyReload -= OnAssemblyReload;
 
 			if (_messager == null)
 				return;
