@@ -235,8 +235,15 @@ namespace Microsoft.Unity.VisualStudio.Editor
 
 		private static void Refresh()
 		{
-			// If the user disabled auto-refresh in Unity, do not try to force refresh the Asset database
-			if (!EditorPrefs.GetBool("kAutoRefresh", true))
+			// Handle auto-refresh based on kAutoRefreshMode: 0=disabled, 1=enabled, 2=enabled outside play mode
+			var autoRefreshMode = EditorPrefs.GetInt("kAutoRefreshMode", 1);
+			
+			// If auto-refresh is disabled (0), do not try to force refresh the Asset database
+			if (autoRefreshMode == 0)
+				return;
+			
+			// If auto-refresh is set to "enabled outside play mode" (2) and we're in play mode, skip refresh
+			if (autoRefreshMode == 2 && EditorApplication.isPlaying)
 				return;
 
 			if (UnityInstallation.IsInSafeMode)
