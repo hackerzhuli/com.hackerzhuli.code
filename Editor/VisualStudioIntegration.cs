@@ -40,6 +40,7 @@ namespace Microsoft.Unity.VisualStudio.Editor
 		}
 
 		private static Messager _messager;
+		private static bool _isQuitting = false;
 
 		private static readonly Queue<Message> _incoming = new Queue<Message>();
 		private static readonly Dictionary<IPEndPoint, Client> _clients = new Dictionary<IPEndPoint, Client>();
@@ -77,6 +78,7 @@ namespace Microsoft.Unity.VisualStudio.Editor
 			});
 
 			EditorApplication.update += OnUpdate;
+			EditorApplication.quitting += OnQuitting;
 			AssemblyReloadEvents.afterAssemblyReload += OnAssemblyReload;
 
 			CheckLegacyAssemblies();
@@ -389,12 +391,20 @@ namespace Microsoft.Unity.VisualStudio.Editor
 			}
 		}
 
+		private static void OnQuitting()
+		{
+			_isQuitting = true;
+		}
+
 		private static void Shutdown()
 		{
 			// Save clients before shutdown to restore after domain reload
-			SaveClients();
+			// But avoid saving when Unity Editor is quitting to prevent crashes
+			if (!_isQuitting)
+				SaveClients();
 
 			// Always unsubscribe from events to prevent memory leaks
+			EditorApplication.quitting -= OnQuitting;
 			AssemblyReloadEvents.afterAssemblyReload -= OnAssemblyReload;
 
 			if (_messager == null)
