@@ -26,6 +26,19 @@ namespace Microsoft.Unity.VisualStudio.Editor
 			public double LastMessage { get; set; }
 		}
 
+		[Serializable]
+		class SerializableClient
+		{
+			public string address;
+			public int port;
+		}
+
+		[Serializable]
+		class ClientData
+		{
+			public SerializableClient[] clients;
+		}
+
 		private static Messager _messager;
 
 		private static readonly Queue<Message> _incoming = new Queue<Message>();
@@ -33,10 +46,14 @@ namespace Microsoft.Unity.VisualStudio.Editor
 		private static readonly object _incomingLock = new object();
 		private static readonly object _clientsLock = new object();
 
+		private const string ClientsPrefsKey = "VisualStudioIntegration.Clients";
+
 		static VisualStudioIntegration()
 		{
 			if (!VisualStudioEditor.IsEnabled)
 				return;
+
+			RestoreClients();
 
 			RunOnceOnUpdate(() =>
 			{
@@ -261,7 +278,47 @@ namespace Microsoft.Unity.VisualStudio.Editor
 
 		private static void OnAssemblyReload()
 		{
+			Debug.Log("OnAssemblyReload");
 			BroadcastMessage(MessageType.CompilationFinished, "");
+		}
+
+		private static void RestoreClients()
+		{
+			try
+			{
+				var clientsJson = EditorPrefs.GetString(ClientsPrefsKey, "");
+				if (string.IsNullOrEmpty(clientsJson))
+					return;
+
+				var clientData = JsonUtility.FromJson<ClientData>(clientsJson);
+				if (clientData?.clients == null)
+					return;
+
+				lock (_clientsLock)
+				{
+					foreach (var serializableClient in clientData.clients)
+					{
+						try
+						{
+							var endPoint = new IPEndPoint(IPAddress.Parse(serializableClient.address), serializableClient.port);
+							var client = new Client
+							{
+								EndPoint = endPoint,
+								LastMessage = EditorApplication.timeSinceStartup
+							};
+							_clients[endPoint] = client;
+						}
+						catch (Exception ex)
+						{
+							Debug.LogWarning($"Failed to restore client {serializableClient.address}:{serializableClient.port}: {ex.Message}");
+						}
+					}
+				}
+			}
+			catch (Exception ex)
+			{
+				Debug.LogWarning($"Failed to restore clients: {ex.Message}");
+			}
 		}
 
 		private static void Answer(Client client, MessageType answerType, string answerValue)
@@ -284,8 +341,38 @@ namespace Microsoft.Unity.VisualStudio.Editor
 			_messager?.SendMessage(targetEndPoint, answerType, answerValue);
 		}
 
+		private static void SaveClients()
+		{
+			try
+			{
+				SerializableClient[] serializableClients;
+				lock (_clientsLock)
+				{
+					serializableClients = _clients.Values
+						.Select(client => new SerializableClient
+						{
+							address = client.EndPoint.Address.ToString(),
+							port = client.EndPoint.Port
+						})
+						.ToArray();
+				}
+
+				var clientData = new ClientData { clients = serializableClients };
+				var json = JsonUtility.ToJson(clientData);
+				EditorPrefs.SetString(ClientsPrefsKey, json);
+			}
+			catch (Exception ex)
+			{
+				Debug.LogError($"Failed to save clients: {ex.Message}");
+			}
+		}
+
 		private static void Shutdown()
 		{
+			// Save clients before shutdown to restore after domain reload
+			SaveClients();
+
+			// Always unsubscribe from events to prevent memory leaks
 			AssemblyReloadEvents.afterAssemblyReload -= OnAssemblyReload;
 
 			if (_messager == null)
