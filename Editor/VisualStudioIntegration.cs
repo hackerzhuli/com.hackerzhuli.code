@@ -27,14 +27,14 @@ namespace Microsoft.Unity.VisualStudio.Editor
 		}
 
 		[Serializable]
-		class SerializableClient
+		public class SerializableClient
 		{
 			public string address;
 			public int port;
 		}
 
 		[Serializable]
-		class ClientData
+		public class ClientData
 		{
 			public SerializableClient[] clients;
 		}
@@ -53,7 +53,7 @@ namespace Microsoft.Unity.VisualStudio.Editor
 			if (!VisualStudioEditor.IsEnabled)
 				return;
 
-			RestoreClients();
+			LoadClients();
 
 			RunOnceOnUpdate(() =>
 			{
@@ -282,7 +282,7 @@ namespace Microsoft.Unity.VisualStudio.Editor
 			BroadcastMessage(MessageType.CompilationFinished, "");
 		}
 
-		private static void RestoreClients()
+		private static void LoadClients()
 		{
 			try
 			{
@@ -296,6 +296,7 @@ namespace Microsoft.Unity.VisualStudio.Editor
 
 				lock (_clientsLock)
 				{
+					_clients.Clear();
 					foreach (var serializableClient in clientData.clients)
 					{
 						try
@@ -313,6 +314,7 @@ namespace Microsoft.Unity.VisualStudio.Editor
 							Debug.LogWarning($"Failed to restore client {serializableClient.address}:{serializableClient.port}: {ex.Message}");
 						}
 					}
+					Debug.Log($"Restored {_clients.Count} clients");
 				}
 			}
 			catch (Exception ex)
@@ -360,6 +362,7 @@ namespace Microsoft.Unity.VisualStudio.Editor
 				var clientData = new ClientData { clients = serializableClients };
 				var json = JsonUtility.ToJson(clientData);
 				EditorPrefs.SetString(ClientsPrefsKey, json);
+				Debug.Log($"Saved {_clients.Count} clients");
 			}
 			catch (Exception ex)
 			{
