@@ -66,6 +66,7 @@ All available message types in the Unity Visual Studio integration:
 | `RetrieveTestList` | 23 | Request to retrieve list of available tests | Check specific section below for details |
 | `ExecuteTests` | 24 | Request to execute specific tests | Check specific section below for details |
 | `ShowUsage` | 25 | Show usage information | - |
+| `CompilationFinished` | 26 | Notification that compilation has finished | Empty string |
 
 ### Value Format Details
 

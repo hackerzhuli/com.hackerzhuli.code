@@ -11,6 +11,7 @@ using System.Net.Sockets;
 using Microsoft.Unity.VisualStudio.Editor.Messaging;
 using Microsoft.Unity.VisualStudio.Editor.Testing;
 using UnityEditor;
+using UnityEditor.Compilation;
 using UnityEngine;
 using MessageType = Microsoft.Unity.VisualStudio.Editor.Messaging.MessageType;
 
@@ -59,6 +60,7 @@ namespace Microsoft.Unity.VisualStudio.Editor
 			});
 
 			EditorApplication.update += OnUpdate;
+			CompilationPipeline.compilationFinished += OnCompilationFinished;
 
 			CheckLegacyAssemblies();
 		}
@@ -257,6 +259,11 @@ namespace Microsoft.Unity.VisualStudio.Editor
 			AddMessage(message);
 		}
 
+		private static void OnCompilationFinished(object obj)
+		{
+			BroadcastMessage(MessageType.CompilationFinished, "");
+		}
+
 		private static void Answer(Client client, MessageType answerType, string answerValue)
 		{
 			Answer(client.EndPoint, answerType, answerValue);
@@ -279,6 +286,8 @@ namespace Microsoft.Unity.VisualStudio.Editor
 
 		private static void Shutdown()
 		{
+			CompilationPipeline.compilationFinished -= OnCompilationFinished;
+
 			if (_messager == null)
 				return;
 

@@ -43,6 +43,8 @@ namespace Microsoft.Unity.VisualStudio.Editor.Messaging
 		RetrieveTestList,
 		ExecuteTests,
 
-		ShowUsage
+		ShowUsage,
+
+		CompilationFinished
 	}
 }
