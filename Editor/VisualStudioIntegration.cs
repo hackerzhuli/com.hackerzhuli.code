@@ -23,7 +23,7 @@ namespace Microsoft.Unity.VisualStudio.Editor
 		class Client
 		{
 			public IPEndPoint EndPoint { get; set; }
-			public double LastMessage { get; set; }
+			public double ElapsedTime { get; set; }
 		}
 
 		[Serializable]
@@ -41,6 +41,7 @@ namespace Microsoft.Unity.VisualStudio.Editor
 
 		private static Messager _messager;
 		private static bool _isQuitting = false;
+		private static double _lastUpdateTime = 0;
 
 		private static readonly Queue<Message> _incoming = new Queue<Message>();
 		private static readonly Dictionary<IPEndPoint, Client> _clients = new Dictionary<IPEndPoint, Client>();
@@ -74,7 +75,7 @@ namespace Microsoft.Unity.VisualStudio.Editor
 					Debug.LogWarning($"Unable to use UDP port {messagingPort} for VS/Unity messaging. You should check if another process is already bound to this port or if your firewall settings are compatible.");
 				}
 
-				RunOnShutdown(Shutdown);
+				AppDomain.CurrentDomain.DomainUnload += OnUnload;
 			});
 
 			EditorApplication.update += OnUpdate;
@@ -84,7 +85,15 @@ namespace Microsoft.Unity.VisualStudio.Editor
 			CheckLegacyAssemblies();
 		}
 
-		private static void CheckLegacyAssemblies()
+        private static void OnUnload(object sender, EventArgs e)
+        {
+        	// Mono on OSX has all kinds of quirks on AppDomain shutdown
+#if UNITY_EDITOR_WIN
+			Shutdown();
+#endif
+        }
+
+        private static void CheckLegacyAssemblies()
 		{
 			var checkList = new HashSet<string>(new[] { KnownAssemblies.UnityVS, KnownAssemblies.Messaging, KnownAssemblies.Bridge });
 
@@ -124,14 +133,6 @@ namespace Microsoft.Unity.VisualStudio.Editor
 			EditorApplication.update += callback;
 		}
 
-		private static void RunOnShutdown(Action action)
-		{
-			// Mono on OSX has all kinds of quirks on AppDomain shutdown
-#if UNITY_EDITOR_WIN
-			AppDomain.CurrentDomain.DomainUnload += (_, __) => action();
-#endif
-		}
-
 		private static int DebuggingPort()
 		{
 			return 56000 + (System.Diagnostics.Process.GetCurrentProcess().Id % 1000);
@@ -149,6 +150,16 @@ namespace Microsoft.Unity.VisualStudio.Editor
 
 		private static void OnUpdate()
 		{
+			// Process messages from the queue on the main thread
+			if (_messager != null)
+			{
+				while (_messager.TryDequeueMessage(out var message))
+				{
+					ProcessIncoming(message);
+				}
+			}
+
+			// Process any remaining messages from the old queue (for compatibility)
 			lock (_incomingLock)
 			{
 				while (_incoming.Count > 0)
@@ -157,12 +168,22 @@ namespace Microsoft.Unity.VisualStudio.Editor
 				}
 			}
 
+			var currentTime = EditorApplication.timeSinceStartup;
+            double deltaTime = currentTime - _lastUpdateTime;
+
+			if(deltaTime > 1)
+			{
+				Debug.Log($"long delta time detected, deltaTime: {deltaTime}");
+			}
+
+            var clampedDeltaTime = Math.Min(deltaTime, 0.1);
+			_lastUpdateTime = currentTime;
 			lock (_clientsLock)
 			{
 				foreach (var client in _clients.Values.ToArray())
 				{
-					// EditorApplication.timeSinceStartup: The time since the editor was started, in seconds, not reset when starting play mode.
-					if (EditorApplication.timeSinceStartup - client.LastMessage > 4)
+					client.ElapsedTime += clampedDeltaTime;
+					if (client.ElapsedTime > 60)
 						_clients.Remove(client.EndPoint);
 				}
 			}
@@ -225,6 +246,9 @@ namespace Microsoft.Unity.VisualStudio.Editor
 				case MessageType.ShowUsage:
 					UsageUtility.ShowUsage(message.Value);
 					break;
+				case MessageType.PackageName:
+					Answer(message, MessageType.PackageName, PackageName());
+					break;
 			}
 		}
 
@@ -237,14 +261,13 @@ namespace Microsoft.Unity.VisualStudio.Editor
 				client = new Client
 				{
 					EndPoint = endPoint,
-					LastMessage = EditorApplication.timeSinceStartup
 				};
 
 				_clients.Add(endPoint, client);
 			}
 			else
 			{
-				client.LastMessage = EditorApplication.timeSinceStartup;
+				client.ElapsedTime = 0;
 			}
 		}
 
@@ -252,6 +275,12 @@ namespace Microsoft.Unity.VisualStudio.Editor
 		{
 			var package = UnityEditor.PackageManager.PackageInfo.FindForAssembly(typeof(VisualStudioIntegration).Assembly);
 			return package.version;
+		}
+
+		internal static string PackageName()
+		{
+			var package = UnityEditor.PackageManager.PackageInfo.FindForAssembly(typeof(VisualStudioIntegration).Assembly);
+			return package.name;
 		}
 
 		private static void Refresh()
@@ -309,7 +338,6 @@ namespace Microsoft.Unity.VisualStudio.Editor
 							var client = new Client
 							{
 								EndPoint = endPoint,
-								LastMessage = EditorApplication.timeSinceStartup
 							};
 							_clients[endPoint] = client;
 						}

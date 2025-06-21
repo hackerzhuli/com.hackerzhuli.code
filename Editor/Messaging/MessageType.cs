@@ -2,6 +2,8 @@
  *  Copyright (c) Microsoft Corporation. All rights reserved.
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
+using System;
+
 namespace Microsoft.Unity.VisualStudio.Editor.Messaging
 {
 	internal enum MessageType
@@ -16,6 +18,7 @@ namespace Microsoft.Unity.VisualStudio.Editor.Messaging
 		Pause,
 		Unpause,
 
+		[Obsolete]
 		Build,
 		Refresh,
 
@@ -23,16 +26,25 @@ namespace Microsoft.Unity.VisualStudio.Editor.Messaging
 		Error,
 		Warning,
 
+		[Obsolete]
 		Open,
+		[Obsolete]
 		Opened,
 
+		/// <summary>
+		/// The version of this package
+		/// </summary>
 		Version,
+		[Obsolete]
 		UpdatePackage,
 
 		ProjectPath,
 
-		// This message is a technical one for big messages, not intended to be used directly
-		Tcp,
+
+        /// <summary>
+        /// This message is a technical one for big messages, not intended to be used directly
+        /// </summary>
+        Tcp,
 
 		RunStarted,
 		RunFinished,
@@ -45,6 +57,16 @@ namespace Microsoft.Unity.VisualStudio.Editor.Messaging
 
 		ShowUsage,
 
-		CompilationFinished
+		/// <summary>
+		/// This is a message sent when the compilation is finished<br/>
+		/// This is a new message and don't exist in the official package from Unity
+		/// </summary>
+		CompilationFinished = 100,
+
+        /// <summary>
+        /// The name of this package
+		/// This is new and don't exist in the official package from Unity
+        /// </summary>
+        PackageName = 101,
 	}
 }

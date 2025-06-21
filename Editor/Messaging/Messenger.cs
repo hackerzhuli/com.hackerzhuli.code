@@ -3,6 +3,7 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 using System;
+using System.Collections.Concurrent;
 using System.Net;
 using System.Net.Sockets;
 
@@ -15,6 +16,7 @@ namespace Microsoft.Unity.VisualStudio.Editor.Messaging
 
 		private readonly UdpSocket _socket;
 		private readonly object _disposeLock = new object();
+		private readonly ConcurrentQueue<Message> _messageQueue = new ConcurrentQueue<Message>();
 		private bool _disposed;
 
 #if UNITY_EDITOR_WIN
@@ -93,19 +95,19 @@ namespace Microsoft.Unity.VisualStudio.Editor.Messaging
 					message.Origin = (IPEndPoint)endPoint;
 
 					if (IsValidTcpMessage(message, out var port, out var bufferSize))
+				{
+					// switch to TCP mode to handle big messages
+					TcpClient.Queue(message.Origin.Address, port, bufferSize, buffer =>
 					{
-						// switch to TCP mode to handle big messages
-						TcpClient.Queue(message.Origin.Address, port, bufferSize, buffer =>
-						{
-							var originalMessage = DeserializeMessage(buffer);
-							originalMessage.Origin = message.Origin;
-							ReceiveMessage?.Invoke(this, new MessageEventArgs(originalMessage));
-						});
-					}
-					else
-					{
-						ReceiveMessage?.Invoke(this, new MessageEventArgs(message));
-					}
+						var originalMessage = DeserializeMessage(buffer);
+						originalMessage.Origin = message.Origin;
+						_messageQueue.Enqueue(originalMessage);
+					});
+				}
+				else
+				{
+					_messageQueue.Enqueue(message);
+				}
 				}
 			}
 			catch (ObjectDisposedException)
@@ -219,6 +221,11 @@ namespace Microsoft.Unity.VisualStudio.Editor.Messaging
 			var value = deserializer.ReadString();
 
 			return new Message { Type = type, Value = value };
+		}
+
+		public bool TryDequeueMessage(out Message message)
+		{
+			return _messageQueue.TryDequeue(out message);
 		}
 
 		public static Messager BindTo(int port)
