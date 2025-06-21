@@ -2,25 +2,17 @@
   "name": "com.hackerzhuli.ide.visualstudio",
   "displayName": "Visual Studio Editor",
   "description": "Code editor integration for supporting Visual Studio as code editor for unity. Adds support for generating csproj files for intellisense purposes, auto discovery of installations, etc.",
-  "version": "2.0.23",
-  "unity": "2019.4",
-  "unityRelease": "25f1",
+  "version": "3.0.0",
+  "unity": "2023.2",
   "dependencies": {
     "com.unity.test-framework": "1.1.9"
   },
-  "relatedPackages": {
-    "com.unity.ide.visualstudio.tests": "2.0.23"
-  },
   "_upm": {
-    "changelog": "Integration:\n\n- Monitor `additionalfile` extension by default.\n- Try opening a Visual Studio Code workspace if there's one (`.code-workspace` file in the Unity project).\n\nProject generation:\n\n- Identify `asset`, `meta`, `prefab` and `unity` files as `yaml` (Visual Studio Code).\n- Add `sln`/`csproj` file nesting (Visual Studio Code).\n- Improve SDK style project generation."
+    "changelog": ""
   },
-  "upmCi": {
-    "footprint": "74a5df56c8eb360db167269a677bc8e15ff95645"
-  },
-  "documentationUrl": "https://docs.unity3d.com/Packages/com.unity.ide.visualstudio@2.0/manual/index.html",
+  "documentationUrl": "https://github.com/hackerzhuli/com.hackerzhuli.ide.visualstudio",
   "repository": {
-    "url": "https://github.cds.internal.unity3d.com/unity/com.unity.ide.visualstudio.git",
-    "type": "git",
-    "revision": "0fe3b29f9aff2b90b9f0962ae35036a824d3dd6b"
+    "url": "https://github.com/hackerzhuli/com.hackerzhuli.ide.visualstudio.git",
+    "type": "git"
   }
 }

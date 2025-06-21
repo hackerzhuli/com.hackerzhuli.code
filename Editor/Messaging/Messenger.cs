@@ -11,7 +11,6 @@ namespace Microsoft.Unity.VisualStudio.Editor.Messaging
 {
 	internal class Messager : IDisposable
 	{
-		public event EventHandler<MessageEventArgs> ReceiveMessage;
 		public event EventHandler<ExceptionEventArgs> MessagerException;
 
 		private readonly UdpSocket _socket;
