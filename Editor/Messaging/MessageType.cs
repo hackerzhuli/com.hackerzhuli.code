@@ -1,4 +1,4 @@
-﻿/*---------------------------------------------------------------------------------------------
+/*---------------------------------------------------------------------------------------------
  *  Copyright (c) Microsoft Corporation. All rights reserved.
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
@@ -68,5 +68,19 @@ namespace Microsoft.Unity.VisualStudio.Editor.Messaging
 		/// This is new and don't exist in the official package from Unity
         /// </summary>
         PackageName = 101,
+
+        /// <summary>
+        /// Notifies clients that we are online and ready to receive messages
+		/// This can be due to after domain reload finished or Unity Editor start
+        /// This is new and don't exist in the official package from Unity
+        /// </summary>
+        OnLine = 102,
+
+        /// <summary>
+        /// Notifies clients that we are going offline, and will not be able to receive messages
+		/// This can be due to domain reload or Unity Editor shutdown
+        /// This is new and don't exist in the official package from Unity
+        /// </summary>
+        OffLine = 103,
 	}
 }

@@ -201,6 +201,48 @@ namespace Microsoft.Unity.VisualStudio.Editor.Messaging
 			}
 		}
 
+		/// <summary>
+		/// Sends a message to the specified endpoint using a blocking send operation with timeout.
+		/// This method is intended for rare cases that must use a blocking send operation.
+		/// Large messages that exceed UDP buffer size will be discarded.
+		/// </summary>
+		/// <param name="target">The target endpoint to send the message to</param>
+		/// <param name="type">The type of message to send</param>
+		/// <param name="value">The message value (optional)</param>
+		/// <param name="timeoutMs">Timeout in milliseconds for the send operation</param>
+		/// <returns>True if the message was sent successfully, false if it failed, timed out, or was too large</returns>
+		public bool SendMessageBlocking(IPEndPoint target, MessageType type, string value = "", int timeoutMs = 1000)
+		{
+			var message = MessageFor(type, value);
+			var buffer = SerializeMessage(message);
+
+			// Discard large messages to keep this method simple
+			if (buffer.Length >= UdpSocket.BufferSize)
+				return false;
+				
+            try
+            {
+				lock (_disposeLock)
+				{
+					if (_disposed)
+						return false;
+                    // Get original timeout and set new one
+                    int originalTimeout = (int)_socket.GetSocketOption(SocketOptionLevel.Socket, SocketOptionName.SendTimeout);
+                    _socket.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.SendTimeout, timeoutMs);
+                    bool timeoutChanged = true;
+                    var bytesSent = _socket.SendTo(buffer, 0, buffer.Length, SocketFlags.None, target);
+					if (timeoutChanged)
+					{
+						_socket.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.SendTimeout, originalTimeout);
+					}
+					return bytesSent > 0;
+				}
+			}
+			catch {
+				return false;
+			}
+		}
+
 		private static byte[] SerializeMessage(Message message)
 		{
 			var serializer = new Serializer();

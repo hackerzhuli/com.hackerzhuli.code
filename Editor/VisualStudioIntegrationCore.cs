@@ -120,21 +120,26 @@ namespace Microsoft.Unity.VisualStudio.Editor
         [SerializeField] private List<IdeClient> _clients = new();
 
         [System.NonSerialized] private Messager _messager;
+        [System.NonSerialized] private bool _needsOnlineNotification = false;
 
         private void OnEnable()
         {
             //Debug.Log("OnEnable");
             CheckLegacyAssemblies();
+            
+            // Flag that we need to notify clients that we're online
+            _needsOnlineNotification = true;
         }
 
         private void OnDisable()
         {
             //Debug.Log("OnDisable");
-            // make sure we dispose the messager, when domain reload or editor quit
-            // this will release the port and allow us to bind to it again on next domain reload
+            // Notify clients that Unity is going offline before disposing the messager
             if (_messager != null)
             {
-                Debug.Log("disposing messager and release socket resources");
+                // Send offline notification with blocking method
+                BroadcastMessageBlocking(MessageType.OffLine, "", timeoutMs: 500);
+                //Debug.Log("disposing messager and release socket resources");
                 _messager.Dispose();
                 _messager = null;
             }
@@ -149,6 +154,12 @@ namespace Microsoft.Unity.VisualStudio.Editor
         {
             EnsureMessagerInitialized();
 
+            if (_needsOnlineNotification)
+            {
+                _needsOnlineNotification = false;
+                BroadcastMessage(MessageType.OnLine, "");
+            }
+
             // Process messages from the queue on the main thread
             if (_messager != null)
             {
@@ -160,11 +171,6 @@ namespace Microsoft.Unity.VisualStudio.Editor
 
             var currentTime = EditorApplication.timeSinceStartup;
             double deltaTime = currentTime - _lastUpdateTime;
-
-            if (deltaTime > 1)
-            {
-                Debug.Log($"long delta time detected, deltaTime: {deltaTime}");
-            }
 
             var clampedDeltaTime = Math.Min(deltaTime, 0.1);
             _lastUpdateTime = currentTime;
@@ -217,6 +223,24 @@ namespace Microsoft.Unity.VisualStudio.Editor
             foreach (var client in _clients)
             {
                 Answer(client.EndPoint, type, value);
+            }
+        }
+
+        /// <summary>
+        /// Broadcasts a message with blocking UDP send and timeout to all connected IDE clients.
+        /// Used for critical notifications like offline status before messager disposal.
+        /// </summary>
+        /// <param name="type">The type of message to broadcast.</param>
+        /// <param name="value">The message content to send to all clients.</param>
+        /// <param name="timeoutMs">Timeout in milliseconds for the blocking send operation.</param>
+        private void BroadcastMessageBlocking(MessageType type, string value, int timeoutMs)
+        {
+            if (_messager == null)
+                return;
+
+            foreach (var client in _clients)
+            {
+                _messager.SendMessageBlocking(client.EndPoint, type, value, timeoutMs);
             }
         }
 

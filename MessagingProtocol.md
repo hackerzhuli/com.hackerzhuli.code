@@ -75,6 +75,8 @@ All available message types in the Unity Visual Studio integration:
 | `ShowUsage` | 25 | Show usage information | - |
 | `CompilationFinished` | 100 | Notification that compilation has finished | Empty string |
 | `PackageName` | 101 | Request/response for package name | Empty string (request) / Package name string (response) |
+| `OnLine` | 102 | Notifies clients that Unity is online and ready to receive messages | Empty string |
+| `OffLine` | 103 | Notifies clients that Unity is offline and can not receive messages | Empty string |
 
 Note:
 - Message value greater than or equal to 100 means it does not exist in the official package but was added in `com.hackerzhuli.ide.visualstudio`
@@ -93,6 +95,8 @@ Detailed value formats for some of the types:
 - **PackageName**: 
   - Request: Empty string
   - Response: Package name string (e.g., "com.hackerzhuli.ide.visualstudio")
+- **OnLine**: Empty string - sent when Unity comes online after domain reload or editor startup
+- **OffLine**: Empty string - sent when Unity goes offline before domain reload or editor shutdown
 - **Tcp**: Internal format `"<port>:<length>"` where port is the TCP listener port and length is the expected message size
 - **Test Messages**: Value format depends on Unity's test runner implementation and may contain JSON or structured data
 
