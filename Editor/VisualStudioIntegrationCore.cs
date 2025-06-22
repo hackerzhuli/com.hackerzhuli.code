@@ -195,7 +195,7 @@ namespace Microsoft.Unity.VisualStudio.Editor
         /// </summary>
         public void OnAssemblyReload()
         {
-            Debug.Log("OnAssemblyReload");
+            //Debug.Log("OnAssemblyReload");
             // need to ensure messager is initialized, because assembly reload event can happen before first Update
             EnsureMessagerInitialized();
             BroadcastMessage(MessageType.CompilationFinished, "");
