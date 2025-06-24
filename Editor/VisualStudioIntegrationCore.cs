@@ -178,7 +178,7 @@ namespace Microsoft.Unity.VisualStudio.Editor
             {
                 var client = _clients[i];
                 client.ElapsedTime += clampedDeltaTime;
-                if (client.ElapsedTime > 60)
+                if (client.ElapsedTime > 4)
                     _clients.RemoveAt(i);
             }
 
