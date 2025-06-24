@@ -127,6 +127,9 @@ namespace Microsoft.Unity.VisualStudio.Editor
             //Debug.Log("OnEnable");
             CheckLegacyAssemblies();
             
+            // Subscribe to Unity log events
+            Application.logMessageReceived += OnLogMessageReceived;
+            
             // Flag that we need to notify clients that we're online
             _needsOnlineNotification = true;
         }
@@ -134,6 +137,9 @@ namespace Microsoft.Unity.VisualStudio.Editor
         private void OnDisable()
         {
             //Debug.Log("OnDisable");
+            // Unsubscribe from Unity log events
+            Application.logMessageReceived -= OnLogMessageReceived;
+            
             // Notify clients that Unity is going offline before disposing the messager
             if (_messager != null)
             {
@@ -379,6 +385,28 @@ namespace Microsoft.Unity.VisualStudio.Editor
         private void Answer(IPEndPoint targetEndPoint, MessageType answerType, string answerValue)
         {
             _messager?.SendMessage(targetEndPoint, answerType, answerValue);
+        }
+
+        /// <summary>
+        /// Handles Unity log messages and broadcasts them to all connected IDE clients.
+        /// </summary>
+        /// <param name="logString">The log message content.</param>
+        /// <param name="stackTrace">The stack trace associated with the log message.</param>
+        /// <param name="type">The type of log message (Log, Warning, Error, etc.).</param>
+        private void OnLogMessageReceived(string logString, string stackTrace, LogType type)
+        {
+            var messageType = type switch
+            {
+                LogType.Error or LogType.Exception or LogType.Assert => MessageType.Error,
+                LogType.Warning => MessageType.Warning,
+                _ => MessageType.Info,
+            };
+
+            // Create a formatted message that includes both the log content and stack trace if available
+
+            var message = string.IsNullOrEmpty(stackTrace) ? logString : $"{logString}\n{stackTrace}";
+            
+            BroadcastMessage(messageType, message);
         }
 
         private void EnsureMessagerInitialized()

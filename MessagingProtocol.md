@@ -55,9 +55,9 @@ All available message types in the Unity Visual Studio integration:
 | `Unpause` | 6 | Unpause play mode | - |
 | ~~`Build`~~ | 7 | ~~Build project~~ (Obsolete) | - |
 | `Refresh` | 8 | Refresh asset database | - |
-| `Info` | 9 | Information message | - |
-| `Error` | 10 | Error message | - |
-| `Warning` | 11 | Warning message | - |
+| `Info` | 9 | Information message from Unity logs | Log message content with optional stack trace |
+| `Error` | 10 | Error message from Unity logs | Error message content with stack trace |
+| `Warning` | 11 | Warning message from Unity logs | Warning message content with optional stack trace |
 | ~~`Open`~~ | 12 | ~~Open file/asset~~ (Obsolete) | - |
 | ~~`Opened`~~ | 13 | ~~File/asset opened confirmation~~ (Obsolete) | - |
 | `Version` | 14 | Request/response for package version | Empty string (request) / Version string (response) |
