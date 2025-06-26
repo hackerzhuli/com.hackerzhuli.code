@@ -388,7 +388,7 @@ namespace Microsoft.Unity.VisualStudio.Editor
 				return null;
 
 			// Check if the path ends with any of the supported fork app names
-			foreach (var fork in SupportedForks)
+			foreach (var fork in Forks)
 			{
 				if (exePath.EndsWith($"{fork.MacAppName}.app", StringComparison.OrdinalIgnoreCase))
 				{
@@ -413,7 +413,7 @@ namespace Microsoft.Unity.VisualStudio.Editor
 				return null;
 
 			// Check if the path ends with any of the supported fork executable names
-			foreach (var fork in SupportedForks)
+			foreach (var fork in Forks)
 			{
 				if (exePath.EndsWith(fork.LinuxExeName, StringComparison.OrdinalIgnoreCase) ||
 				    exePath.EndsWith($"{fork.LinuxExeName}.desktop"))
@@ -549,13 +549,13 @@ namespace Microsoft.Unity.VisualStudio.Editor
 			var appPath = IOPath.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles));
 			
 			// Add specific fork app patterns
-			foreach (var fork in SupportedForks)
+			foreach (var fork in Forks)
 			{
 				candidates.AddRange(Directory.EnumerateDirectories(appPath, $"{fork.MacAppName}*.app"));
 			}
 #elif UNITY_EDITOR_LINUX
 			// Well known locations for all forks
-			foreach (var fork in SupportedForks)
+			foreach (var fork in Forks)
 			{
 				candidates.Add($"/usr/bin/{fork.LinuxExeName}");
 				candidates.Add($"/bin/{fork.LinuxExeName}");
@@ -593,7 +593,7 @@ namespace Microsoft.Unity.VisualStudio.Editor
 			var dirs = envdirs.Split(':');
 			foreach(var dir in dirs)
 			{
-				foreach (var fork in SupportedForks)
+				foreach (var fork in Forks)
 				{
 					Match match = null;
 					var desktopFileName = $"{fork.LinuxExeName}.desktop";
@@ -1261,8 +1261,8 @@ namespace Microsoft.Unity.VisualStudio.Editor
 		{
 #if UNITY_EDITOR_OSX
 			// wrap with built-in OSX open feature
-			arguments = $"-n \"{application}\" --args {arguments}";
-			application = "open";
+			arguments = $"-n \"{exePath}\" --args {arguments}";
+			var application = "open";
 			return ProcessRunner.ProcessStartInfoFor(application, arguments, redirect:false, shell: true);
 #else
 			return ProcessRunner.ProcessStartInfoFor(exePath, arguments, redirect: false);
