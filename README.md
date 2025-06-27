@@ -37,7 +37,7 @@ The reason we need Dot Rush is because apparently the official C# Dev Kit extens
 This package supports automatially patching the settings file and launch file for working with Dot Rush, if Dot Rush is detected for the VS Code Fork that you selected.
 
 ## Code Guidelines
-- Try not to change unrelated files and keep the code in sync with the official package.
+- Try to keep code simple and well documented.
 
 For pull requests:
 - Try to keep the code changes minimal.
