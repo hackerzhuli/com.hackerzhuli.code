@@ -4,7 +4,7 @@
 
 **Messaging Protocol Changes**: This package uses a modified messaging port and protocol. Advanced integrations with Visual Studio Code forks that have the official Unity extension installed may be affected, if messaging with the Unity extension is needed(which we don't know if it uses the messaging protocol yet), you can install the official Visual Studio Editor package alongside this package. This does not affect debuggers.
 
-**Recommendation**: For the best experience with VS Code forks, we recommend using our [Unity Code extension(source code only, awaiting release for Windows)](https://github.com/hackerzhuli/unity-code.git) which is specifically designed to work with this package.
+**Recommendation**: For the best experience with VS Code forks, we recommend using our [Unity Code extension(source code only, awaiting release, unfortunately we can't support MacOS/Linux because we don't use these OS)](https://github.com/hackerzhuli/unity-code.git) which is specifically designed to work with this package.
 
 ## Description
 This is a fork of Visual Studio Editor package for Unity that focuses on Visual Studio Code and its forks.
