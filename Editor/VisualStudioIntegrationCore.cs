@@ -278,14 +278,9 @@ namespace Hackerzhuli.Code.Editor
             }
         }
 
-        private int DebuggingPort()
-        {
-            return 56000 + (System.Diagnostics.Process.GetCurrentProcess().Id % 1000);
-        }
-
         private int MessagingPort()
         {
-            return DebuggingPort() + 2;
+            return 58000 + (System.Diagnostics.Process.GetCurrentProcess().Id % 1000);
         }
 
         private void RefreshAssetDatabase()

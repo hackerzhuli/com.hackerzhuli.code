@@ -11,7 +11,7 @@ The protocol uses UDP as the primary transport with automatic fallback to TCP fo
 ## Network Configuration
 
 ### Port Calculation
-- **Messaging Port**: `56002 + (ProcessId % 1000)`
+- **Messaging Port**: `58000 + (ProcessId % 1000)`
 - **Protocol**: UDP (primary), TCP (fallback for large messages)
 - **Address**: Binds to `IPAddress.Any` (0.0.0.0)
 
