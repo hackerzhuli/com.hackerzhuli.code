@@ -32,9 +32,8 @@ The official package supports Visual Studio Tools for Unity extensions. Which al
 ### Dot Rush
 This fork adds support for [Dot Rush](https://github.com/JaneySprings/DotRush). Dot Rush is a VS Code extension that supports C# IntelliSense, Test Explorer and Debugging, including with debugging Unity. Think of it as a replacement of the C# extension and C# Dev Kit extension from Microsoft.
 
-The reason we need Dot Rush is because apparently the official C# Dev Kit extension (Which Visual Studio Tools for Unity depends on) from Microsoft doesn't support debugging in VS Code forks other than Visual Studio Code itself. So we need an alternative like Dot Rush in VS Code forks.
-
-This package supports automatially patching the settings file and launch file for working with Dot Rush, if Dot Rush is detected for the VS Code Fork that you selected.
+### Unity Code
+This fork adds support for [Unity Code](https://github.com/hackerzhuli/unity-code.git). Unity Code is a VS Code extension that supports Unity Tests, debugging with Unity Editor, a Unity Console to directly see Unity's logs, and other useful things for Unity projects. Think of it as a replacement of the Unity extension from Microsoft. It's way more advanced and has better integrating with Unity. (the downside is that we don't official support MacOS, Linux but you can always build it yourself.)
 
 ## Code Guidelines
 - Try to keep code simple and well documented.
