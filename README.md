@@ -36,7 +36,7 @@ This fork adds support for [Dot Rush](https://github.com/JaneySprings/DotRush). 
 This fork adds support for [Unity Code](https://github.com/hackerzhuli/unity-code.git). Unity Code is a VS Code extension that supports Unity Tests, debugging with Unity Editor, a Unity Console to directly see Unity's logs, and other useful things for Unity projects. Think of it as a replacement of the Unity extension from Microsoft. It's way more advanced and has better integrating with Unity. (the downside is that we don't officially support MacOS, Linux but you can always build it yourself.)
 
 ## Platform Support
-- I can only personally test the VS Code forks on Windows, if you have issues on other platforms, you have to fix it yourself. If you would like, you can create a pull request to share your changes.
+- We only test the VS Code forks on Windows, if you have issues on other platforms, you have to fix it yourself. If you would like, you can create a pull request to share your changes.
 - For advance integration, we recommend our Unity Code extension for VS Code, but we only support Windows. You have to build and test them on other OS yourself.
 
 ## Code Guidelines
