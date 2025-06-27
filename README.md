@@ -1,9 +1,15 @@
 [中文版](READMEZH.md)
 
-## Description
-This is a fork of Visual Studio Editor package for Unity.
+## ⚠️ Important Notice
 
-The difference between this fork and the official package is that this fork adds support for popular Visual Studio Code forks and  alternative C# development extension Dot Rush (that is, alternative to C# Dev Kit).
+**Messaging Protocol Changes**: This package uses a modified messaging port and protocol. Advanced integrations with Visual Studio Code forks that have the official Unity extension installed may be affected, if messaging with the Unity extension is needed(which we don't know if it uses the messaging protocol yet), you can install the official Visual Studio Editor package alongside this package. This does not affect debuggers.
+
+**Recommendation**: For the best experience with VS Code forks, we recommend using our [Unity Code extension(source code only, awaiting release for Windows)]() which is specifically designed to work with this package.
+
+## Description
+This is a fork of Visual Studio Editor package for Unity that focuses on Visual Studio Code and its forks.
+
+The difference between this fork and the official package is that this fork adds support for popular Visual Studio Code forks and alternative C# development extension Dot Rush (that is, alternative to C# Dev Kit) and Unity Code.
 
 ### VS Code Forks
 Supported Visual Studio Code forks:
@@ -18,7 +24,7 @@ All forks are treated as if they are Visual Studio Code, but with different exec
 Notes:
 - If you use other forks, you need to add their support yourself, it's very easy, look at the file `VisualStudioCodeInstallation.cs` and add data for your forks to the array `Forks` (and that's it!). If you would like, you can create a pull request to share your changes.
 - I can only personally test the VS Code forks on Windows, if you have issues on other platforms, you have to fix it yourself. If you would like, you can create a pull request to share your changes.
-- I don't personally test Visual Studio, but since the code is same as the official package, it should work as expected.
+- **Visual Studio is not supported** by this package. This package focuses exclusively on Visual Studio Code and its forks.
 
 ### VS Code Extensions
 The official package supports Visual Studio Tools for Unity extensions. Which allows you to debug Unity projects in Visual Studio Code.
@@ -38,7 +44,7 @@ For pull requests:
 - Please make sure you test the changes before you submit (only on the platform for which you have changed the code)
 
 ## Installation
-Uninstall the official package, and install this fork in Package Manager.
+This package can be installed alongside the official Visual Studio Editor package without conflicts. Simply install this fork through the Package Manager by git url.
 
 Check out this awesome screenshot, every popular C# code editor detected by Unity Editor on Windows:
 ![image](Images/Unity%20Editor%20External%20Script%20Editor%20Detection.png)
