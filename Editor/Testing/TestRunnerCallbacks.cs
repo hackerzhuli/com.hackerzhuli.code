@@ -25,7 +25,7 @@ namespace Microsoft.Unity.VisualStudio.Editor.Testing
 
 			AddAdaptor(source, -1);
 
-			return JsonUtility.ToJson(container(adaptors.ToArray()));
+			return JsonUtility.ToJson(container(adaptors.ToArray()), true);
 		}
 
 		private string Serialize(ITestAdaptor testAdaptor)
@@ -37,29 +37,34 @@ namespace Microsoft.Unity.VisualStudio.Editor.Testing
 				(r) => new TestAdaptorContainer { TestAdaptors = r });
 		}
 
-		private string Serialize(ITestResultAdaptor testResultAdaptor)
-		{
-			return Serialize(
-				testResultAdaptor,
-				(a, parentIndex) => new TestResultAdaptor(a, parentIndex),
-				(a) => a.Children,
-				(r) => new TestResultAdaptorContainer { TestResultAdaptors = r });
-		}
+        private string Serialize(ITestResultAdaptor testResultAdaptor)
+        {
+            // Test results should never include children data (for efficiency, because children is already sent when they finish)
+            var summary = new TestResultAdaptor(testResultAdaptor, -1);
+            var container = new TestResultAdaptorContainer { TestResultAdaptors = new[] { summary } };
+            var result = JsonUtility.ToJson(container);
+            //Debug.Log($"Test result is:\n {result}");
+            return result;
+        }
 
-		public void RunFinished(ITestResultAdaptor testResultAdaptor)
-		{
-			VisualStudioIntegration.BroadcastMessage(Messaging.MessageType.RunFinished, Serialize(testResultAdaptor));
-		}
+        public void RunFinished(ITestResultAdaptor testResultAdaptor)
+        {
+            // Send only summary information without individual test results to avoid redundancy
+            var summary = new TestResultAdaptor(testResultAdaptor, -1);
+            var container = new TestResultAdaptorContainer { TestResultAdaptors = new[] { summary } };
+            var result = JsonUtility.ToJson(container, true);
+            VisualStudioIntegration.BroadcastMessage(Messaging.MessageType.RunFinished, result);
+        }
 
-		public void RunStarted(ITestAdaptor testAdaptor)
-		{
-			VisualStudioIntegration.BroadcastMessage(Messaging.MessageType.RunStarted, Serialize(testAdaptor));
-		}
+        public void RunStarted(ITestAdaptor testAdaptor)
+        {
+            VisualStudioIntegration.BroadcastMessage(Messaging.MessageType.RunStarted, Serialize(testAdaptor));
+        }
 
-		public void TestFinished(ITestResultAdaptor testResultAdaptor)
-		{
-			VisualStudioIntegration.BroadcastMessage(Messaging.MessageType.TestFinished, Serialize(testResultAdaptor));
-		}
+        public void TestFinished(ITestResultAdaptor testResultAdaptor)
+	        {
+            VisualStudioIntegration.BroadcastMessage(Messaging.MessageType.TestFinished, Serialize(testResultAdaptor));
+        }
 
 		public void TestStarted(ITestAdaptor testAdaptor)
 		{
