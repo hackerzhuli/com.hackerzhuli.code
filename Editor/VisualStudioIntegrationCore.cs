@@ -24,9 +24,9 @@ namespace Microsoft.Unity.VisualStudio.Editor
     {
         [SerializeField] private string _address;
         [SerializeField] private int _port;
-        [SerializeField] private double _elapsedTime;
+        [NonSerialized] private double _elapsedTime; // don't serialize, reset when we finish domain reload
 
-        [System.NonSerialized] private IPEndPoint _endPoint;
+        [NonSerialized] private IPEndPoint _endPoint;
 
         /// <summary>
         /// The network endpoint of the connected IDE client.
