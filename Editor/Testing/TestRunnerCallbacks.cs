@@ -42,8 +42,8 @@ namespace Hackerzhuli.Code.Editor.Testing
             // Test results should never include children data (for efficiency, because children is already sent when they finish)
             var summary = new TestResultAdaptor(testResultAdaptor, -1);
             var container = new TestResultAdaptorContainer { TestResultAdaptors = new[] { summary } };
-            var result = JsonUtility.ToJson(container);
-            //Debug.Log($"Test result is:\n {result}");
+            var result = JsonUtility.ToJson(container, true);
+            Debug.Log($"Test result is:\n {result}");
             return result;
         }
 
