@@ -1,8 +1,7 @@
 ﻿using System;
-
 using UnityEditor.TestTools.TestRunner.Api;
 
-namespace Microsoft.Unity.VisualStudio.Editor.Testing
+namespace Hackerzhuli.Code.Editor.Testing
 {
 	/// <summary>
 	/// Container for serializing an array of <see cref="TestResultAdaptor"/> objects.

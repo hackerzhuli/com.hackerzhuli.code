@@ -7,7 +7,7 @@
 using System.Collections.Generic;
 using System.IO;
 
-namespace Microsoft.Unity.VisualStudio.Editor
+namespace Hackerzhuli.Code.Editor
 {
 	internal static class Discovery
 	{

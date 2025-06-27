@@ -1,6 +1,6 @@
 ﻿using System;
 
-namespace Microsoft.Unity.VisualStudio.Editor
+namespace Hackerzhuli.Code.Editor
 {
 	internal struct VersionPair
 	{

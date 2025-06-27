@@ -7,7 +7,7 @@
 using System;
 using System.Collections.Generic;
 
-namespace Microsoft.Unity.VisualStudio.Editor
+namespace Hackerzhuli.Code.Editor.ProjectGeneration
 {
 	internal enum GeneratorStyle
 	{

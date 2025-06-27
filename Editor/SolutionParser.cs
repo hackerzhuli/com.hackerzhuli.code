@@ -2,10 +2,12 @@
  *  Copyright (c) Microsoft Corporation. All rights reserved.
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
+
 using System.Collections.Generic;
 using System.Text.RegularExpressions;
+using Hackerzhuli.Code.Editor.ProjectGeneration;
 
-namespace Microsoft.Unity.VisualStudio.Editor
+namespace Hackerzhuli.Code.Editor
 {
 	internal static class SolutionParser
 	{

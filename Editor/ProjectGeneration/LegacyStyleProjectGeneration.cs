@@ -7,7 +7,7 @@
 using System.Text;
 using UnityEditor.Compilation;
 
-namespace Microsoft.Unity.VisualStudio.Editor
+namespace Hackerzhuli.Code.Editor.ProjectGeneration
 {
 
 	internal class LegacyStyleProjectGeneration : ProjectGeneration

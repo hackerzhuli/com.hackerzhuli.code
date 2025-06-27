@@ -1,5 +1,6 @@
 {
-    "name": "Unity.VisualStudio.Editor",
+    "name": "Hackerzhuli.Code",
+    "rootNamespace": "Hackerzhuli.Code",
     "references": [],
     "includePlatforms": [
         "Editor"

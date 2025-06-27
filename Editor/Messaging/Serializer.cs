@@ -2,10 +2,11 @@
  *  Copyright (c) Microsoft Corporation. All rights reserved.
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
+
 using System.IO;
 using System.Text;
 
-namespace Microsoft.Unity.VisualStudio.Editor.Messaging
+namespace Hackerzhuli.Code.Editor.Messaging
 {
 	internal class Serializer
 	{

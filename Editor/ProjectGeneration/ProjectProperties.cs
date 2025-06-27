@@ -1,6 +1,6 @@
 ﻿using System;
 
-namespace Microsoft.Unity.VisualStudio.Editor
+namespace Hackerzhuli.Code.Editor.ProjectGeneration
 {
 	internal class ProjectProperties
 	{

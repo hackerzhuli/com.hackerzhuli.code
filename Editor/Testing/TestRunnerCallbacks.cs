@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using UnityEditor.TestTools.TestRunner.Api;
 using UnityEngine;
 
-namespace Microsoft.Unity.VisualStudio.Editor.Testing
+namespace Hackerzhuli.Code.Editor.Testing
 {
 	internal class TestRunnerCallbacks : ICallbacks
 	{

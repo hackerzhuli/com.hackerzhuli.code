@@ -3,7 +3,7 @@ using UnityEditor;
 using UnityEditor.TestTools.TestRunner.Api;
 using UnityEngine;
 
-namespace Microsoft.Unity.VisualStudio.Editor.Testing
+namespace Hackerzhuli.Code.Editor.Testing
 {
 	[InitializeOnLoad]
 	internal class TestRunnerApiListener

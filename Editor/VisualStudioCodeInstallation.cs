@@ -9,12 +9,12 @@ using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Text.RegularExpressions;
+using Hackerzhuli.Code.Editor.ProjectGeneration;
 using UnityEngine;
-using SimpleJSON;
 using IOPath = System.IO.Path;
 using Debug = UnityEngine.Debug;
 
-namespace Microsoft.Unity.VisualStudio.Editor
+namespace Hackerzhuli.Code.Editor
 {
 	/// <summary>
 	/// Represents the state of a VS Code extension.

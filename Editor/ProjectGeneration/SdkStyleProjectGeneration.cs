@@ -4,13 +4,12 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-using System;
 using System.IO;
 using System.Text;
 using UnityEditor.Compilation;
 using UnityEngine;
 
-namespace Microsoft.Unity.VisualStudio.Editor
+namespace Hackerzhuli.Code.Editor.ProjectGeneration
 {
 	internal class SdkStyleProjectGeneration : ProjectGeneration
 	{

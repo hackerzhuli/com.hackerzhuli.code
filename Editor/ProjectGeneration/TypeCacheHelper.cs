@@ -4,13 +4,12 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-using SR = System.Reflection;
-
 using System.Collections.Generic;
 using System.Linq;
 using UnityEditor;
+using SR = System.Reflection;
 
-namespace Microsoft.Unity.VisualStudio.Editor {
+namespace Hackerzhuli.Code.Editor.ProjectGeneration {
 
 	internal class TypeCacheHelper
 	{

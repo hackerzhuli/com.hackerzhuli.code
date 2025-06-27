@@ -1,6 +1,6 @@
 ﻿using System;
 
-namespace Microsoft.Unity.VisualStudio.Editor.Testing
+namespace Hackerzhuli.Code.Editor.Testing
 {
 	/// <summary>
 	/// Represents the status of a test execution result.

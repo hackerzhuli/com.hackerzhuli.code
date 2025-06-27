@@ -2,12 +2,13 @@
  *  Copyright (c) Microsoft Corporation. All rights reserved.
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
+
 using System.Linq;
 using UnityEditor;
 using UnityEngine;
-using MessageType = Microsoft.Unity.VisualStudio.Editor.Messaging.MessageType;
-
-namespace Microsoft.Unity.VisualStudio.Editor
+using MessageType = Hackerzhuli.Code.Editor.Messaging.MessageType;
+	
+namespace Hackerzhuli.Code.Editor
 {
 	/// <summary>
 	/// Static wrapper for Visual Studio integration that delegates to a ScriptableObject core implementation.

@@ -3,20 +3,22 @@
  *  Copyright (c) Microsoft Corporation. All rights reserved.
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
+
 using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Runtime.CompilerServices;
+using Hackerzhuli.Code.Editor.ProjectGeneration;
+using Unity.CodeEditor;
 using UnityEditor;
 using UnityEngine;
-using Unity.CodeEditor;
 
 [assembly: InternalsVisibleTo("Unity.VisualStudio.EditorTests")]
 [assembly: InternalsVisibleTo("Unity.VisualStudio.Standalone.EditorTests")]
 [assembly: InternalsVisibleTo("DynamicProxyGenAssembly2")]
 
-namespace Microsoft.Unity.VisualStudio.Editor
+namespace Hackerzhuli.Code.Editor
 {
 	[InitializeOnLoad]
 	public class VisualStudioEditor : IExternalCodeEditor
@@ -272,7 +274,7 @@ namespace Microsoft.Unity.VisualStudio.Editor
 				return true;
 
 			// We only want to check for cs scripts
-			if (ProjectGeneration.ScriptingLanguageForFile(path) != ScriptingLanguage.CSharp)
+			if (ProjectGeneration.ProjectGeneration.ScriptingLanguageForFile(path) != ScriptingLanguage.CSharp)
 				return true;
 
 			// Even on windows, the package manager requires relative path + unix style separators for queries
