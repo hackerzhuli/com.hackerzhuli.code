@@ -30,9 +30,11 @@ namespace Hackerzhuli.Code.Editor.Testing
 
 		private string Serialize(ITestAdaptor testAdaptor)
 		{
+			// Use a single MonoCecilHelper instance for all test adaptors and ensure proper disposal
+			using var cecilHelper = new MonoCecilHelper();
 			return Serialize(
 				testAdaptor,
-				(a, parentIndex) => new TestAdaptor(a, parentIndex),
+				(a, parentIndex) => new TestAdaptor(a, parentIndex, cecilHelper),
 				(a) => a.Children,
 				(r) => new TestAdaptorContainer { TestAdaptors = r });
 		}
@@ -81,7 +83,6 @@ namespace Hackerzhuli.Code.Editor.Testing
 
 			throw new ArgumentOutOfRangeException();
 		}
-
 
 		internal void TestListRetrieved(TestMode testMode, ITestAdaptor testAdaptor)
 		{

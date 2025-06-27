@@ -9,7 +9,8 @@
     "allowUnsafeCode": false,
     "overrideReferences": true,
     "precompiledReferences": [
-        "Newtonsoft.Json.dll"
+        "Newtonsoft.Json.dll",
+        "Mono.Cecil.dll"
     ],
     "autoReferenced": true,
     "defineConstraints": [],
