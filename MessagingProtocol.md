@@ -1,8 +1,8 @@
-# Unity Visual Studio Editor Messaging Protocol
+# Visual Studio Code Editor Messaging Protocol
 
 This document describes the UDP-based messaging protocol used by Visual Studio Code Editor package for communication between Unity Editor and Visual Studio Code.
 
-The name of this package is `com.hackerzhuli.code`. The name of the official package this is fork from is `com.unity.ide.visualstudio`. The messaging protocol is modified for better development experience in Visual Studio Code.
+The name of this package is `com.hackerzhuli.code`. The name of the official package this is forked from is `com.unity.ide.visualstudio`. The messaging protocol is modified for better development experience with Visual Studio Code.
 
 ## Overview
 
@@ -42,7 +42,7 @@ Messages are serialized in binary format using little-endian encoding:
 
 ## Message Types
 
-All available message types in the Unity Visual Studio Code integration:
+All available message types:
 
 | Type | Value | Description | Value Format |
 |------|-------|-------------|-------------|
@@ -74,8 +74,8 @@ All available message types in the Unity Visual Studio Code integration:
 | `ShowUsage` | 25 | Show usage information | JSON serialized FileUsage object |
 | `CompilationFinished` | 100 | Notification that compilation has finished | Empty string |
 | `PackageName` | 101 | Request/response for package name | Empty string (request) / Package name string (response) |
-| `Online` | 102 | Notifies clients that Unity is online and ready to receive messages | Empty string |
-| `Offline` | 103 | Notifies clients that Unity is offline and can not receive messages | Empty string |
+| `Online` | 102 | Notifies clients that this package is online and ready to receive messages | Empty string |
+| `Offline` | 103 | Notifies clients that this package is offline and can not receive messages | Empty string |
 
 Note:
 - Message value greater than or equal to 100 means it does not exist in the official package but was added in `com.hackerzhuli.code`
@@ -94,8 +94,8 @@ Detailed value formats for some of the types:
 - **PackageName**: 
   - Request: Empty string
   - Response: Package name string (e.g., "com.hackerzhuli.code")
-- **OnLine**: Empty string - sent when Unity comes online after domain reload or editor startup
-- **OffLine**: Empty string - sent when Unity goes offline before domain reload or editor shutdown
+- **Online**: Empty string - sent when this package comes online after domain reload or editor startup
+- **Offline**: Empty string - sent when this package goes offline before domain reload or editor shutdown
 - **Tcp**: Internal format `"<port>:<length>"` where port is the TCP listener port and length is the expected message size
 - **Test Messages**: Value format depends on Unity's test runner implementation and may contain JSON or structured data
 
@@ -339,14 +339,19 @@ internal class FileUsage
 
 ### Client Registration
 1. Client sends any message to Unity's messaging port
-2. Unity registers the client's endpoint and timestamp
-3. Unity responds appropriately based on message type
+2. This package registers the client's endpoint
+3. This package responds appropriately based on message type
 4. Client must send messages within 4 seconds to stay registered 
 
 ### Heartbeat Mechanism
 - Send `Ping` message to Unity
-- Unity responds with `Pong` message
+- this package responds with `Pong` message
 - Clients are automatically removed after 4 seconds of inactivity 
+
+### Online/Offline and Domain Reload
+When domain reload starts(typically along with compilation), this package is disabled due to Unity's mechanism. Socket will be disposed and this package can't receive messages for a while(domain reload can take up to a minute depending on the project).
+
+Once domain reload finishes, this package will be enabled and socket will be recreated. And previous clients will be preserved. But messages that are not handled or not received at all(when this package is offline) will not be processed.
 
 ### Large Message Handling (TCP Fallback)
 
@@ -359,7 +364,7 @@ When a message exceeds the 8KB UDP buffer limit, the protocol automatically swit
 
 #### Detailed Process
 
-**1. Sender (Unity or Client)**:
+**1. Sender (This package or Client)**:
    - Detects message size exceeds UDP buffer limit
    - Creates a temporary TCP listener on an available port (system-assigned)
    - Replaces original message with `Tcp` control message
@@ -368,7 +373,7 @@ When a message exceeds the 8KB UDP buffer limit, the protocol automatically swit
    - Sends the actual large message over TCP connection
    - Closes TCP connection and listener after transmission
 
-**2. Receiver (Unity or Client)**:
+**2. Receiver (This package or Client)**:
    - Receives `Tcp` control message via UDP
    - Validates message type is `MessageType.Tcp` (value: 17)
    - Parses message value to extract: `port` and `length`
@@ -390,13 +395,13 @@ When a message exceeds the 8KB UDP buffer limit, the protocol automatically swit
 ## Implementation Notes
 
 - Clients can be implemented in any language that supports UDP sockets and binary serialization
-- The protocol is designed for localhost communication between Unity and external tools
+- The protocol is designed for localhost communication between this package and external tools
 - Message serialization uses little-endian encoding for cross-platform compatibility
 
 ## Error Handling
 
-- **Socket Exceptions**: Unity will attempt to rebind on domain reload
-- **Port Conflicts**: Unity uses `ReuseAddress` but conflicts may still occur
+- **Socket Exceptions**: This package will attempt to rebind on domain reload
+- **Port Conflicts**: This package uses `ReuseAddress` but conflicts may still occur
 - **Message Size**: Messages larger than 8KB automatically use TCP fallback
 - **Client Timeout**: Clients are removed after 4 seconds of inactivity 
 
