@@ -78,7 +78,7 @@ All available message types:
 | `Offline` | 103 | Notifies clients that this package is offline and can not receive messages | Empty string |
 
 Note:
-- Message value greater than or equal to 100 means it does not exist in the official package but was added in `com.hackerzhuli.code`
+- Message value greater than or equal to 100 means it does not exist in the official package but was added in this package.
 
 ### Value Format Details
 
