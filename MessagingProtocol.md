@@ -338,20 +338,20 @@ internal class FileUsage
 ## Protocol Flow
 
 ### Client Registration
-1. Client sends any message to Unity's messaging port
+1. Client sends any message to this package's messaging port
 2. This package registers the client's endpoint
 3. This package responds appropriately based on message type
 4. Client must send messages within 4 seconds to stay registered 
 
 ### Heartbeat Mechanism
 - Send `Ping` message to Unity
-- this package responds with `Pong` message
+- This package responds with `Pong` message
 - Clients are automatically removed after 4 seconds of inactivity 
 
 ### Online/Offline and Domain Reload
-When domain reload starts(typically along with compilation), this package is disabled due to Unity's mechanism. Socket will be disposed and this package can't receive messages for a while(domain reload can take up to a minute depending on the project).
+When domain reload starts(typically along with compilation), this package is disabled due to Unity's mechanism. Socket will be disposed and this package can't receive messages for a while(domain reload can take up to a minute depending on the project). The Offline message is sent right before this package's socket is disposed.
 
-Once domain reload finishes, this package will be enabled and socket will be recreated. And previous clients will be preserved. But messages that are not handled or not received at all(when this package is offline) will not be processed.
+Once domain reload finishes, this package will be enabled and socket will be recreated. And previous clients will be preserved. But messages that are not handled or not received at all(when this package is offline) will not be processed. The Online message is sent right after this package's socket is recreated.
 
 ### Large Message Handling (TCP Fallback)
 
