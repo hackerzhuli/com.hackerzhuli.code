@@ -6,7 +6,7 @@ The name of this package is `com.hackerzhuli.code`. The name of the official pac
 
 ## Overview
 
-The protocol uses UDP as the primary transport with automatic fallback to TCP for large messages. The communication is bidirectional, allowing both Unity and Visual Studio to send messages to each other.
+The protocol uses UDP as the primary transport with automatic fallback to TCP for large messages. The communication is bidirectional, allowing both Unity and Visual Studio Code to send messages to each other.
 
 ## Network Configuration
 
@@ -42,7 +42,7 @@ Messages are serialized in binary format using little-endian encoding:
 
 ## Message Types
 
-All available message types in the Unity Visual Studio integration:
+All available message types in the Unity Visual Studio Code integration:
 
 | Type | Value | Description | Value Format |
 |------|-------|-------------|-------------|
