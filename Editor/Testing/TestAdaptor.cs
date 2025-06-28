@@ -2,6 +2,7 @@
 using System.IO;
 using System.Reflection;
 using UnityEditor.TestTools.TestRunner.Api;
+using UnityEngine.TestTools;
 
 namespace Hackerzhuli.Code.Editor.Testing
 {
@@ -25,7 +26,7 @@ namespace Hackerzhuli.Code.Editor.Testing
 	internal class TestAdaptor
 	{
 		/// <summary>
-		/// The unique identifier of the test.
+		/// The ID of the test tree node. The ID can change if you add new tests to the suite. Use UniqueName, if you want to have a more permanent point of reference.
 		/// </summary>
 		public string Id;
 		
@@ -66,12 +67,22 @@ namespace Hackerzhuli.Code.Editor.Testing
 		public string SourceLocation;
 
 		/// <summary>
-		/// Initializes a new instance of the <see cref="TestAdaptor"/> class from Unity's <see cref="ITestAdaptor"/>.
+		/// Indicates if the test has the UnityTest attribute(if it is a method).
 		/// </summary>
-		/// <param name="testAdaptor">The Unity test adaptor to convert from.</param>
-		/// <param name="parent">Index of parent in TestAdaptors array, -1 for root.</param>
-		/// <param name="cecilHelper">Shared MonoCecilHelper instance for source location retrieval.</param>
-		public TestAdaptor(ITestAdaptor testAdaptor, int parent, MonoCecilHelper cecilHelper = null)
+		public bool IsHaveUnityTestAttribute;
+
+		/// <summary>
+		/// A unique generated name for the test node. E.g., Tests.dll/MyNamespace/MyTestClass/[Tests][MyNamespace.MyTestClass.MyTest].
+		/// </summary>
+		public string UniqueName;
+
+        /// <summary>
+        /// Initializes a new instance of the <see cref="TestAdaptor"/> class from Unity's <see cref="ITestAdaptor"/>.
+        /// </summary>
+        /// <param name="testAdaptor">The Unity test adaptor to convert from.</param>
+        /// <param name="parent">Index of parent in TestAdaptors array, -1 for root.</param>
+        /// <param name="cecilHelper">Shared MonoCecilHelper instance for source location retrieval.</param>
+        public TestAdaptor(ITestAdaptor testAdaptor, int parent, MonoCecilHelper cecilHelper = null)
 		{
 			Id = testAdaptor.Id;
 			Name = testAdaptor.Name;
@@ -79,6 +90,8 @@ namespace Hackerzhuli.Code.Editor.Testing
 
 			Type = testAdaptor.TypeInfo?.FullName;
 			Method = testAdaptor.Method?.Name;
+			IsHaveUnityTestAttribute = testAdaptor.Method?.GetCustomAttributes<UnityTestAttribute>(true).Length != 0;
+			UniqueName = testAdaptor.UniqueName;
 
 			Parent = parent;
 
