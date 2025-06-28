@@ -1,8 +1,8 @@
 # Unity Visual Studio Editor Messaging Protocol
 
-This document describes the UDP-based messaging protocol used by Unity's Visual Studio Editor package for communication between Unity Editor and Visual Studio(or other IDEs).
+This document describes the UDP-based messaging protocol used by Visual Studio Code Editor package for communication between Unity Editor and Visual Studio Code.
 
-The name of this package is `com.hackerzhuli.ide.visualstudio`. The name of the official package this is fork from is `com.unity.ide.visualstudio`. Difference between this package and the official package will be speicified below.
+The name of this package is `com.hackerzhuli.code`. The name of the official package this is fork from is `com.unity.ide.visualstudio`. The messaging protocol is modified for better development experience in Visual Studio Code.
 
 ## Overview
 
@@ -49,13 +49,13 @@ All available message types in the Unity Visual Studio integration:
 | `None` | 0 | Default/unspecified message type | Empty string |
 | `Ping` | 1 | Heartbeat request | Empty string |
 | `Pong` | 2 | Heartbeat response | Empty string |
-| `Play` | 3 | Start play mode | - |
-| `Stop` | 4 | Stop play mode | - |
-| `Pause` | 5 | Pause play mode | - |
-| `Unpause` | 6 | Unpause play mode | - |
+| `Play` | 3 | Start play mode | Empty string |
+| `Stop` | 4 | Stop play mode | Empty string |
+| `Pause` | 5 | Pause play mode | Empty string |
+| `Unpause` | 6 | Unpause play mode | Empty string |
 | ~~`Build`~~ | 7 | ~~Build project~~ (Obsolete) | - |
-| `Refresh` | 8 | Refresh asset database | - |
-| `Info` | 9 | Information message from Unity logs | Log message content with optional stack trace |
+| `Refresh` | 8 | Refresh asset database | Empty String |
+| `Info` | 9 | Info message from Unity logs | Log message content with optional stack trace |
 | `Error` | 10 | Error message from Unity logs | Error message content with stack trace |
 | `Warning` | 11 | Warning message from Unity logs | Warning message content with optional stack trace |
 | ~~`Open`~~ | 12 | ~~Open file/asset~~ (Obsolete) | - |
@@ -64,21 +64,21 @@ All available message types in the Unity Visual Studio integration:
 | ~~`UpdatePackage`~~ | 15 | ~~Update package~~ (Obsolete) | - |
 | `ProjectPath` | 16 | Request/response for Unity project path | Empty string (request) / Full project path (response) |
 | `Tcp` | 17 | Internal message for TCP fallback coordination | `"<port>:<length>"` format |
-| `RunStarted` | 18 | Test run started | - |
+| `RunStarted` | 18 | Test run started | JSON serialized TestAdaptorContainer with complete test hierarchy |
 | `RunFinished` | 19 | Test run finished | JSON serialized TestResultAdaptorContainer (single result, no children) |
 | `TestStarted` | 20 | Notification that a test has started | Check specific section below for details |
 | `TestFinished` | 21 | Notification that a test has finished | Check specific section below for details |
 | `TestListRetrieved` | 22 | Notification that test list has been retrieved | Check specific section below for details |
 | `RetrieveTestList` | 23 | Request to retrieve list of available tests | Check specific section below for details |
 | `ExecuteTests` | 24 | Request to execute specific tests | Check specific section below for details |
-| `ShowUsage` | 25 | Show usage information | - |
+| `ShowUsage` | 25 | Show usage information | JSON serialized FileUsage object |
 | `CompilationFinished` | 100 | Notification that compilation has finished | Empty string |
 | `PackageName` | 101 | Request/response for package name | Empty string (request) / Package name string (response) |
-| `OnLine` | 102 | Notifies clients that Unity is online and ready to receive messages | Empty string |
-| `OffLine` | 103 | Notifies clients that Unity is offline and can not receive messages | Empty string |
+| `Online` | 102 | Notifies clients that Unity is online and ready to receive messages | Empty string |
+| `Offline` | 103 | Notifies clients that Unity is offline and can not receive messages | Empty string |
 
 Note:
-- Message value greater than or equal to 100 means it does not exist in the official package but was added in `com.hackerzhuli.ide.visualstudio`
+- Message value greater than or equal to 100 means it does not exist in the official package but was added in `com.hackerzhuli.code`
 
 ### Value Format Details
 
@@ -93,7 +93,7 @@ Detailed value formats for some of the types:
   - Response: Full path to Unity project directory
 - **PackageName**: 
   - Request: Empty string
-  - Response: Package name string (e.g., "com.hackerzhuli.ide.visualstudio")
+  - Response: Package name string (e.g., "com.hackerzhuli.code")
 - **OnLine**: Empty string - sent when Unity comes online after domain reload or editor startup
 - **OffLine**: Empty string - sent when Unity goes offline before domain reload or editor shutdown
 - **Tcp**: Internal format `"<port>:<length>"` where port is the TCP listener port and length is the expected message size
@@ -112,67 +112,68 @@ Detailed value formats for some of the types:
 #### TestStarted (Value: 20)
 - **Format**: JSON serialized TestAdaptorContainer
 - **C# Structure**:
-  ```csharp
-  [Serializable]
-  internal class TestAdaptorContainer
-  {
-      public TestAdaptor[] TestAdaptors;
-  }
   
-  [Serializable]
-  internal class TestAdaptor
-  {
-		/// <summary>
-		/// The ID of the test tree node. The ID can change if you add new tests to the suite. Use UniqueName, if you want to have a more permanent point of reference.
-		/// </summary>
-		public string Id;
-		
-		/// <summary>
-		/// The name of the test node.
-		/// </summary>
-		public string Name;
-		
-		/// <summary>
-		/// The full name of the test including namespace and class.
-		/// </summary>
-		public string FullName;
+```csharp
+[Serializable]
+internal class TestAdaptorContainer
+{
+    public TestAdaptor[] TestAdaptors;
+}
 
-		/// <summary>
-		/// The full name of the type containing the test method.
-		/// </summary>
-		public string Type;
-		
-		/// <summary>
-		/// The name of the test method.
-		/// </summary>
-		public string Method;
+[Serializable]
+internal class TestAdaptor
+{
+  /// <summary>
+  /// The ID of the test tree node. The ID can change if you add new tests to the suite. Use UniqueName, if you want to have a more permanent point of reference.
+  /// </summary>
+  public string Id;
+  
+  /// <summary>
+  /// The name of the test node.
+  /// </summary>
+  public string Name;
+  
+  /// <summary>
+  /// The full name of the test including namespace and class.
+  /// </summary>
+  public string FullName;
 
-		/// <summary>
-		/// The location of the assembly containing the test.
-		/// </summary>
-		public string Assembly;
-		
-		/// <summary>
-		/// Index of parent in TestAdaptors array, -1 for root.
-		/// </summary>
-		public int Parent;
+  /// <summary>
+  /// The full name of the type containing the test method.
+  /// </summary>
+  public string Type;
+  
+  /// <summary>
+  /// The name of the test method.
+  /// </summary>
+  public string Method;
 
-		/// <summary>
-		/// Source location of the test in format "Assets/Path/File.cs:LineNumber".
-		/// Only populated for methods and types, null for namespaces or assemblies or other things
-		/// </summary>
-		public string SourceLocation;
+  /// <summary>
+  /// The location of the assembly containing the test.
+  /// </summary>
+  public string Assembly;
+  
+  /// <summary>
+  /// Index of parent in TestAdaptors array, -1 for root.
+  /// </summary>
+  public int Parent;
 
-		/// <summary>
-		/// Indicates if the test has the UnityTest attribute(if it is a method).
-		/// </summary>
-		public bool IsHaveUnityTestAttribute;
+  /// <summary>
+  /// Source location of the test in format "Assets/Path/File.cs:LineNumber".
+  /// Only populated for methods and types, null for namespaces or assemblies or other things
+  /// </summary>
+  public string SourceLocation;
 
-		/// <summary>
-		/// A unique generated name for the test node. E.g., Tests.dll/MyNamespace/MyTestClass/[Tests][MyNamespace.MyTestClass.MyTest].
-		/// </summary>
-		public string UniqueName;
-  }
+  /// <summary>
+  /// Indicates if the test has the UnityTest attribute(if it is a method).
+  /// </summary>
+  public bool IsHaveUnityTestAttribute;
+
+  /// <summary>
+  /// A unique generated name for the test node. E.g., Tests.dll/MyNamespace/MyTestClass/[Tests][MyNamespace.MyTestClass.MyTest].
+  /// </summary>
+  public string UniqueName;
+}
 ```
 
 - **Description**: Sent when a test starts execution, contains test metadata and hierarchy
@@ -180,114 +181,152 @@ Detailed value formats for some of the types:
 #### TestFinished (Value: 21)
 - **Format**: JSON serialized TestResultAdaptorContainer
 - **Important**: Each message contains exactly one test result. The `TestResultAdaptors` array always contains a single element with no children data. This is an optimization to avoid sending redundant data.
+
 - **C# Structure**:
+
 ```csharp
-    [Serializable]
-    internal class TestResultAdaptorContainer
-    {
-        public TestResultAdaptor[] TestResultAdaptors; // Always contains exactly one element
-    }
+[Serializable]
+internal class TestResultAdaptorContainer
+{
+    public TestResultAdaptor[] TestResultAdaptors; // Always contains exactly one element
+}
+
+[Serializable]
+internal class TestResultAdaptor
+{
+  /// <summary>
+  /// The name of the test node.
+  /// </summary>
+  public string Name;
   
-    [Serializable]
-    internal class TestResultAdaptor
-    {
-      /// <summary>
-      /// The name of the test node.
-      /// </summary>
-      public string Name;
-      
-      /// <summary>
-      /// Gets the full name of the test result.
-      /// </summary>
-      public string FullName;
+  /// <summary>
+  /// Gets the full name of the test result.
+  /// </summary>
+  public string FullName;
 
-      /// <summary>
-      /// The number of test cases that passed when running the test and all its children.
-      /// </summary>
-      public int PassCount;
-      
-      /// <summary>
-      /// The number of test cases that failed when running the test and all its children.
-      /// </summary>
-      public int FailCount;
-      
-      /// <summary>
-      /// The number of test cases that were inconclusive when running the test and all its children.
-      /// </summary>
-      public int InconclusiveCount;
-      
-      /// <summary>
-      /// The number of test cases that were skipped when running the test and all its children.
-      /// </summary>
-      public int SkipCount;
-
-      /// <summary>
-      /// Gets the state of the result as a string.
-      /// Returns one of these values: Inconclusive, Skipped, Skipped:Ignored, Skipped:Explicit, Passed, Failed, Failed:Error, Failed:Cancelled, Failed:Invalid.
-      /// </summary>
-      public string ResultState;
-      
-      /// <summary>
-      /// Any stacktrace associated with an error or failure, empty if the test passed (only avaiable for leaf tests)
-      /// </summary>
-      public string StackTrace;
-
-      /// <summary>
-      /// The test status as a simplified enum value.
-      /// </summary>
-      public TestStatusAdaptor TestStatus;
-
-      /// <summary>
-      /// The number of asserts executed when running the test and all its children.
-      /// </summary>
-      public int AssertCount;
-      
-      /// <summary>
-      /// Gets the elapsed time for running the test in seconds.
-      /// </summary>
-      public double Duration;
-      
-      /// <summary>
-      /// Gets the time the test started running as Unix timestamp (milliseconds since epoch).
-      /// </summary>
-      public long StartTime;
-      
-      /// <summary>
-      /// Gets the time the test finished running as Unix timestamp (milliseconds since epoch).
-      /// </summary>
-      public long EndTime;
-      
-      /// <summary>
-      /// The error message associated with a test failure or with not running the test, empty if the test (and its children) passed
-      /// </summary>
-      public string Message;
-      
-      /// <summary>
-      /// Gets all logs during the test(only available for leaf tests)(no stack trace for logs is available)
-      /// </summary>
-      public string Output;
-      
-      /// <summary>
-      /// True if this result has any child results.
-      /// </summary>
-      public bool HasChildren;
-
-      /// <summary>
-      /// Index of parent in TestResultAdaptors array, -1 for root.
-      /// </summary>
-      public int Parent;
-    }
+  /// <summary>
+  /// The number of test cases that passed when running the test and all its children.
+  /// </summary>
+  public int PassCount;
   
-    [Serializable]
-    internal enum TestStatusAdaptor
-    {
-        Passed,        // 0
-        Skipped,       // 1
-        Inconclusive,  // 2
-        Failed,        // 3
-    }
+  /// <summary>
+  /// The number of test cases that failed when running the test and all its children.
+  /// </summary>
+  public int FailCount;
+  
+  /// <summary>
+  /// The number of test cases that were inconclusive when running the test and all its children.
+  /// </summary>
+  public int InconclusiveCount;
+  
+  /// <summary>
+  /// The number of test cases that were skipped when running the test and all its children.
+  /// </summary>
+  public int SkipCount;
+
+  /// <summary>
+  /// Gets the state of the result as a string.
+  /// Returns one of these values: Inconclusive, Skipped, Skipped:Ignored, Skipped:Explicit, Passed, Failed, Failed:Error, Failed:Cancelled, Failed:Invalid.
+  /// </summary>
+  public string ResultState;
+  
+  /// <summary>
+  /// Any stacktrace associated with an error or failure, empty if the test passed (only avaiable for leaf tests)
+  /// </summary>
+  public string StackTrace;
+
+  /// <summary>
+  /// The test status as a simplified enum value.
+  /// </summary>
+  public TestStatusAdaptor TestStatus;
+
+  /// <summary>
+  /// The number of asserts executed when running the test and all its children.
+  /// </summary>
+  public int AssertCount;
+  
+  /// <summary>
+  /// Gets the elapsed time for running the test in seconds.
+  /// </summary>
+  public double Duration;
+  
+  /// <summary>
+  /// Gets the time the test started running as Unix timestamp (milliseconds since epoch).
+  /// </summary>
+  public long StartTime;
+  
+  /// <summary>
+  /// Gets the time the test finished running as Unix timestamp (milliseconds since epoch).
+  /// </summary>
+  public long EndTime;
+  
+  /// <summary>
+  /// The error message associated with a test failure or with not running the test, empty if the test (and its children) passed
+  /// </summary>
+  public string Message;
+  
+  /// <summary>
+  /// Gets all logs during the test(only available for leaf tests)(no stack trace for logs is available)
+  /// </summary>
+  public string Output;
+  
+  /// <summary>
+  /// True if this result has any child results.
+  /// </summary>
+  public bool HasChildren;
+
+  /// <summary>
+  /// Index of parent in TestResultAdaptors array, -1 for root.
+  /// </summary>
+  public int Parent;
+}
+
+[Serializable]
+internal enum TestStatusAdaptor
+{
+    Passed,        // 0
+    Skipped,       // 1
+    Inconclusive,  // 2
+    Failed,        // 3
+}
 ```
+
 - **Description**: Sent when a test finishes execution. Each message contains exactly one test result without any children data, ensuring efficient and non-redundant messaging.
+
+#### RunStarted (Value: 18)
+- **Format**: JSON serialized TestAdaptorContainer
+- **C# Structure**: Uses the same TestAdaptorContainer and TestAdaptor structures as TestStarted (see TestStarted section for complete structure)
+- **Description**: Sent when a test run begins execution. Contains the complete test hierarchy that will be executed, including all parent nodes and children. This provides the full context of what tests are about to run.
+- **Usage**: Clients can use this to prepare UI, show progress indicators, or track which tests are part of the current run.
+
+#### ShowUsage (Value: 25)
+- **Format**: JSON serialized FileUsage object
+- **C# Structure**:
+
+```csharp
+[Serializable]
+internal class FileUsage
+{
+    /// <summary>
+    /// The file path to show usage for. Can be absolute or relative to project.
+    /// </summary>
+    public string Path;
+    
+    /// <summary>
+    /// Optional array of GameObject names representing the hierarchy path within a scene.
+    /// Used when showing usage of a specific GameObject in a Unity scene.
+    /// Example: ["ParentObject", "ChildObject", "TargetObject"]
+    /// </summary>
+    public string[] GameObjectPath;
+}
+```
+
+- **Description**: Requests Unity to show usage/location of a specific file or GameObject. Unity will focus the Project window and select the specified asset, or open a scene and select a GameObject if a hierarchy path is provided.
+- **Behavior**:
+  - For non-scene files: Selects and pings the asset in the Project window
+  - For .unity scene files: Prompts to open the scene (single, additive, or cancel), then optionally navigates to a specific GameObject using the GameObjectPath
+  - Handles both absolute and relative file paths, normalizing them to project-relative paths
+- **Example**: `{"Path":"Assets/Scenes/MainScene.unity","GameObjectPath":["UI","Canvas","Button"]}`
 
 #### TestListRetrieved (Value: 22)
 - **Format**: `TestMode:JsonData`
@@ -302,12 +341,12 @@ Detailed value formats for some of the types:
 1. Client sends any message to Unity's messaging port
 2. Unity registers the client's endpoint and timestamp
 3. Unity responds appropriately based on message type
-4. Client must send messages within 4 seconds to stay registered (see Client Timeout Configuration)
+4. Client must send messages within 4 seconds to stay registered 
 
 ### Heartbeat Mechanism
 - Send `Ping` message to Unity
 - Unity responds with `Pong` message
-- Clients are automatically removed after 4 seconds of inactivity (see Client Timeout Configuration)
+- Clients are automatically removed after 4 seconds of inactivity 
 
 ### Large Message Handling (TCP Fallback)
 
@@ -357,30 +396,25 @@ When a message exceeds the 8KB UDP buffer limit, the protocol automatically swit
 ## Error Handling
 
 - **Socket Exceptions**: Unity will attempt to rebind on domain reload
-- **Firewall Issues**: Check Windows Firewall settings for UDP port access
 - **Port Conflicts**: Unity uses `ReuseAddress` but conflicts may still occur
 - **Message Size**: Messages larger than 8KB automatically use TCP fallback
-- **Client Timeout**: Clients are removed after 4 seconds of inactivity (see Client Timeout Configuration)
+- **Client Timeout**: Clients are removed after 4 seconds of inactivity 
 
 ## Security Considerations
 
 - **Local Communication Only**: Protocol is designed for localhost communication
 - **No Authentication**: No built-in authentication mechanism
-- **Process ID Based Ports**: Ports are predictable based on Unity process ID
-- **Firewall Configuration**: Ensure UDP ports are accessible for the messaging to work
+- **Process ID Based Ports**: Ports are calculated based on Unity process ID
 
 ## Limitations
 
 - **UDP Reliability**: No guaranteed delivery (inherent UDP limitation)
 - **Message Ordering**: No guaranteed order (inherent UDP limitation)
 - **Buffer Size**: 8KB limit for UDP messages (larger messages use TCP)
-- **Platform Support**: Some features are Windows-specific
-- **Client Management**: Automatic cleanup after 4 seconds of inactivity (see Client Timeout Configuration)
+- **Client Management**: Automatic cleanup after 4 seconds of inactivity 
 
 ## Troubleshooting
 
 1. **Connection Issues**: Verify Unity process ID and calculated port
-2. **Firewall Blocks**: Check Windows Firewall settings
-3. **Port Conflicts**: Another application might be using the calculated port
-4. **Message Format**: Ensure proper binary serialization format
-5. **Client Timeout**: Send heartbeat messages regularly within 4 seconds (see Client Timeout Configuration)
+2. **Port Conflicts**: Another application might be using the calculated port
+3. **Client Timeout**: Send heartbeat messages regularly within 4 seconds

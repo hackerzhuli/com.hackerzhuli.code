@@ -145,7 +145,7 @@ namespace Hackerzhuli.Code.Editor
             if (_messager != null)
             {
                 // Send offline notification with blocking method
-                BroadcastMessageBlocking(MessageType.OffLine, "", timeoutMs: 500);
+                BroadcastMessageBlocking(MessageType.Offline, "", timeoutMs: 500);
                 //Debug.Log("disposing messager and release socket resources");
                 _messager.Dispose();
                 _messager = null;
@@ -164,7 +164,7 @@ namespace Hackerzhuli.Code.Editor
             if (_needsOnlineNotification)
             {
                 _needsOnlineNotification = false;
-                BroadcastMessage(MessageType.OnLine, "");
+                BroadcastMessage(MessageType.Online, "");
             }
 
             // Process messages from the queue on the main thread

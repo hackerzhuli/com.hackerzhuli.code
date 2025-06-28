@@ -110,7 +110,6 @@ namespace Hackerzhuli.Code.Editor.Messaging
 		/// </summary>
 		ProjectPath,
 
-
         /// <summary>
         /// Internal message for TCP fallback coordination when messages exceed 8KB UDP buffer limit.
         /// Value format: "&lt;port&gt;:&lt;length&gt;" where port is TCP listener port and length is expected message size.
@@ -182,13 +181,13 @@ namespace Hackerzhuli.Code.Editor.Messaging
 		/// This can be due to after domain reload finished or Unity Editor start
         /// This is new and don't exist in the official package from Unity
         /// </summary>
-        OnLine = 102,
+        Online = 102,
 
         /// <summary>
         /// Notifies clients that we are going offline, and will not be able to receive messages
 		/// This can be due to domain reload or Unity Editor shutdown
         /// This is new and don't exist in the official package from Unity
         /// </summary>
-        OffLine = 103,
+        Offline = 103,
 	}
 }
