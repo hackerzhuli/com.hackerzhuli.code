@@ -1,5 +1,5 @@
 ## Description
-This package is called Visual Studio Code Editor. It is designed to work with my [Unity Code extension for VS Code](https://github.com/hackerzhuli/unity-code.git). Making the development experience for Unity games in Cursor, Windsurf and Trae much better.
+This package is called Visual Studio Code Editor. It is designed to work with my [Unity Code extension for VS Code](https://github.com/hackerzhuli/unity-code). Making the development experience for Unity games in Cursor, Windsurf and Trae much better.
 
 ## Features
 
@@ -22,7 +22,7 @@ This package is designed to work with Unity Code and Dot Rush extension for VS C
 [Dot Rush](https://github.com/JaneySprings/DotRush) is a VS Code extension that supports C# IntelliSense, Test Explorer(not including Unity), Debugging(including with debugging Unity) and other features. Think of it as a alternative of the C# extension and C# Dev Kit extension.
 
 #### Unity Code
-[Unity Code](https://github.com/hackerzhuli/unity-code.git) is a VS Code extension that supports Unity Tests, debugging with Unity Editor, a Unity Console to see Unity's logs, and other useful things for Unity projects. Think of it as a alternative to the Unity extension. It is Windows only, but you can build from source for other platforms.
+[Unity Code](https://github.com/hackerzhuli/unity-code) is a VS Code extension that supports Unity Tests, debugging with Unity Editor, a Unity Console to see Unity's logs, and other useful things for Unity projects. Think of it as a alternative to the Unity extension. It is Windows only, but you can build from source for other platforms.
 
 ## Platform Support
 - I only test on Windows, if you have issues on other platforms, you have to fix it yourself. If you would like, you can create a pull request to share your changes.
