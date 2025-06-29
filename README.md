@@ -1,16 +1,12 @@
-[中文版](READMEZH.md)
-
-## ⚠️ Important Notice
-
-This package is desinged for integration with my [Unity Code extension](https://github.com/hackerzhuli/unity-code.git) for VS Code. If you want to use it with the official Unity extension for VS Code(or a fork), it can work, but if there are any issues, you can try installing the offical package along with this package. Also my Unity Code extension is Windows only, but you can build from source for other platforms.
+## Description
+This package is called Visual Studio Code Editor. It is designed to work with my [Unity Code extension for VS Code](https://github.com/hackerzhuli/unity-code.git). Making the development experience for Unity games in Cursor, Windsurf and Trae much better.
 
 ## Features
-The purpose of this package is enable VS Code forks to have great Unity development experience, rivaling Visual Studio and Rider, working with my Unity Code extension for VS Code.
 
 ### Supported VS Code Forks
-- Visual Studio Code (including Insiders)
+- Visual Studio Code
 - Cursor
-- Windsurf (including Next)
+- Windsurf
 - Trae
 
 About the forks:
