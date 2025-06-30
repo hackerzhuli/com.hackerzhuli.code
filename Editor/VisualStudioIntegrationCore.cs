@@ -121,7 +121,7 @@ namespace Hackerzhuli.Code.Editor
         [SerializeField] private bool _refreshRequested = false;
         [SerializeField] private List<IdeClient> _clients = new();
 
-        [System.NonSerialized] private Messager _messager;
+        [System.NonSerialized] private Messenger _messenger;
         [System.NonSerialized] private bool _needsOnlineNotification = false;
 
         private void OnEnable()
@@ -160,14 +160,14 @@ namespace Hackerzhuli.Code.Editor
             CompilationPipeline.compilationFinished -= OnCompilationFinished;
             Application.logMessageReceived -= OnLogMessageReceived;
             
-            // Notify clients that Unity is going offline before disposing the messager
-            if (_messager != null)
+            // Notify clients that Unity is going offline before disposing the messenger
+            if (_messenger != null)
             {
                 // Send offline notification with blocking method
                 BroadcastMessageBlocking(MessageType.Offline, "", timeoutMs: 500);
-                //Debug.Log("disposing messager and release socket resources");
-                _messager.Dispose();
-                _messager = null;
+                //Debug.Log("disposing messenger and release socket resources");
+                _messenger.Dispose();
+                _messenger = null;
             }
         }
 
@@ -178,7 +178,7 @@ namespace Hackerzhuli.Code.Editor
         /// </summary>
         public void Update()
         {
-            EnsureMessagerInitialized();
+            EnsureMessengerInitialized();
 
             if (_needsOnlineNotification)
             {
@@ -189,9 +189,9 @@ namespace Hackerzhuli.Code.Editor
             }
 
             // Process messages from the queue on the main thread
-            if (_messager != null)
+            if (_messenger != null)
             {
-                while (_messager.TryDequeueMessage(out var message))
+                while (_messenger.TryDequeueMessage(out var message))
                 {
                     ProcessIncoming(message);
                 }
@@ -221,8 +221,8 @@ namespace Hackerzhuli.Code.Editor
         private void OnCompilationFinished(object obj)
         {
             //Debug.Log("OnAssemblyReload");
-            // need to ensure messager is initialized, because assembly reload event can happen before first Update
-            EnsureMessagerInitialized();
+            // need to ensure messenger is initialized, because assembly reload event can happen before first Update
+            EnsureMessengerInitialized();
             BroadcastMessage(MessageType.CompilationFinished, "");
         }
 
@@ -253,19 +253,19 @@ namespace Hackerzhuli.Code.Editor
 
         /// <summary>
         /// Broadcasts a message with blocking UDP send and timeout to all connected IDE clients.
-        /// Used for critical notifications like offline status before messager disposal.
+        /// Used for critical notifications like offline status before messenger disposal.
         /// </summary>
         /// <param name="type">The type of message to broadcast.</param>
         /// <param name="value">The message content to send to all clients.</param>
         /// <param name="timeoutMs">Timeout in milliseconds for the blocking send operation.</param>
         private void BroadcastMessageBlocking(MessageType type, string value, int timeoutMs)
         {
-            if (_messager == null)
+            if (_messenger == null)
                 return;
 
             foreach (var client in _clients)
             {
-                _messager.SendMessageBlocking(client.EndPoint, type, value, timeoutMs);
+                _messenger.SendMessageBlocking(client.EndPoint, type, value, timeoutMs);
             }
         }
 
@@ -401,7 +401,7 @@ namespace Hackerzhuli.Code.Editor
 
         private void Answer(IPEndPoint targetEndPoint, MessageType answerType, string answerValue)
         {
-            _messager?.SendMessage(targetEndPoint, answerType, answerValue);
+            _messenger?.SendMessage(targetEndPoint, answerType, answerValue);
         }
 
         /// <summary>
@@ -426,15 +426,15 @@ namespace Hackerzhuli.Code.Editor
             BroadcastMessage(messageType, message);
         }
 
-        private void EnsureMessagerInitialized()
+        private void EnsureMessengerInitialized()
         {
-            if (_messager != null || !VisualStudioEditor.IsEnabled)
+            if (_messenger != null || !VisualStudioEditor.IsEnabled)
                 return;
 
             var messagingPort = MessagingPort();
             try
             {
-                _messager = Messager.BindTo(messagingPort);
+                _messenger = Messenger.BindTo(messagingPort);
             }
             catch (SocketException)
             {

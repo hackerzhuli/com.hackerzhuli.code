@@ -10,9 +10,9 @@ using System.Net.Sockets;
 
 namespace Hackerzhuli.Code.Editor.Messaging
 {
-	internal class Messager : IDisposable
+	internal class Messenger : IDisposable
 	{
-		public event EventHandler<ExceptionEventArgs> MessagerException;
+		public event EventHandler<ExceptionEventArgs> MessengerException;
 
 		private readonly UdpSocket _socket;
 		private readonly object _disposeLock = new object();
@@ -32,7 +32,7 @@ namespace Hackerzhuli.Code.Editor.Messaging
 		}
 #endif
 
-		protected Messager(int port)
+		protected Messenger(int port)
 		{
 			_socket = new UdpSocket();
 			_socket.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.ExclusiveAddressUse, false);
@@ -66,7 +66,7 @@ namespace Hackerzhuli.Code.Editor.Messaging
 			}
 			catch (SocketException se)
 			{
-				MessagerException?.Invoke(this, new ExceptionEventArgs(se));
+				MessengerException?.Invoke(this, new ExceptionEventArgs(se));
 
 				BeginReceiveMessage();
 			}
@@ -116,7 +116,7 @@ namespace Hackerzhuli.Code.Editor.Messaging
 			}
 			catch (Exception e)
 			{
-				RaiseMessagerException(e);
+				RaiseMessengerException(e);
 			}
 
 			BeginReceiveMessage();
@@ -138,9 +138,9 @@ namespace Hackerzhuli.Code.Editor.Messaging
 			return int.TryParse(parts[1], out bufferSize);
 		}
 
-		private void RaiseMessagerException(Exception e)
+		private void RaiseMessengerException(Exception e)
 		{
-			MessagerException?.Invoke(this, new ExceptionEventArgs(e));
+			MessengerException?.Invoke(this, new ExceptionEventArgs(e));
 		}
 
 		private static Message MessageFor(MessageType type, string value)
@@ -177,7 +177,7 @@ namespace Hackerzhuli.Code.Editor.Messaging
 			}
 			catch (SocketException se)
 			{
-				MessagerException?.Invoke(this, new ExceptionEventArgs(se));
+				MessengerException?.Invoke(this, new ExceptionEventArgs(se));
 			}
 		}
 
@@ -195,7 +195,7 @@ namespace Hackerzhuli.Code.Editor.Messaging
 			}
 			catch (SocketException se)
 			{
-				MessagerException?.Invoke(this, new ExceptionEventArgs(se));
+				MessengerException?.Invoke(this, new ExceptionEventArgs(se));
 			}
 			catch (ObjectDisposedException)
 			{
@@ -270,9 +270,9 @@ namespace Hackerzhuli.Code.Editor.Messaging
 			return _messageQueue.TryDequeue(out message);
 		}
 
-		public static Messager BindTo(int port)
+		public static Messenger BindTo(int port)
 		{
-			return new Messager(port);
+			return new Messenger(port);
 		}
 
 		public void Dispose()
