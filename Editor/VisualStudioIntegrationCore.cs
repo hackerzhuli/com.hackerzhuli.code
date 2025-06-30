@@ -352,6 +352,7 @@ namespace Hackerzhuli.Code.Editor
                     break;
                 case MessageType.ExecuteTests:
                     TestRunnerApiListener.ExecuteTests(message.Value);
+                    Answer(message, MessageType.ExecuteTests, "");
                     break;
                 case MessageType.RetrieveTestList:
                     TestRunnerApiListener.RetrieveTestList(message.Value);
