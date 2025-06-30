@@ -77,6 +77,11 @@ namespace Hackerzhuli.Code.Editor.Testing
 		public string UniqueName;
 
         /// <summary>
+        /// Returns true if the node represents a test assembly, false otherwise.
+        /// </summary>
+        public bool IsTestAssembly;
+
+        /// <summary>
         /// Initializes a new instance of the <see cref="TestAdaptor"/> class from Unity's <see cref="ITestAdaptor"/>.
         /// </summary>
         /// <param name="testAdaptor">The Unity test adaptor to convert from.</param>
@@ -91,6 +96,7 @@ namespace Hackerzhuli.Code.Editor.Testing
 			Type = testAdaptor.TypeInfo?.FullName;
 			Method = testAdaptor.Method?.Name;
 			IsHaveUnityTestAttribute = testAdaptor.Method?.GetCustomAttributes<UnityTestAttribute>(true).Length != 0;
+			IsTestAssembly = testAdaptor.IsTestAssembly;
 			UniqueName = testAdaptor.UniqueName;
 
 			Parent = parent;
