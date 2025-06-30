@@ -35,23 +35,34 @@ namespace Hackerzhuli.Code.Editor.Testing
 
 		public static void ExecuteTests(string command)
 		{
-			// ExecuteTests format:
-			// TestMode:FullName
+            string filter = null;
+            var index = command.IndexOf(':');
+            // ExecuteTests format:
+            // TestMode:Filter or just TestMode
+            string mode;
+            if (index < 0)
+            {
+                mode = command;
+            }
+            else
+            {
+                mode = command.Substring(0, index);
+                filter = command.Substring(index + 1);
+            }
 
-			var index = command.IndexOf(':');
-			if (index < 0)
+            // use try parse instead
+            if (!Enum.TryParse(mode, out TestMode testMode))
+			{
+				Debug.LogError($"Could not parse test mode {mode}");
 				return;
-
-			var testMode = (TestMode)Enum.Parse(typeof(TestMode), command.Substring(0, index));
-			var filter = command.Substring(index + 1);
+			}
 
 			//Debug.Log($"Executing tests filter = {filter} in mode {testMode}, command is {command}");
 
 			Filter actualFilter;
-			var projectName = Path.GetFileName(Path.GetDirectoryName(Application.dataPath));
 
-			// if the project name is received, we just execute all tests
-			if(projectName != null && projectName == filter)
+			// if there is no filter, we just execute all tests
+			if(string.IsNullOrEmpty(filter))
 			{
 				actualFilter = new Filter { testMode = testMode};
 			}
