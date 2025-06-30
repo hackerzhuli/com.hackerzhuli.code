@@ -25,7 +25,7 @@ namespace Hackerzhuli.Code.Editor.Testing
 
 			AddAdaptor(source, -1);
 
-			return JsonUtility.ToJson(container(adaptors.ToArray()), true);
+			return JsonUtility.ToJson(container(adaptors.ToArray()));
 		}
 
 		private string Serialize(ITestAdaptor testAdaptor)

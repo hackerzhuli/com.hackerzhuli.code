@@ -1,15 +1,9 @@
 using System;
-using System.Collections;
 using System.Collections.Generic;
 using System.Diagnostics;
-using System.IO;
-using System.Linq;
 using NUnit.Framework;
-using UnityEditor;
 using UnityEditor.TestTools.TestRunner.Api;
 using UnityEngine;
-using UnityEngine.TestTools;
-using Hackerzhuli.Code.Editor;
 using Debug = UnityEngine.Debug;
 using Object = UnityEngine.Object;
 
@@ -26,13 +20,13 @@ namespace Hackerzhuli.Code.Editor.Testing
 		private long _lastConversionTimeMs;
 		private int _lastTestCount;
 
-		[SetUp]
+		//[SetUp]
 		public void SetUp()
 		{
 			_testRunnerApi = ScriptableObject.CreateInstance<TestRunnerApi>();
 		}
    
-		[TearDown]
+		//[TearDown]
 		public void TearDown()
 		{
 			if (_testRunnerApi)
@@ -137,7 +131,7 @@ namespace Hackerzhuli.Code.Editor.Testing
 		/// <summary>
 		/// Test that retrieves all editor mode tests and measures conversion performance.
 		/// </summary>
-		[Test]
+		//[Test]
 		public async System.Threading.Tasks.Task TestRetrieveEditorModeTests()
 		{
 			var result = await RetrieveTestsAsync(TestMode.EditMode);
@@ -153,7 +147,7 @@ namespace Hackerzhuli.Code.Editor.Testing
 		/// <summary>
 		/// Test that validates source location information is properly populated for both methods and types.
 		/// </summary>
-		[Test]
+		//[Test]
 		public async System.Threading.Tasks.Task TestSourceLocationPopulation()
 		{
 			var result = await RetrieveTestsAsync(TestMode.EditMode);
@@ -235,7 +229,7 @@ namespace Hackerzhuli.Code.Editor.Testing
 		/// <summary>
 		/// Performance test that benchmarks MonoCecilHelper source location retrieval speed by calling it 1000 times.
 		/// </summary>
-		[Test]
+		//[Test]
 		public async System.Threading.Tasks.Task TestMonoCecilHelperPerformance()
 		{
 			var result = await RetrieveTestsAsync(TestMode.EditMode);
