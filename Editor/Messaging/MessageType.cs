@@ -189,5 +189,11 @@ namespace Hackerzhuli.Code.Editor.Messaging
         /// This is new and don't exist in the official package from Unity
         /// </summary>
         Offline = 103,
+
+		/// <summary>
+		/// Notifies clients that the play mode state has changed<br/>
+		/// "true" for is playing(or entering play mode), "false" otherwise
+		/// </summary>
+		IsPlaying = 104,
 	}
 }

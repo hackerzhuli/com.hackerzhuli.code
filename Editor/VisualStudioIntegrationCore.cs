@@ -131,6 +131,7 @@ namespace Hackerzhuli.Code.Editor
             
             // Subscribe to Unity events
             EditorApplication.update += Update;
+            EditorApplication.playModeStateChanged += OnPlayModeStateChanged;
             CompilationPipeline.compilationFinished += OnCompilationFinished;
             Application.logMessageReceived += OnLogMessageReceived;
             
@@ -138,11 +139,24 @@ namespace Hackerzhuli.Code.Editor
             _needsOnlineNotification = true;
         }
 
+        private void OnPlayModeStateChanged(PlayModeStateChange change)
+        {
+            switch (change){
+                case PlayModeStateChange.EnteredPlayMode:
+                    BroadcastMessage(MessageType.IsPlaying, "true");
+                    break;
+                case PlayModeStateChange.ExitingPlayMode:
+                    BroadcastMessage(MessageType.IsPlaying, "false");
+                    break;
+            }
+        }
+
         private void OnDisable()
         {
             //Debug.Log("OnDisable");
             // Unsubscribe from Unity events
             EditorApplication.update -= Update;
+            EditorApplication.playModeStateChanged -= OnPlayModeStateChanged;
             CompilationPipeline.compilationFinished -= OnCompilationFinished;
             Application.logMessageReceived -= OnLogMessageReceived;
             
@@ -170,6 +184,8 @@ namespace Hackerzhuli.Code.Editor
             {
                 _needsOnlineNotification = false;
                 BroadcastMessage(MessageType.Online, "");
+                // Send current play mode state to newly connected clients
+                BroadcastMessage(MessageType.IsPlaying, EditorApplication.isPlaying ? "true" : "false");
             }
 
             // Process messages from the queue on the main thread
@@ -363,6 +379,9 @@ namespace Hackerzhuli.Code.Editor
                 };
 
                 _clients.Add(client);
+                
+                // Send current play mode state to new client
+                Answer(endPoint, MessageType.IsPlaying, EditorApplication.isPlaying ? "true" : "false");
             }
             else
             {

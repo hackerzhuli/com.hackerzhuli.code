@@ -76,6 +76,7 @@ All available message types:
 | `PackageName` | 101 | Request/response for package name | Empty string (request) / Package name string (response) |
 | `Online` | 102 | Notifies clients that this package is online and ready to receive messages | Empty string |
 | `Offline` | 103 | Notifies clients that this package is offline and can not receive messages | Empty string |
+| `IsPlaying` | 104 | Notification of current play mode state | "true" (in play mode) / "false" (in edit mode) |
 
 Note:
 - Message value greater than or equal to 100 means it does not exist in the official package but was added in this package.
@@ -96,6 +97,10 @@ Detailed value formats for some of the types:
   - Response: Package name string (e.g., "com.hackerzhuli.code")
 - **Online**: Empty string - sent when this package comes online after domain reload or editor startup
 - **Offline**: Empty string - sent when this package goes offline before domain reload or editor shutdown
+- **IsPlaying**: 
+  - Value: "true" when Unity is in play mode, "false" when in edit mode
+  - Sent automatically when play mode state changes (entering/exiting play mode)
+  - Sent to new clients when they connect or when this package comes online
 - **Tcp**: Internal format `"<port>:<length>"` where port is the TCP listener port and length is the expected message size
 - **Test Messages**: Value format depends on Unity's test runner implementation and may contain JSON or structured data
 
