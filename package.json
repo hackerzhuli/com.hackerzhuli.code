@@ -3,16 +3,16 @@
   "displayName": "Visual Studio Code Editor",
   "description": "Code editor integration for supporting Visual Studio Code (or its forks) as code editor for unity. Adds support for generating csproj files for intellisense purposes, auto discovery of installations, etc.",
   "version": "1.0.0",
-  "unity": "2023.2",
+  "unity": "6000.0",
   "dependencies": {
-    "com.unity.test-framework": "1.4.6"
+    "com.unity.test-framework": "1.4.5"
   },
   "_upm": {
     "changelog": ""
   },
-  "documentationUrl": "https://github.com/hackerzhuli/com.hackerzhuli.ide.visualstudio",
+  "documentationUrl": "https://github.com/hackerzhuli/com.hackerzhuli.code",
   "repository": {
-    "url": "https://github.com/hackerzhuli/com.hackerzhuli.ide.visualstudio.git",
+    "url": "https://github.com/hackerzhuli/com.hackerzhuli.code",
     "type": "git"
   }
 }
