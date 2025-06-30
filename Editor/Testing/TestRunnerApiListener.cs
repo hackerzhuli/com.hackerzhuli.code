@@ -45,7 +45,7 @@ namespace Hackerzhuli.Code.Editor.Testing
 			var testMode = (TestMode)Enum.Parse(typeof(TestMode), command.Substring(0, index));
 			var filter = command.Substring(index + 1);
 
-			Debug.Log($"Executing tests filter = {filter} in mode {testMode}, command is {command}");
+			//Debug.Log($"Executing tests filter = {filter} in mode {testMode}, command is {command}");
 
 			Filter actualFilter;
 			var projectName = Path.GetFileName(Path.GetDirectoryName(Application.dataPath));
@@ -58,7 +58,8 @@ namespace Hackerzhuli.Code.Editor.Testing
 			// if it is an assembly name(by ending with dll), we only execute tests in that assembly
 			else if (filter.EndsWith(".dll"))
 			{
-				actualFilter = new Filter { testMode = testMode, assemblyNames = new[] { filter } };
+				// we need to remove the extension here
+				actualFilter = new Filter { testMode = testMode, assemblyNames = new[] { Path.GetFileNameWithoutExtension(filter) } };
 			}
 			// otherwise look for the individual test
 			else

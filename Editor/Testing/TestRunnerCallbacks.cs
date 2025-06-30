@@ -45,7 +45,7 @@ namespace Hackerzhuli.Code.Editor.Testing
             var summary = new TestResultAdaptor(testResultAdaptor, -1);
             var container = new TestResultAdaptorContainer { TestResultAdaptors = new[] { summary } };
             var result = JsonUtility.ToJson(container, true);
-            Debug.Log($"Test result is:\n {result}");
+            //Debug.Log($"Test result is:\n {result}");
             return result;
         }
 
