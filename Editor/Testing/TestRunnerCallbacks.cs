@@ -44,7 +44,7 @@ namespace Hackerzhuli.Code.Editor.Testing
             // Test results should never include children data (for efficiency, because children is already sent when they finish)
             var summary = new TestResultAdaptor(testResultAdaptor, -1);
             var container = new TestResultAdaptorContainer { TestResultAdaptors = new[] { summary } };
-            var result = JsonUtility.ToJson(container, true);
+            var result = JsonUtility.ToJson(container);
             //Debug.Log($"Test result is:\n {result}");
             return result;
         }
@@ -54,7 +54,7 @@ namespace Hackerzhuli.Code.Editor.Testing
             // Send only summary information without individual test results to avoid redundancy
             var summary = new TestResultAdaptor(testResultAdaptor, -1);
             var container = new TestResultAdaptorContainer { TestResultAdaptors = new[] { summary } };
-            var result = JsonUtility.ToJson(container, true);
+            var result = JsonUtility.ToJson(container);
             VisualStudioIntegration.BroadcastMessage(Messaging.MessageType.RunFinished, result);
         }
 

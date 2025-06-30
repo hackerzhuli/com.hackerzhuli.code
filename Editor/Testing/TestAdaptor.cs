@@ -26,17 +26,12 @@ namespace Hackerzhuli.Code.Editor.Testing
 	internal class TestAdaptor
 	{
 		/// <summary>
-		/// The ID of the test tree node. The ID can change if you add new tests to the suite. Use UniqueName, if you want to have a more permanent point of reference.
-		/// </summary>
-		public string Id;
-		
-		/// <summary>
 		/// The name of the test node.
-		/// </summary>
+		/// </summary>a
 		public string Name;
 		
 		/// <summary>
-		/// The full name of the test including namespace and class.
+		/// The full name of the test including namespace and class, for assembly, the path of the assembly
 		/// </summary>
 		public string FullName;
 
@@ -46,14 +41,19 @@ namespace Hackerzhuli.Code.Editor.Testing
 		public string Type;
 		
 		/// <summary>
-		/// The name of the test method.
+		/// The name of the test method, if it is not a method, empty
 		/// </summary>
 		public string Method;
 
 		/// <summary>
-		/// The location of the assembly containing the test.
+		/// The name of the assembly containing the test(eg. MyNamespace.MyAssembly), if it is an assembly or not in an assembly, empty string
 		/// </summary>
 		public string Assembly;
+
+		/// <summary>
+		/// The mode of the test("PlayMode" or "EditMode")
+		/// </summary>
+		public string Mode;
 		
 		/// <summary>
 		/// Index of parent in TestAdaptors array, -1 for root.
@@ -66,21 +66,6 @@ namespace Hackerzhuli.Code.Editor.Testing
 		/// </summary>
 		public string SourceLocation;
 
-		/// <summary>
-		/// Indicates if the test has the UnityTest attribute(if it is a method).
-		/// </summary>
-		public bool IsHaveUnityTestAttribute;
-
-		/// <summary>
-		/// A unique generated name for the test node. E.g., Tests.dll/MyNamespace/MyTestClass/[Tests][MyNamespace.MyTestClass.MyTest].
-		/// </summary>
-		public string UniqueName;
-
-        /// <summary>
-        /// Returns true if the node represents a test assembly, false otherwise.
-        /// </summary>
-        public bool IsTestAssembly;
-
         /// <summary>
         /// Initializes a new instance of the <see cref="TestAdaptor"/> class from Unity's <see cref="ITestAdaptor"/>.
         /// </summary>
@@ -89,16 +74,12 @@ namespace Hackerzhuli.Code.Editor.Testing
         /// <param name="cecilHelper">Shared MonoCecilHelper instance for source location retrieval.</param>
         public TestAdaptor(ITestAdaptor testAdaptor, int parent, MonoCecilHelper cecilHelper = null)
 		{
-			Id = testAdaptor.Id;
 			Name = testAdaptor.Name;
 			FullName = testAdaptor.FullName;
-
 			Type = testAdaptor.TypeInfo?.FullName;
 			Method = testAdaptor.Method?.Name;
-			IsHaveUnityTestAttribute = testAdaptor.Method?.GetCustomAttributes<UnityTestAttribute>(true).Length != 0;
-			IsTestAssembly = testAdaptor.IsTestAssembly;
-			UniqueName = testAdaptor.UniqueName;
-
+			Assembly = testAdaptor.GetAssemblyName();
+			Mode = testAdaptor.GetMode().ToString();
 			Parent = parent;
 
 			// Populate source location for leaf tests (actual test methods) or test types
@@ -117,13 +98,13 @@ namespace Hackerzhuli.Code.Editor.Testing
 			}
 		}
 
-		/// <summary>
-		/// Gets the source location for a test method using MonoCecil debug information.
-		/// </summary>
-		/// <param name="testAdaptor">The test adaptor containing method information.</param>
-		/// <param name="cecilHelper">Shared MonoCecilHelper instance for source location retrieval.</param>
-		/// <returns>Source location in format "Assets/Path/File.cs:LineNumber" or null if not found.</returns>
-		private static string GetMethodSourceLocation(ITestAdaptor testAdaptor, MonoCecilHelper cecilHelper)
+        /// <summary>
+        /// Gets the source location for a test method using MonoCecil debug information.
+        /// </summary>
+        /// <param name="testAdaptor">The test adaptor containing method information.</param>
+        /// <param name="cecilHelper">Shared MonoCecilHelper instance for source location retrieval.</param>
+        /// <returns>Source location in format "Assets/Path/File.cs:LineNumber" or null if not found.</returns>
+        private static string GetMethodSourceLocation(ITestAdaptor testAdaptor, MonoCecilHelper cecilHelper)
 		{
 			// If no cecil helper provided, skip source location detection
 			if (cecilHelper == null) return null;

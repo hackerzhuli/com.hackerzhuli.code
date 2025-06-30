@@ -33,6 +33,16 @@ namespace Hackerzhuli.Code.Editor.Testing
 		public string FullName;
 
 		/// <summary>
+		/// Same as <see cref="TestAdaptor.Assembly"/>
+		/// </summary>
+		public string Assembly;
+
+		/// <summary>
+		/// Same as <see cref="TestAdaptor.Mode"/>
+		/// </summary>
+		public string Mode;
+
+		/// <summary>
 		/// The number of test cases that passed when running the test and all its children.
 		/// </summary>
 		public int PassCount;
@@ -117,6 +127,8 @@ namespace Hackerzhuli.Code.Editor.Testing
 		{
 			Name = testResultAdaptor.Name;
 			FullName = testResultAdaptor.FullName;
+			Assembly = testResultAdaptor.Test.GetAssemblyName();
+			Mode = testResultAdaptor.Test.GetMode().ToString();
 
 			PassCount = testResultAdaptor.PassCount;
 			FailCount = testResultAdaptor.FailCount;
