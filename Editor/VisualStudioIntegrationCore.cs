@@ -12,6 +12,7 @@ using System.Net.Sockets;
 using Hackerzhuli.Code.Editor.Messaging;
 using Hackerzhuli.Code.Editor.Testing;
 using UnityEditor;
+using UnityEditor.Compilation;
 using UnityEngine;
 using MessageType = Hackerzhuli.Code.Editor.Messaging.MessageType;
 
@@ -128,7 +129,9 @@ namespace Hackerzhuli.Code.Editor
             //Debug.Log("OnEnable");
             CheckLegacyAssemblies();
             
-            // Subscribe to Unity log events
+            // Subscribe to Unity events
+            EditorApplication.update += Update;
+            CompilationPipeline.compilationFinished += OnCompilationFinished;
             Application.logMessageReceived += OnLogMessageReceived;
             
             // Flag that we need to notify clients that we're online
@@ -138,7 +141,9 @@ namespace Hackerzhuli.Code.Editor
         private void OnDisable()
         {
             //Debug.Log("OnDisable");
-            // Unsubscribe from Unity log events
+            // Unsubscribe from Unity events
+            EditorApplication.update -= Update;
+            CompilationPipeline.compilationFinished -= OnCompilationFinished;
             Application.logMessageReceived -= OnLogMessageReceived;
             
             // Notify clients that Unity is going offline before disposing the messager
@@ -197,10 +202,7 @@ namespace Hackerzhuli.Code.Editor
             }
         }
 
-        /// <summary>
-        /// Handles assembly reload events by notifying connected IDE clients that compilation has finished.
-        /// </summary>
-        public void OnAssemblyReload()
+        private void OnCompilationFinished(object obj)
         {
             //Debug.Log("OnAssemblyReload");
             // need to ensure messager is initialized, because assembly reload event can happen before first Update

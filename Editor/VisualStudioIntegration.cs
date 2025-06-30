@@ -25,9 +25,6 @@ namespace Hackerzhuli.Code.Editor
 
 			// Create or find the core ScriptableObject instance
 			_core = GetOrCreateCore();
-
-			EditorApplication.update += OnUpdate;
-			AssemblyReloadEvents.afterAssemblyReload += OnAssemblyReload;
 		}
 
 		/// <summary>
@@ -48,10 +45,7 @@ namespace Hackerzhuli.Code.Editor
 			return core;
 		}
 
-		private static void OnUpdate()
-		{
-			_core.Update();
-		}
+
 
 		/// <summary>
 		/// Gets the package version.
@@ -62,10 +56,7 @@ namespace Hackerzhuli.Code.Editor
 			return package.version;
 		}
 
-		private static void OnAssemblyReload()
-		{
-			_core.OnAssemblyReload();
-		}
+
 
 		/// <summary>
 		/// Broadcasts a message to all connected clients.
