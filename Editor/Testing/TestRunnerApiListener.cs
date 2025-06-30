@@ -1,4 +1,5 @@
 ﻿using System;
+using System.IO;
 using UnityEditor;
 using UnityEditor.TestTools.TestRunner.Api;
 using UnityEngine;
@@ -44,7 +45,31 @@ namespace Hackerzhuli.Code.Editor.Testing
 			var testMode = (TestMode)Enum.Parse(typeof(TestMode), command.Substring(0, index));
 			var filter = command.Substring(index + 1);
 
-			ExecuteTests(new Filter { testMode = testMode, testNames = new [] { filter } });
+			Debug.Log($"Executing tests filter = {filter} in mode {testMode}, command is {command}");
+
+			Filter actualFilter;
+			var projectName = Path.GetFileName(Path.GetDirectoryName(Application.dataPath));
+
+			// if the project name is received, we just execute all tests
+			if(projectName != null && projectName == filter)
+			{
+				actualFilter = new Filter { testMode = testMode};
+			}
+			// if it is an assembly name(by ending with dll), we only execute tests in that assembly
+			else if (filter.EndsWith(".dll"))
+			{
+				actualFilter = new Filter { testMode = testMode, assemblyNames = new[] { filter } };
+			}
+			// otherwise look for the individual test
+			else
+			{
+				actualFilter = new Filter { testMode = testMode, testNames = new[] { filter } };
+			}
+
+			if(actualFilter != null)
+			{
+				ExecuteTests(actualFilter);
+			}
 		}
 
 		private static void ExecuteTests(Filter filter)
