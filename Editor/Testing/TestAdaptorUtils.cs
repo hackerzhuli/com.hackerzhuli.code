@@ -4,7 +4,7 @@ using UnityEditor.Experimental.GraphView;
 using UnityEditor.TestTools.TestRunner.Api;
 
 namespace Hackerzhuli.Code.Editor.Testing{
-    public static class TestUtils
+    public static class TestAdaptorUtils
     {
         /// <summary>
         /// Get the assembly name that this test belongs to, if it is an assembly, or not in an assembly, return empty string
