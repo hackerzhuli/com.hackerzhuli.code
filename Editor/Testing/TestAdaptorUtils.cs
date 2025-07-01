@@ -43,5 +43,43 @@ namespace Hackerzhuli.Code.Editor.Testing{
             }
             return testAdaptor.Parent.GetMode();
         }
+
+        /// <summary>
+        /// Get the test node type of this test
+        /// </summary>
+        /// <param name="testAdaptor"></param>
+        /// <returns></returns>
+        public static TestNodeType GetNodeType(this ITestAdaptor testAdaptor)
+        {
+            if (testAdaptor.Parent == null)
+            {
+                return TestNodeType.Solution;
+            }
+            else if (testAdaptor.FullName.EndsWith(".dll"))
+            {
+                return TestNodeType.Assembly;
+            }
+            else if (testAdaptor.TypeInfo == null)
+            {
+                return TestNodeType.Namespace;
+            }
+            else if (testAdaptor.Method == null)
+            {
+                return TestNodeType.Class;
+            }
+            else
+            {
+                return TestNodeType.Method;
+            }
+        }
+
+        /// <summary>
+        /// Get a unique id for test that will persist across compiles and not conflict across test modes
+        /// </summary>
+        /// <param name="testAdaptor"></param>
+        /// <returns></returns>
+        public static string GetId(this ITestAdaptor testAdaptor){
+            return $"{GetMode(testAdaptor)}/{testAdaptor.UniqueName}";
+        }
     }
 }

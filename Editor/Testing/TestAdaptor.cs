@@ -19,15 +19,33 @@ namespace Hackerzhuli.Code.Editor.Testing
 	}
 
 	/// <summary>
-	/// Serializable adaptor for Unity's <see cref="ITestAdaptor"/> interface.
-	/// Represents a test node in the test tree with metadata and hierarchy information.
+	/// Type of test node
+	/// </summary>
+	public enum TestNodeType{
+		Solution,
+		Assembly,
+		Namespace,
+		Class,
+		Method,
+	}
+
+	/// <summary>
+	/// Serializable adaptor for Unity's <see cref="ITestAdaptor"/> interface.<br/>
+	/// Represents a test node in the test tree with metadata and hierarchy information.<br/>
+	/// Try not to include unneeded information, as there can be many tests in a project<br/>
+	/// This can make message <see cref="MessageType.RetrieveTestList"/> big
 	/// </summary>
 	[Serializable]
 	internal class TestAdaptor
 	{
+        /// <summary>
+        /// Unique identifier for the test node, persisted (as much as possible) across compiles, will not conflict accross test modes
+        /// </summary>
+        public string Id;
+
 		/// <summary>
 		/// The name of the test node.
-		/// </summary>a
+		/// </summary>
 		public string Name;
 		
 		/// <summary>
@@ -36,24 +54,9 @@ namespace Hackerzhuli.Code.Editor.Testing
 		public string FullName;
 
 		/// <summary>
-		/// The full name of the type containing the test method.
+		/// The type of the test node.
 		/// </summary>
-		public string Type;
-		
-		/// <summary>
-		/// The name of the test method, if it is not a method, empty
-		/// </summary>
-		public string Method;
-
-		/// <summary>
-		/// The name of the assembly containing the test(eg. MyNamespace.MyAssembly), if it is an assembly or not in an assembly, empty string
-		/// </summary>
-		public string Assembly;
-
-		/// <summary>
-		/// The mode of the test("PlayMode" or "EditMode")
-		/// </summary>
-		public string Mode;
+		public TestNodeType Type;
 		
 		/// <summary>
 		/// Index of parent in TestAdaptors array, -1 for root.
@@ -62,9 +65,9 @@ namespace Hackerzhuli.Code.Editor.Testing
 
 		/// <summary>
 		/// Source location of the test in format "Assets/Path/File.cs:LineNumber".
-		/// Only populated for methods and types, null for namespaces or assemblies or other things
+		/// Only populated for methods, null for other nodes
 		/// </summary>
-		public string SourceLocation;
+		public string Source;
 
         /// <summary>
         /// Initializes a new instance of the <see cref="TestAdaptor"/> class from Unity's <see cref="ITestAdaptor"/>.
@@ -74,12 +77,10 @@ namespace Hackerzhuli.Code.Editor.Testing
         /// <param name="cecilHelper">Shared MonoCecilHelper instance for source location retrieval.</param>
         public TestAdaptor(ITestAdaptor testAdaptor, int parent, MonoCecilHelper cecilHelper = null)
 		{
+			Id = testAdaptor.GetId();
 			Name = testAdaptor.Name;
 			FullName = testAdaptor.FullName;
-			Type = testAdaptor.TypeInfo?.FullName;
-			Method = testAdaptor.Method?.Name;
-			Assembly = testAdaptor.GetAssemblyName();
-			Mode = testAdaptor.GetMode().ToString();
+			Type = testAdaptor.GetNodeType();
 			Parent = parent;
 
 			// Populate source location for leaf tests (actual test methods) or test types
@@ -88,12 +89,12 @@ namespace Hackerzhuli.Code.Editor.Testing
 				if (!testAdaptor.IsSuite && testAdaptor.Method != null)
 				{
 					// For test methods, get method source location
-					SourceLocation = GetMethodSourceLocation(testAdaptor, cecilHelper);
+					Source = GetMethodSourceLocation(testAdaptor, cecilHelper);
 				}
 				else if (testAdaptor.IsSuite && testAdaptor.Method == null && !string.IsNullOrEmpty(testAdaptor.TypeInfo.FullName))
 				{
 					// For test types (suites without methods), get type source location
-					SourceLocation = GetTypeSourceLocation(testAdaptor, cecilHelper);
+					Source = GetTypeSourceLocation(testAdaptor, cecilHelper);
 				}
 			}
 		}

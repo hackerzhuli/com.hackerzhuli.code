@@ -23,24 +23,9 @@ namespace Hackerzhuli.Code.Editor.Testing
 	internal class TestResultAdaptor
 	{
 		/// <summary>
-		/// The name of the test node.
+		/// The unique identifier for the test this result is for.
 		/// </summary>
-		public string Name;
-		
-		/// <summary>
-		/// Gets the full name of the test result.
-		/// </summary>
-		public string FullName;
-
-		/// <summary>
-		/// Same as <see cref="TestAdaptor.Assembly"/>
-		/// </summary>
-		public string Assembly;
-
-		/// <summary>
-		/// Same as <see cref="TestAdaptor.Mode"/>
-		/// </summary>
-		public string Mode;
+		public string TestId;
 
 		/// <summary>
 		/// The number of test cases that passed when running the test and all its children.
@@ -125,10 +110,7 @@ namespace Hackerzhuli.Code.Editor.Testing
 		/// <param name="parent">Index of parent in TestResultAdaptors array, -1 for root.</param>
 		public TestResultAdaptor(ITestResultAdaptor testResultAdaptor, int parent)
 		{
-			Name = testResultAdaptor.Name;
-			FullName = testResultAdaptor.FullName;
-			Assembly = testResultAdaptor.Test.GetAssemblyName();
-			Mode = testResultAdaptor.Test.GetMode().ToString();
+			TestId = testResultAdaptor.Test.GetId();
 
 			PassCount = testResultAdaptor.PassCount;
 			FailCount = testResultAdaptor.FailCount;
