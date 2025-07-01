@@ -1,7 +1,10 @@
 
+using System;
 using System.IO;
 using UnityEditor.Experimental.GraphView;
 using UnityEditor.TestTools.TestRunner.Api;
+using Hackerzhuli.Code.Editor.Hash;
+using System.Text;
 
 namespace Hackerzhuli.Code.Editor.Testing{
     public static class TestAdaptorUtils
@@ -98,7 +101,17 @@ namespace Hackerzhuli.Code.Editor.Testing{
         /// <param name="testAdaptor"></param>
         /// <returns></returns>
         public static string GetId(this ITestAdaptor testAdaptor){
-            return $"{GetMode(testAdaptor)}/{testAdaptor.UniqueName}";
+            // Create the original long ID format(which can be 100 bytes or longer)
+            var originalId = $"{GetMode(testAdaptor)}/{testAdaptor.UniqueName}";
+
+            var bytes = Encoding.UTF8.GetBytes(originalId);
+            
+            // Hash it using xxHash64 to get a fixed-size hash
+            var hash = xxHash64.ComputeHash(bytes);
+            
+            // Convert to base64 for a shorter string representation
+            var hashBytes = BitConverter.GetBytes(hash);
+            return Convert.ToBase64String(hashBytes);
         }
     }
 }
