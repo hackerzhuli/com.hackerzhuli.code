@@ -1,6 +1,7 @@
 ﻿using System;
 using System.IO;
 using System.Reflection;
+using UnityEditor.Experimental.GraphView;
 using UnityEditor.TestTools.TestRunner.Api;
 using UnityEngine.TestTools;
 
@@ -94,7 +95,7 @@ namespace Hackerzhuli.Code.Editor.Testing
 			TestCount = testAdaptor.TestCaseCount;
 
 			// Populate source location for methods
-			if (Type == TestNodeType.Method)
+			if (cecilHelper != null && Type == TestNodeType.Method)
 			{
 				Source = GetMethodSourceLocation(testAdaptor, cecilHelper);
 			}
@@ -110,58 +111,22 @@ namespace Hackerzhuli.Code.Editor.Testing
 		{
 			// If no cecil helper provided, skip source location detection
 			if (cecilHelper == null) return null;
+			if(testAdaptor.Method == null){
+				return null;
+			}
 
 			try
 			{
 				// Get the actual System.Type from the type info
-				var type = testAdaptor.TypeInfo.Type;
+				var type = testAdaptor.Method.TypeInfo.Type;
 				if (type == null) return null;
 
 				// Get the MethodInfo from reflection
-				var methodInfo = type.GetMethod(testAdaptor.Method.Name, 
-					BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Static);
+				var methodInfo = testAdaptor.Method.MethodInfo;
 				if (methodInfo == null) return null;
 
 				// Use shared MonoCecilHelper to get file location
 				var fileOpenInfo = cecilHelper.TryGetCecilFileOpenInfo(type, methodInfo);
-				
-				if (fileOpenInfo is { FilePath: not null, LineNumber: > 0 })
-				{
-					// Convert absolute path to relative path from project root
-					var relativePath = GetRelativePathFromProject(fileOpenInfo.FilePath);
-					if (relativePath != null)
-					{
-						return $"{relativePath}:{fileOpenInfo.LineNumber}";
-					}
-				}
-			}
-			catch
-			{
-				// Silently ignore errors in source location detection
-			}
-
-			return null;
-		}
-
-		/// <summary>
-		/// Gets the source location for a test type using MonoCecil debug information.
-		/// </summary>
-		/// <param name="testAdaptor">The test adaptor containing type information.</param>
-		/// <param name="cecilHelper">Shared MonoCecilHelper instance for source location retrieval.</param>
-		/// <returns>Source location in format "Assets/Path/File.cs:LineNumber" or null if not found.</returns>
-		private static string GetTypeSourceLocation(ITestAdaptor testAdaptor, MonoCecilHelper cecilHelper)
-		{
-			// If no cecil helper provided, skip source location detection
-			if (cecilHelper == null) return null;
-
-			try
-			{
-				// Get the actual System.Type from the type info
-				var type = testAdaptor.TypeInfo.Type;
-				if (type == null) return null;
-
-				// Use shared MonoCecilHelper to get type source location
-				var fileOpenInfo = cecilHelper.TryGetCecilTypeSourceLocation(type);
 				
 				if (fileOpenInfo is { FilePath: not null, LineNumber: > 0 })
 				{

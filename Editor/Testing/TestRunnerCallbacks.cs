@@ -49,6 +49,13 @@ namespace Hackerzhuli.Code.Editor.Testing
             return result;
         }
 
+        private string SerializeTopLevelOnlyWithNoSource(ITestAdaptor testAdaptor)
+        {
+            var topLevelAdaptor = new TestAdaptor(testAdaptor, -1, null);
+            var container = new TestAdaptorContainer { TestAdaptors = new[] { topLevelAdaptor } };
+            return JsonUtility.ToJson(container);
+        }
+
         public void RunFinished(ITestResultAdaptor testResultAdaptor)
         {
             // Send only summary information without individual test results to avoid redundancy
@@ -60,17 +67,17 @@ namespace Hackerzhuli.Code.Editor.Testing
 
         public void RunStarted(ITestAdaptor testAdaptor)
         {
-            VisualStudioIntegration.BroadcastMessage(Messaging.MessageType.RunStarted, Serialize(testAdaptor));
+            VisualStudioIntegration.BroadcastMessage(Messaging.MessageType.RunStarted, SerializeTopLevelOnlyWithNoSource(testAdaptor));
         }
 
         public void TestFinished(ITestResultAdaptor testResultAdaptor)
-	        {
+	    {
             VisualStudioIntegration.BroadcastMessage(Messaging.MessageType.TestFinished, Serialize(testResultAdaptor));
         }
 
 		public void TestStarted(ITestAdaptor testAdaptor)
 		{
-			VisualStudioIntegration.BroadcastMessage(Messaging.MessageType.TestStarted, Serialize(testAdaptor));
+			VisualStudioIntegration.BroadcastMessage(Messaging.MessageType.TestStarted, SerializeTopLevelOnlyWithNoSource(testAdaptor));
 		}
 
 		private static string TestModeName(TestMode testMode)

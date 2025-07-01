@@ -1,5 +1,6 @@
 
 using System.IO;
+using UnityEditor.Experimental.GraphView;
 using UnityEditor.TestTools.TestRunner.Api;
 
 namespace Hackerzhuli.Code.Editor.Testing{
@@ -51,27 +52,43 @@ namespace Hackerzhuli.Code.Editor.Testing{
         /// <returns></returns>
         public static TestNodeType GetNodeType(this ITestAdaptor testAdaptor)
         {
-            if (testAdaptor.Parent == null)
-            {
-                return TestNodeType.Solution;
-            }
-            else if (testAdaptor.FullName.EndsWith(".dll"))
+            // The code looks odd because sometimes methods have type info but sometimes methods don't have type info
+            // It is inconsistent from Unity Test Framework
+            // Do our best to be accurate
+            if (testAdaptor.IsTestAssembly)
             {
                 return TestNodeType.Assembly;
             }
-            else if (testAdaptor.TypeInfo == null)
+            else if (testAdaptor.TypeInfo != null)
             {
-                return TestNodeType.Namespace;
+                if(testAdaptor.Arguments is {Length: > 0})
+                {
+                    return TestNodeType.TestCase;
+                }
+                else if(testAdaptor.Method == null)
+                {
+                    return TestNodeType.Class;
+                }
+                else
+                {
+                    return TestNodeType.Method;
+                }
             }
-            else if (testAdaptor.Method == null)
+            else if(testAdaptor.Arguments is {Length: > 0})
             {
-                return TestNodeType.Class;
+                return TestNodeType.TestCase;
             }
-            else if(testAdaptor.Arguments == null || testAdaptor.Arguments.Length == 0)
+            else if(testAdaptor.Method != null)
             {
                 return TestNodeType.Method;
-            }else{
-                return TestNodeType.TestCase;
+            }
+            else if (testAdaptor.Parent == null)
+            {
+                return TestNodeType.Solution;
+            }
+            else 
+            {
+                return TestNodeType.Namespace;
             }
         }
 

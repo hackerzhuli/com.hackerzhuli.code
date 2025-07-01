@@ -125,6 +125,8 @@ Response:
 
 #### TestStarted (Value: 20)
 - **Format**: JSON serialized TestAdaptorContainer
+- **Important**: Each message contains exactly one test adaptor. The `TestAdaptors` array always contains a single element with no children data. This is an optimization to avoid sending redundant hierarchy information.
+- **Note**: The Source field is not populated in this message type for efficiency.
 - **C# Structure**:
   
 ```csharp
@@ -143,7 +145,7 @@ public enum TestNodeType{
 [Serializable]
 internal class TestAdaptorContainer
 {
-    public TestAdaptor[] TestAdaptors;
+    public TestAdaptor[] TestAdaptors; // Always contains exactly one element
 }
 
 [Serializable]
@@ -187,7 +189,7 @@ internal class TestAdaptor
 }
 ```
 
-- **Description**: Sent when a test starts execution, contains test metadata and hierarchy
+- **Description**: Sent when a test starts execution. Each message contains exactly one test adaptor without any children data, ensuring efficient and non-redundant messaging. Only the top-level test information is included, and the Source field is not populated.
 
 #### TestFinished (Value: 21)
 - **Format**: JSON serialized TestResultAdaptorContainer
@@ -301,8 +303,10 @@ internal enum TestStatusAdaptor
 
 #### RunStarted (Value: 18)
 - **Format**: JSON serialized TestAdaptorContainer
+- **Important**: Each message contains exactly one test adaptor. The `TestAdaptors` array always contains a single element with no children data. This is an optimization to avoid sending redundant hierarchy information.
+- **Note**: The Source field is not populated in this message type for efficiency.
 - **C# Structure**: Uses the same TestAdaptorContainer and TestAdaptor structures as TestStarted (see TestStarted section for complete structure)
-- **Description**: Sent when a test run begins execution. Contains the complete test hierarchy that will be executed, including all parent nodes and children. This provides the full context of what tests are about to run.
+- **Description**: Sent when a test run begins execution. Each message contains exactly one test adaptor without any children data, ensuring efficient and non-redundant messaging. Only the top-level test information is included, and the Source field is not populated.
 - **Usage**: Clients can use this to prepare UI, show progress indicators, or track which tests are part of the current run.
 
 #### ShowUsage (Value: 25)
