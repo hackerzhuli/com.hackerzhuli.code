@@ -27,6 +27,10 @@ namespace Hackerzhuli.Code.Editor.Testing
 		Namespace,
 		Class,
 		Method,
+		/// <summary>
+		/// Test case of a parameterized test method
+		/// </summary>
+		TestCase,
 	}
 
 	/// <summary>
@@ -65,9 +69,14 @@ namespace Hackerzhuli.Code.Editor.Testing
 
 		/// <summary>
 		/// Source location of the test in format "Assets/Path/File.cs:LineNumber".
-		/// Only populated for methods, null for other nodes
+		/// Only populated for methods, empty for other nodes
 		/// </summary>
 		public string Source;
+
+		/// <summary>
+		/// Number of leaf tests in this test node and its children
+		/// </summary>
+		public int TestCount;
 
         /// <summary>
         /// Initializes a new instance of the <see cref="TestAdaptor"/> class from Unity's <see cref="ITestAdaptor"/>.
@@ -82,20 +91,12 @@ namespace Hackerzhuli.Code.Editor.Testing
 			FullName = testAdaptor.FullName;
 			Type = testAdaptor.GetNodeType();
 			Parent = parent;
+			TestCount = testAdaptor.TestCaseCount;
 
-			// Populate source location for leaf tests (actual test methods) or test types
-			if (testAdaptor.TypeInfo != null)
+			// Populate source location for methods
+			if (Type == TestNodeType.Method)
 			{
-				if (!testAdaptor.IsSuite && testAdaptor.Method != null)
-				{
-					// For test methods, get method source location
-					Source = GetMethodSourceLocation(testAdaptor, cecilHelper);
-				}
-				else if (testAdaptor.IsSuite && testAdaptor.Method == null && !string.IsNullOrEmpty(testAdaptor.TypeInfo.FullName))
-				{
-					// For test types (suites without methods), get type source location
-					Source = GetTypeSourceLocation(testAdaptor, cecilHelper);
-				}
+				Source = GetMethodSourceLocation(testAdaptor, cecilHelper);
 			}
 		}
 

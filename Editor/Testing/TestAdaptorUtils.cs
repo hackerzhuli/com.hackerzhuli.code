@@ -67,9 +67,11 @@ namespace Hackerzhuli.Code.Editor.Testing{
             {
                 return TestNodeType.Class;
             }
-            else
+            else if(testAdaptor.Arguments == null || testAdaptor.Arguments.Length == 0)
             {
                 return TestNodeType.Method;
+            }else{
+                return TestNodeType.TestCase;
             }
         }
 
