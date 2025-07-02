@@ -356,7 +356,7 @@ internal class FileUsage
 4. Client must send messages within 4 seconds to stay registered 
 
 ### Heartbeat Mechanism
-- Send `Ping` message to Unity
+- Send `Ping` message to this package
 - This package responds with `Pong` message
 - Clients are automatically removed after 4 seconds of inactivity 
 
