@@ -17,8 +17,8 @@ Messaging Protocol:
 
 Code Improvement:
 - Improve some code with better structure and documentation
-- Changed VisualStudioIntegration core logic into a ScriptableObject VisualStudioIntegrationCore, to make code less error prone and make use of Unity lifecycle events and automatic state preservation through serialization and deserialization
-- Improve code quality for some classes(eg. VisualStudioIntegrationCore) by making it single threaded to avoid problems.
+- Changed VisualStudioIntegration core logic into a ScriptableObject CodeEditorIntegrationCore, to make code less error prone and make use of Unity lifecycle events and automatic state preservation through serialization and deserialization
+- Improve code quality for some classes(eg. CodeEditorIntegrationCore) by making it single threaded to avoid problems.
   
 Removed:
 - Removed support for Visual Studio
