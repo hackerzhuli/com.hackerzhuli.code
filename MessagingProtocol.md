@@ -64,13 +64,13 @@ All available message types:
 | ~~`UpdatePackage`~~ | 15 | ~~Update package~~ (Obsolete) | - |
 | `ProjectPath` | 16 | Request/response for Unity project path | Empty string (request) / Full project path (response) |
 | `Tcp` | 17 | Internal message for TCP fallback coordination | `"<port>:<length>"` format |
-| `RunStarted` | 18 | Test run started | JSON serialized TestAdaptorContainer with complete test hierarchy |
-| `RunFinished` | 19 | Test run finished | JSON serialized TestResultAdaptorContainer (single result, no children) |
-| `TestStarted` | 20 | Notification that a test has started | Check specific section below for details |
-| `TestFinished` | 21 | Notification that a test has finished | Check specific section below for details |
-| `TestListRetrieved` | 22 | Notification that test list has been retrieved | Check specific section below for details |
-| `RetrieveTestList` | 23 | Request to retrieve list of available tests | Check specific section below for details |
-| `ExecuteTests` | 24 | Request to execute specific tests | Check specific section below for details / Response is empty string|
+| `TestRunStarted` | 18 | Test run started | JSON serialized TestAdaptorContainer (top-level adaptors, no children, no Source) |
+| `TestRunFinished` | 19 | Test run finished | JSON serialized TestResultAdaptorContainer (top-level results, no children) |
+| `TestStarted` | 20 | Notification that a test has started | JSON serialized TestAdaptorContainer (top-level adaptors, no children, no Source) |
+| `TestFinished` | 21 | Notification that a test has finished | JSON serialized TestResultAdaptorContainer (top-level results, no children) |
+| `TestListRetrieved` | 22 | Notification that test list has been retrieved | JSON serialized TestAdaptorContainer (complete test hierarchy with children) |
+| `RetrieveTestList` | 23 | Request to retrieve list of available tests | Test mode string ("EditMode" or "PlayMode") |
+| `ExecuteTests` | 24 | Request to execute specific tests | TestMode, TestMode:AssemblyName.dll, or TestMode:FullTestName / Response is empty string|
 | `ShowUsage` | 25 | Show usage information | JSON serialized FileUsage object |
 | `CompilationFinished` | 100 | Notification that compilation has finished | Empty string |
 | `PackageName` | 101 | Request/response for package name | Empty string (request) / Package name string (response) |
@@ -101,7 +101,8 @@ Detailed value formats for some of the types:
   - Value: "true" when Unity is in play mode, "false" when in edit mode
   - Sent automatically when play mode state changes (entering/exiting play mode)
   - Sent to new clients when they connect or when this package comes online
-- **Tcp**: Internal format `"<port>:<length>"` where port is the TCP listener port and length is the expected message size
+- **Tcp**: Internal format `"<port>:<length>"` (eg. "1234:1024") where port is the TCP listener port and length is the expected message size
+
 - **Test Messages**: Value format depends on Unity's test runner implementation and may contain JSON or structured data
 
 #### RetrieveTestList (Value: 23)
@@ -117,7 +118,7 @@ Detailed value formats for some of the types:
 - **Examples**: 
   - `"EditMode"` - Run all edit mode tests
   - `"PlayMode:MyTests.dll"` - Run all tests in MyTests assembly
-  - `"EditMode:MyNamespace.MyTestClass.MyTestMethod"` - Run specific test method
+  - `"EditMode:MyNamespace.MyTestClass"` - Run all tests in MyTestClass
 - **Description**: Executes tests based on the specified filter. The filter can target all tests in a mode, all tests in an assembly, or a specific test by name.
 
 Response:
@@ -125,7 +126,7 @@ Response:
 
 #### TestStarted (Value: 20)
 - **Format**: JSON serialized TestAdaptorContainer
-- **Important**: Each message contains exactly one test adaptor. The `TestAdaptors` array always contains a single element with no children data. This is an optimization to avoid sending redundant hierarchy information.
+- **Important**: Each message contains only top-level test adaptors with no children data. This is an optimization to avoid sending redundant hierarchy information.
 - **Note**: The Source field is not populated in this message type for efficiency.
 - **C# Structure**:
   
@@ -151,49 +152,49 @@ internal class TestAdaptorContainer
 [Serializable]
 internal class TestAdaptor
 {
-        /// <summary>
-        /// Unique identifier for the test node, persisted (as much as possible) across compiles, will not conflict accross test modes
-        /// </summary>
-        public string Id;
+  /// <summary>
+  /// Unique identifier for the test node, persisted (as much as possible) across compiles, will not conflict accross test modes
+  /// </summary>
+  public string Id;
 
-		/// <summary>
-		/// The name of the test node.
-		/// </summary>
-		public string Name;
-		
-		/// <summary>
-		/// The full name of the test including namespace and class, for assembly, the path of the assembly
-		/// </summary>
-		public string FullName;
+  /// <summary>
+  /// The name of the test node.
+  /// </summary>
+  public string Name;
+  
+  /// <summary>
+  /// The full name of the test including namespace and class, for assembly, the path of the assembly
+  /// </summary>
+  public string FullName;
 
-		/// <summary>
-		/// The type of the test node.
-		/// </summary>
-		public TestNodeType Type;
-		
-		/// <summary>
-		/// Index of parent in TestAdaptors array, -1 for root.
-		/// </summary>
-		public int Parent;
+  /// <summary>
+  /// The type of the test node.
+  /// </summary>
+  public TestNodeType Type;
+  
+  /// <summary>
+  /// Index of parent in TestAdaptors array, -1 for root.
+  /// </summary>
+  public int Parent;
 
-		/// <summary>
-		/// Source location of the test in format "Assets/Path/File.cs:LineNumber".
-		/// Only populated for methods, null for other nodes
-		/// </summary>
-		public string Source;
+  /// <summary>
+  /// Source location of the test in format "Assets/Path/File.cs:LineNumber".
+  /// Only populated for methods, empty for other nodes
+  /// </summary>
+  public string Source;
 
-		/// <summary>
-		/// Number of leaf tests in this test node and its children
-		/// </summary>
-		public int TestCount;
+  /// <summary>
+  /// Number of leaf tests in this test node and its children
+  /// </summary>
+  public int TestCount;
 }
 ```
 
-- **Description**: Sent when a test starts execution. Each message contains exactly one test adaptor without any children data, ensuring efficient and non-redundant messaging. Only the top-level test information is included, and the Source field is not populated.
+- **Description**: Sent when a test starts execution. Each message contains only top-level test adaptors without any children data, ensuring efficient and non-redundant messaging. Only the top-level test information is included, and the Source field is not populated.
 
 #### TestFinished (Value: 21)
 - **Format**: JSON serialized TestResultAdaptorContainer
-- **Important**: Each message contains exactly one test result. The `TestResultAdaptors` array always contains a single element with no children data. This is an optimization to avoid sending redundant data.
+- **Important**: Each message contains only top-level test results with no children data. This is an optimization to avoid sending redundant data.
 
 - **C# Structure**:
 
@@ -299,14 +300,14 @@ internal enum TestStatusAdaptor
 }
 ```
 
-- **Description**: Sent when a test finishes execution. Each message contains exactly one test result without any children data, ensuring efficient and non-redundant messaging.
+- **Description**: Sent when a test finishes execution. Each message contains only top-level test results without any children data, ensuring efficient and non-redundant messaging.
 
-#### RunStarted (Value: 18)
+#### TestRunStarted (Value: 18)
 - **Format**: JSON serialized TestAdaptorContainer
-- **Important**: Each message contains exactly one test adaptor. The `TestAdaptors` array always contains a single element with no children data. This is an optimization to avoid sending redundant hierarchy information.
+- **Important**: Each message contains only top-level test adaptors with no children. This is an optimization to avoid sending redundant hierarchy information.
 - **Note**: The Source field is not populated in this message type for efficiency.
 - **C# Structure**: Uses the same TestAdaptorContainer and TestAdaptor structures as TestStarted (see TestStarted section for complete structure)
-- **Description**: Sent when a test run begins execution. Each message contains exactly one test adaptor without any children data, ensuring efficient and non-redundant messaging. Only the top-level test information is included, and the Source field is not populated.
+- **Description**: Sent when a test run begins execution. Only the top-level tests are included, and the Source field is not populated.
 - **Usage**: Clients can use this to prepare UI, show progress indicators, or track which tests are part of the current run.
 
 #### ShowUsage (Value: 25)
@@ -342,8 +343,9 @@ internal class FileUsage
 - **Format**: `TestMode:JsonData`
 - **Structure**: `TestModeName + ":" + JSON serialized TestAdaptorContainer`
 - **TestModeName**: "EditMode" or "PlayMode"
-- **JsonData**: Uses the same TestAdaptorContainer structure as TestStarted
-- **Description**: Response containing the hierarchical test structure as JSON for the requested test mode
+- **JsonData**: JSON serialized TestAdaptorContainer with complete test hierarchy (unlike other test messages which only contain top level test adaptors)
+- **Important**: This is the only test message that contains the complete hierarchical structure with all tests and their relationships
+- **Description**: Response containing the complete hierarchical test structure as JSON for the requested test mode
 
 ## Protocol Flow
 

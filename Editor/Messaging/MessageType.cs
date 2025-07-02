@@ -119,31 +119,31 @@ namespace Hackerzhuli.Code.Editor.Messaging
 
 		/// <summary>
 		/// Notification that a test run has started. Sent by Unity's test runner.
-		/// Value format depends on Unity's test runner implementation.
+		/// Value format: JSON serialized TestAdaptorContainer with single test adaptor (no children, no source).
 		/// </summary>
-		RunStarted,
+		TestRunStarted,
 		
 		/// <summary>
 		/// Notification that a test run has finished. Sent by Unity's test runner.
-		/// Value format depends on Unity's test runner implementation.
+		/// Value format: JSON serialized TestResultAdaptorContainer with single test result (no children).
 		/// </summary>
-		RunFinished,
+		TestRunFinished,
 		
 		/// <summary>
 		/// Notification that a test has started execution. Contains test metadata and hierarchy.
-		/// Value format: JSON serialized <see cref="TestAdaptorContainer"/> with test information.
+		/// Value format: JSON serialized TestAdaptorContainer with single test adaptor (no children, no source).
 		/// </summary>
 		TestStarted,
 		
 		/// <summary>
 		/// Notification that a test has finished execution. Contains test results and status.
-		/// Value format: JSON serialized <see cref="TestResultAdaptorContainer"/> with test results.
+		/// Value format: JSON serialized TestResultAdaptorContainer with single test result (no children).
 		/// </summary>
 		TestFinished,
 		
 		/// <summary>
 		/// Response containing the hierarchical test structure for the requested test mode.
-		/// Value format: "TestModeName:JsonData" where TestModeName is "EditMode" or "PlayMode" and JsonData is JSON serialized <see cref="TestAdaptorContainer"/>.
+		/// Value format: "TestModeName:JsonData" where TestModeName is "EditMode" or "PlayMode" and JsonData is JSON serialized TestAdaptorContainer with complete hierarchy.
 		/// </summary>
 		TestListRetrieved,
 

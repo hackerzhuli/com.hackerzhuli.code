@@ -62,12 +62,12 @@ namespace Hackerzhuli.Code.Editor.Testing
             var summary = new TestResultAdaptor(testResultAdaptor, -1);
             var container = new TestResultAdaptorContainer { TestResultAdaptors = new[] { summary } };
             var result = JsonUtility.ToJson(container);
-            VisualStudioIntegration.BroadcastMessage(Messaging.MessageType.RunFinished, result);
+            VisualStudioIntegration.BroadcastMessage(Messaging.MessageType.TestRunFinished, result);
         }
 
         public void RunStarted(ITestAdaptor testAdaptor)
         {
-            VisualStudioIntegration.BroadcastMessage(Messaging.MessageType.RunStarted, SerializeTopLevelOnlyWithNoSource(testAdaptor));
+            VisualStudioIntegration.BroadcastMessage(Messaging.MessageType.TestRunStarted, SerializeTopLevelOnlyWithNoSource(testAdaptor));
         }
 
         public void TestFinished(ITestResultAdaptor testResultAdaptor)
