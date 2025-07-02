@@ -58,22 +58,22 @@ namespace Hackerzhuli.Code.Editor.Testing
 
         public void RunFinished(ITestResultAdaptor testResultAdaptor)
         {
-            VisualStudioIntegration.BroadcastMessage(Messaging.MessageType.TestRunFinished, Serialize(testResultAdaptor));
+            CodeEditorIntegration.BroadcastMessage(Messaging.MessageType.TestRunFinished, Serialize(testResultAdaptor));
         }
 
         public void RunStarted(ITestAdaptor testAdaptor)
         {
-            VisualStudioIntegration.BroadcastMessage(Messaging.MessageType.TestRunStarted, SerializeTopLevelOnlyWithNoSource(testAdaptor));
+            CodeEditorIntegration.BroadcastMessage(Messaging.MessageType.TestRunStarted, SerializeTopLevelOnlyWithNoSource(testAdaptor));
         }
 
         public void TestFinished(ITestResultAdaptor testResultAdaptor)
 	    {
-            VisualStudioIntegration.BroadcastMessage(Messaging.MessageType.TestFinished, Serialize(testResultAdaptor));
+            CodeEditorIntegration.BroadcastMessage(Messaging.MessageType.TestFinished, Serialize(testResultAdaptor));
         }
 
 		public void TestStarted(ITestAdaptor testAdaptor)
 		{
-			VisualStudioIntegration.BroadcastMessage(Messaging.MessageType.TestStarted, SerializeTopLevelOnlyWithNoSource(testAdaptor));
+			CodeEditorIntegration.BroadcastMessage(Messaging.MessageType.TestStarted, SerializeTopLevelOnlyWithNoSource(testAdaptor));
 		}
 
 		internal void TestListRetrieved(TestMode testMode, ITestAdaptor testAdaptor)
@@ -82,7 +82,7 @@ namespace Hackerzhuli.Code.Editor.Testing
 			// TestMode:Json
 
 			var value = testMode.GetModeString() + ":" + Serialize(testAdaptor);
-			VisualStudioIntegration.BroadcastMessage(Messaging.MessageType.TestListRetrieved, value);
+			CodeEditorIntegration.BroadcastMessage(Messaging.MessageType.TestListRetrieved, value);
 		}
 	}
 }

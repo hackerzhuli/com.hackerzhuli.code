@@ -21,7 +21,7 @@ using UnityEngine;
 namespace Hackerzhuli.Code.Editor
 {
 	[InitializeOnLoad]
-	public class VisualStudioEditor : IExternalCodeEditor
+	public class VisualStudioCodeEditor : IExternalCodeEditor
 	{
 		CodeEditor.Installation[] IExternalCodeEditor.Installations => _discoverInstallations
 			.Result
@@ -29,17 +29,17 @@ namespace Hackerzhuli.Code.Editor
 			.Select(v => v.ToCodeEditorInstallation())
 			.ToArray();
 
-		private static readonly AsyncOperation<Dictionary<string, IVisualStudioInstallation>> _discoverInstallations;
+		private static readonly AsyncOperation<Dictionary<string, ICodeEditorInstallation>> _discoverInstallations;
 
-		static VisualStudioEditor()
+		static VisualStudioCodeEditor()
 		{
 			if (!UnityInstallation.IsMainUnityEditorProcess)
 				return;
 
 			Discovery.Initialize();
-			CodeEditor.Register(new VisualStudioEditor());
+			CodeEditor.Register(new VisualStudioCodeEditor());
 
-			_discoverInstallations = AsyncOperation<Dictionary<string, IVisualStudioInstallation>>.Run(DiscoverInstallations);
+			_discoverInstallations = AsyncOperation<Dictionary<string, ICodeEditorInstallation>>.Run(DiscoverInstallations);
 		}
 
 #if UNITY_2019_4_OR_NEWER && !UNITY_2020
@@ -51,7 +51,7 @@ namespace Hackerzhuli.Code.Editor
 			if (editor == null)
 				return;
 
-			if (editor is VisualStudioEditor)
+			if (editor is VisualStudioCodeEditor)
 				return;
 
 			// only disable the com.unity.ide.vscode package
@@ -64,7 +64,7 @@ namespace Hackerzhuli.Code.Editor
 		}
 #endif
 
-		private static Dictionary<string, IVisualStudioInstallation> DiscoverInstallations()
+		private static Dictionary<string, ICodeEditorInstallation> DiscoverInstallations()
 		{
 			try
 			{
@@ -75,11 +75,11 @@ namespace Hackerzhuli.Code.Editor
 			catch (Exception ex)
 			{
 				Debug.LogError($"Error detecting Visual Studio installations: {ex}");
-				return new Dictionary<string, IVisualStudioInstallation>();
+				return new Dictionary<string, ICodeEditorInstallation>();
 			}
 		}
 
-		internal static bool IsEnabled => CodeEditor.CurrentEditor is VisualStudioEditor && UnityInstallation.IsMainUnityEditorProcess;
+		internal static bool IsEnabled => CodeEditor.CurrentEditor is VisualStudioCodeEditor && UnityInstallation.IsMainUnityEditorProcess;
 
 		// this one seems legacy and not used anymore
 		// keeping it for now given it is public, so we need a major bump to remove it 
@@ -97,7 +97,7 @@ namespace Hackerzhuli.Code.Editor
 		{
 		}
 
-		internal virtual bool TryGetVisualStudioInstallationForPath(string editorPath, bool lookupDiscoveredInstallations, out IVisualStudioInstallation installation)
+		internal virtual bool TryGetVisualStudioInstallationForPath(string editorPath, bool lookupDiscoveredInstallations, out ICodeEditorInstallation installation)
 		{
 			editorPath = Path.GetFullPath(editorPath);
 
@@ -148,7 +148,7 @@ namespace Hackerzhuli.Code.Editor
 			EditorGUI.indentLevel--;
 		}
 
-		private static void RegenerateProjectFiles(IVisualStudioInstallation installation)
+		private static void RegenerateProjectFiles(ICodeEditorInstallation installation)
 		{
 			var rect = EditorGUI.IndentedRect(EditorGUILayout.GetControlRect());
 			rect.width = 252;
@@ -158,7 +158,7 @@ namespace Hackerzhuli.Code.Editor
 			}
 		}
 
-		private static void SettingsButton(ProjectGenerationFlag preference, string guiMessage, string toolTip, IVisualStudioInstallation installation)
+		private static void SettingsButton(ProjectGenerationFlag preference, string guiMessage, string toolTip, ICodeEditorInstallation installation)
 		{
 			var generator = installation.ProjectGenerator;
 			var prevValue = generator.AssemblyNameProvider.ProjectGenerationFlag.HasFlag(preference);
@@ -234,7 +234,7 @@ namespace Hackerzhuli.Code.Editor
 			return installation.Open(path, line, column, solution);
 		}
 
-		private static bool OpenFromInstallation(IVisualStudioInstallation installation, string path, int line, int column)
+		private static bool OpenFromInstallation(ICodeEditorInstallation installation, string path, int line, int column)
 		{
 			var solution = installation.ProjectGenerator.SolutionFile();
 			return installation.Open(path, line, column, solution);

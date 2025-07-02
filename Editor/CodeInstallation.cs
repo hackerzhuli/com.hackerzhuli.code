@@ -8,11 +8,18 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
-using System.Text.RegularExpressions;
 using Hackerzhuli.Code.Editor.ProjectGeneration;
 using UnityEngine;
 using IOPath = System.IO.Path;
 using Debug = UnityEngine.Debug;
+using System.Text.RegularExpressions;
+#if UNITY_EDITOR_WIN
+using PlatformAppDiscover = Hackerzhuli.Code.Editor.WindowsAppDiscover;
+#elif UNITY_EDITOR_OSX
+using PlatformAppDiscover = Hackerzhuli.Code.Editor.MacOSAppDiscover;
+#else
+using PlatformAppDiscover = Hackerzhuli.Code.Editor.LinuxAppDiscover;
+#endif
 
 namespace Hackerzhuli.Code.Editor
 {
@@ -43,61 +50,56 @@ namespace Hackerzhuli.Code.Editor
 	}
 
 	/// <summary>
-	/// Data for a Visual Studio Code fork.
+	/// Wrapper class for deserializing the extensions.json file.
 	/// </summary>
-	public record CodeForkData
+	[Serializable]
+	internal class CodeExtensionsWrapper
+	{
+		public CodeExtensionInfo[] extensions;
+	}
+
+	/// <summary>
+	/// Represents an extension entry in the extensions.json file.
+	/// </summary>
+	[Serializable]
+	internal class CodeExtensionInfo
+	{
+		public CodeExtensionIdentifier identifier;
+		public string version;
+		public string relativeLocation;
+	}
+
+	/// <summary>
+	/// Represents the identifier of an extension.
+	/// </summary>
+	[Serializable]
+	internal class CodeExtensionIdentifier
+	{
+		public string id;
+	}
+
+	/// <summary>
+	/// Represents the manifest data structure for a Visual Studio Code installation.
+	/// </summary>
+	[Serializable]
+	internal class CodeManifest
 	{
 		/// <summary>
-		/// The name of the fork (that is displayed to the user).
+		/// The name of the VS Code application.
 		/// </summary>
-		public string Name { get; set; }
+		public string name;
 
 		/// <summary>
-		/// The default folder name for a fork used on Windows (typically in Program Files or Local AppData).
+		/// The version of the VS Code application.
 		/// </summary>
-		public string WindowsDefaultDirName { get; set; }
-
-		/// <summary>
-		/// The executable name on Windows (without .exe extension).
-		/// </summary>
-		public string WindowsExeName { get; set; }
-
-		/// <summary>
-		/// The app name on macOS (without .app extension).
-		/// </summary>
-		public string MacAppName { get; set; }
-
-		/// <summary>
-		/// The executable name on Linux.
-		/// </summary>
-		public string LinuxExeName { get; set; }
-
-		/// <summary>
-		/// The user data directory name in the user profile (including the leading dot)(it's the same across different platforms).
-		/// </summary>
-		public string UserDataDirName { get; set; }
-
-		/// <summary>
-		/// The latest C# language version supported by this fork.
-		/// </summary>
-		public Version LatestLanguageVersion { get; set; }
-
-		/// <summary>
-		/// True if this fork is always a pre-release version, otherwise false(then is pre-release version will be checked dynamically)
-		/// </summary>
-		public bool IsPrerelease { get; set; }
-
-		/// <summary>
-		/// True if this fork is from Microsoft, otherwise false. This affects how launch files are patched.
-		/// </summary>
-		public bool IsMicrosoft { get; set; }
+		public string version;
 	}
 
 	/// <summary>
 	/// Represents a Visual Studio Code fork installation.
 	/// Provides functionality for discovering, interacting with, and configuring VS Code.
 	/// </summary>
-	internal class VisualStudioCodeInstallation : VisualStudioInstallation
+	internal class CodeInstallation : CodeEditorInstallation
 	{
 		/// <summary>
 		/// The fork data for this installation.
@@ -132,88 +134,33 @@ namespace Hackerzhuli.Code.Editor
 		private CodeExtensionState UnityToolsExtensionState => GetExtensionState(MicrosoftUnityExtensionId);
 
 		/// <summary>
-		/// Gets the state of the C# Dev Kit extension.
-		/// </summary>
-		private CodeExtensionState CSharpDevKitExtensionState => GetExtensionState(CSharpDevKitExtensionId);
-
-		/// <summary>
 		/// Gets the state of the DotRush extension.
 		/// </summary>
 		private CodeExtensionState DotRushExtensionState => GetExtensionState(DotRushExtensionId);
 
 		/// <summary>
-		/// Static array of supported Visual Studio Code forks.<br/>
-		/// VS Code Insiders is treated as a fork because it have a different executable name than the stable version<br/>
-		/// If for a fork, a prerelease version and the stable version have same executable name, then it should be treated as the same fork
-		/// </summary>
-		private static readonly CodeForkData[] Forks = new[]
-		{
-			new CodeForkData
-			{
-				Name = "Visual Studio Code",
-				WindowsDefaultDirName = "Microsoft VS Code",
-				WindowsExeName = "Code",
-				MacAppName = "Visual Studio Code",
-				LinuxExeName = "code",
-				UserDataDirName = ".vscode",
-				LatestLanguageVersion = new Version(13, 0),
-				IsPrerelease = false,
-				IsMicrosoft = true
-			},
-			new CodeForkData
-			{
-				Name = "Visual Studio Code Insiders",
-				WindowsDefaultDirName = "Microsoft VS Code Insiders",
-				WindowsExeName = "Code - Insiders",
-				MacAppName = "Visual Studio Code - Insiders",
-				LinuxExeName = "code-insiders",
-				UserDataDirName = ".vscode-insiders",
-				LatestLanguageVersion = new Version(13, 0),
-				IsPrerelease = true,
-				IsMicrosoft = true
-			},
-			new CodeForkData
-			{
-				Name = "Cursor",
-				WindowsDefaultDirName = "Cursor",
-				WindowsExeName = "Cursor",
-				MacAppName = "Cursor",
-				LinuxExeName = "cursor",
-				UserDataDirName = ".cursor",
-			},
-			new CodeForkData
-			{
-				Name = "Windsurf",
-				WindowsDefaultDirName = "Windsurf",
-				WindowsExeName = "Windsurf",
-				MacAppName = "Windsurf",
-				LinuxExeName = "windsurf",
-				UserDataDirName = ".windsurf",
-			},
-			new CodeForkData
-			{
-				Name = "Windsurf Next",
-				WindowsDefaultDirName = "Windsurf Next",
-				WindowsExeName = "Windsurf - Next",
-				MacAppName = "Windsurf - Next",
-				LinuxExeName = "windsurf-next",
-				UserDataDirName = ".windsurf-next",
-			},
-			new CodeForkData
-			{
-				Name = "Trae",
-				WindowsDefaultDirName = "Trae",
-				WindowsExeName = "Trae",
-				MacAppName = "Trae",
-				LinuxExeName = "trae",
-				UserDataDirName = ".trae",
-			}
-		};
-
-		/// <summary>
 		/// The generator instance used for creating project files.
 		/// </summary>
 		private static readonly IGenerator _generator = GeneratorFactory.GetInstance(GeneratorStyle.SDK);
+
+		/// <summary>
+		/// Pre-created platform discoverers for each fork to avoid repeated instantiation.
+		/// </summary>
+		private static readonly Dictionary<CodeForkData, IAppDiscover> _discoverers = InitializeDiscoverers();
+
+		/// <summary>
+		/// Initializes the platform discoverers for all supported forks.
+		/// </summary>
+		/// <returns>A dictionary mapping each fork to its corresponding discoverer.</returns>
+		private static Dictionary<CodeForkData, IAppDiscover> InitializeDiscoverers()
+		{
+			var discoverers = new Dictionary<CodeForkData, IAppDiscover>();
+			foreach (var fork in CodeForkData.Forks)
+			{
+				discoverers[fork] = new PlatformAppDiscover(fork);
+			}
+			return discoverers;
+		}
 
 		/// <summary>
 		/// Gets whether this installation supports code analyzers.
@@ -242,35 +189,6 @@ namespace Hackerzhuli.Code.Editor
 		}
 
 		/// <summary>
-		/// Wrapper class for deserializing the extensions.json file.
-		/// </summary>
-		[Serializable]
-		private class ExtensionsWrapper
-		{
-			public ExtensionInfo[] extensions;
-		}
-
-		/// <summary>
-		/// Represents an extension entry in the extensions.json file.
-		/// </summary>
-		[Serializable]
-		private class ExtensionInfo
-		{
-			public ExtensionIdentifier identifier;
-			public string version;
-			public string relativeLocation;
-		}
-
-		/// <summary>
-		/// Represents the identifier of an extension.
-		/// </summary>
-		[Serializable]
-		private class ExtensionIdentifier
-		{
-			public string id;
-		}
-
-		/// <summary>
 		/// Loads extension states from the extensions.json file.
 		/// </summary>
 		/// <param name="extensionsDirectory">The directory containing the extensions.</param>
@@ -282,7 +200,6 @@ namespace Hackerzhuli.Code.Editor
 			ExtensionStates = new Dictionary<string, CodeExtensionState>
 			{
 				[MicrosoftUnityExtensionId] = new() { Id = MicrosoftUnityExtensionId },
-				[CSharpDevKitExtensionId] = new() { Id = CSharpDevKitExtensionId },
 				[DotRushExtensionId] = new() { Id = DotRushExtensionId }
 			};
 
@@ -302,7 +219,7 @@ namespace Hackerzhuli.Code.Editor
 				// Wrap the JSON array in an object for JsonUtility
 				json = $"{{\"extensions\":{json}}}";
 
-				var wrapper = JsonUtility.FromJson<ExtensionsWrapper>(json);
+				var wrapper = JsonUtility.FromJson<CodeExtensionsWrapper>(json);
 				if (wrapper?.extensions == null)
 				{
 					Debug.LogError($"Extensions wrapper is null");
@@ -357,23 +274,6 @@ namespace Hackerzhuli.Code.Editor
 		public override IGenerator ProjectGenerator => _generator;
 
 		/// <summary>
-		/// Represents the manifest data structure for a Visual Studio Code installation.
-		/// </summary>
-		[Serializable]
-		internal class VisualStudioCodeManifest
-		{
-			/// <summary>
-			/// The name of the VS Code application.
-			/// </summary>
-			public string name;
-
-			/// <summary>
-			/// The version of the VS Code application.
-			/// </summary>
-			public string version;
-		}
-
-		/// <summary>
 		/// Identifies the VS Code fork based on the executable path.
 		/// </summary>
 		/// <param name="exePath">The path to the VS Code executable.</param>
@@ -383,50 +283,22 @@ namespace Hackerzhuli.Code.Editor
 			if (string.IsNullOrEmpty(exePath))
 				return null;
 
-#if UNITY_EDITOR_OSX
-			if (!Directory.Exists(exePath))
-				return null;
-
-			// Check if the path ends with any of the supported fork app names
-			foreach (var fork in Forks)
+			// Use the platform discoverers to check if the path is a valid candidate for each fork
+			foreach (var kvp in _discoverers)
 			{
-				if (exePath.EndsWith($"{fork.MacAppName}.app", StringComparison.OrdinalIgnoreCase))
+				var fork = kvp.Key;
+				var discoverer = kvp.Value;
+				
+				if (discoverer.IsCandidate(exePath))
 				{
 					return fork;
 				}
 			}
-
-#elif UNITY_EDITOR_WIN
-			if (!File.Exists(exePath))
-				return null;
-
-			// Check if the path ends with any of the supported fork executable names
-			foreach (var fork in Forks)
-			{
-				if (exePath.EndsWith($"{fork.WindowsExeName}.exe", StringComparison.OrdinalIgnoreCase))
-				{
-					return fork;
-				}
-			}
-#else
-			if (!File.Exists(exePath))
-				return null;
-
-			// Check if the path ends with any of the supported fork executable names
-			foreach (var fork in Forks)
-			{
-				if (exePath.EndsWith(fork.LinuxExeName, StringComparison.OrdinalIgnoreCase) ||
-				    exePath.EndsWith($"{fork.LinuxExeName}.desktop"))
-				{
-					return fork;
-				}
-			}
-#endif
 
 			return null;
 		}
 
-		public static bool TryDiscoverInstallation(string exePath, out IVisualStudioInstallation installation)
+		public static bool TryDiscoverInstallation(string exePath, out ICodeEditorInstallation installation)
 		{
 			//Debug.Log($"trying to get the vs code fork installation at {exePath}");
 			installation = null;
@@ -446,7 +318,7 @@ namespace Hackerzhuli.Code.Editor
 
 			try
 			{
-				var manifestBase = GetRealPath(exePath);
+				var manifestBase = PlatformPathUtility.GetRealPath(exePath);
 
 #if UNITY_EDITOR_WIN
 				// on Windows, editorPath is a file, resources as subdirectory
@@ -467,7 +339,7 @@ namespace Hackerzhuli.Code.Editor
 				var manifestFullPath = IOPath.Combine(manifestBase, "resources", "app", "package.json");
 				if (File.Exists(manifestFullPath))
 				{
-					var manifest = JsonUtility.FromJson<VisualStudioCodeManifest>(File.ReadAllText(manifestFullPath));
+					var manifest = JsonUtility.FromJson<CodeManifest>(File.ReadAllText(manifestFullPath));
 					Version.TryParse(manifest.version.Split('-').First(), out version);
 
 					// If fork is not marked as prerelease, check manifest version for prerelease indicators
@@ -505,7 +377,7 @@ namespace Hackerzhuli.Code.Editor
 				name += $" [{version.ToString(3)}]";
 			}
 
-			var installation2 = new VisualStudioCodeInstallation()
+			var installation2 = new CodeInstallation()
 			{
 				ForkData = forkData,
 				IsPrerelease = isPrerelease,
@@ -528,133 +400,25 @@ namespace Hackerzhuli.Code.Editor
 		/// Gets all Visual Studio Code installations detected on the system.
 		/// </summary>
 		/// <returns>An enumerable collection of VS Code installations.</returns>
-		public static IEnumerable<IVisualStudioInstallation> GetVisualStudioInstallations()
+		public static IEnumerable<ICodeEditorInstallation> GetInstallations()
 		{
-			var candidates = new List<string>();
-
-#if UNITY_EDITOR_WIN
-			var localAppPath = IOPath.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-				"Programs");
-			var programFiles = IOPath.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles));
-
-			foreach (var basePath in new[] { localAppPath, programFiles })
+			// Discover installations for each fork using pre-created discoverers
+			foreach (var kvp in _discoverers)
 			{
-				foreach (var fork in Forks)
+				var fork = kvp.Key;
+				var discoverer = kvp.Value;
+				var candidates = discoverer.GetCandidatePaths();
+
+				foreach (var candidate in candidates)
 				{
-					candidates.Add(
-						IOPath.Combine(basePath, fork.WindowsDefaultDirName, $"{fork.WindowsExeName}.exe"));
-				}
-			}
-#elif UNITY_EDITOR_OSX
-			var appPath = IOPath.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles));
-			
-			// Add specific fork app patterns
-			foreach (var fork in Forks)
-			{
-				candidates.AddRange(Directory.EnumerateDirectories(appPath, $"{fork.MacAppName}*.app"));
-			}
-#elif UNITY_EDITOR_LINUX
-			// Well known locations for all forks
-			foreach (var fork in Forks)
-			{
-				candidates.Add($"/usr/bin/{fork.LinuxExeName}");
-				candidates.Add($"/bin/{fork.LinuxExeName}");
-				candidates.Add($"/usr/local/bin/{fork.LinuxExeName}");
-			}
-
-			// Preference ordered base directories relative to which desktop files should be searched
-			candidates.AddRange(GetXdgCandidates());
-#endif
-
-			foreach (var candidate in candidates.Distinct())
-			{
-				if (TryDiscoverInstallation(candidate, out var installation))
-					yield return installation;
-			}
-		}
-
-#if UNITY_EDITOR_LINUX
-		/// <summary>
-		/// Regular expression for extracting the executable path from Linux desktop files.
-		/// </summary>
-		private static readonly Regex DesktopFileExecEntry =
- new Regex(@"Exec=(\S+)", RegexOptions.Singleline | RegexOptions.Compiled);
-
-		/// <summary>
-		/// Gets candidate VS Code fork paths from XDG data directories on Linux.
-		/// </summary>
-		/// <returns>An enumerable collection of potential VS Code fork executable paths.</returns>
-		private static IEnumerable<string> GetXdgCandidates()
-		{
-			var envdirs = Environment.GetEnvironmentVariable("XDG_DATA_DIRS");
-			if (string.IsNullOrEmpty(envdirs))
-				yield break;
-
-			var dirs = envdirs.Split(':');
-			foreach(var dir in dirs)
-			{
-				foreach (var fork in Forks)
-				{
-					Match match = null;
-					var desktopFileName = $"{fork.LinuxExeName}.desktop";
-
-					try
+					// Discoverers already return validated paths, so we can directly attempt discovery
+					if (TryDiscoverInstallation(candidate, out var installation))
 					{
-						var desktopFile = IOPath.Combine(dir, $"applications/{desktopFileName}");
-						if (!File.Exists(desktopFile))
-							continue;
-					
-						var content = File.ReadAllText(desktopFile);
-						match = DesktopFileExecEntry.Match(content);
+						yield return installation;
 					}
-					catch
-					{
-						// do not fail if we cannot read desktop file
-					}
-
-					if (match == null || !match.Success)
-						continue;
-
-					yield return match.Groups[1].Value;
 				}
 			}
 		}
-
-		/// <summary>
-		/// Imports the readlink function from libc for resolving symbolic links on Linux.
-		/// </summary>
-		/// <param name="path">The path to the symbolic link.</param>
-		/// <param name="buffer">The buffer to store the target path.</param>
-		/// <param name="buflen">The length of the buffer.</param>
-		/// <returns>The number of bytes placed in the buffer or -1 if an error occurred.</returns>
-		[System.Runtime.InteropServices.DllImport ("libc")]
-		private static extern int readlink(string path, byte[] buffer, int buflen);
-
-		/// <summary>
-		/// Gets the real path by resolving symbolic links on Linux.
-		/// </summary>
-		/// <param name="path">The path that might be a symbolic link.</param>
-		/// <returns>The resolved path if it's a symbolic link; otherwise, the original path.</returns>
-		internal static string GetRealPath(string path)
-		{
-			byte[] buf = new byte[512];
-			int ret = readlink(path, buf, buf.Length);
-			if (ret == -1) return path;
-			char[] cbuf = new char[512];
-			int chars = System.Text.Encoding.Default.GetChars(buf, 0, ret, cbuf, 0);
-			return new String(cbuf, 0, chars);
-		}
-#else
-		/// <summary>
-		/// Gets the real path for non-Linux platforms (no-op implementation).
-		/// </summary>
-		/// <param name="path">The input path.</param>
-		/// <returns>The same path without modification.</returns>
-		internal static string GetRealPath(string path)
-		{
-			return path;
-		}
-#endif
 
 		/// <summary>
 		/// Creates additional configuration files for VS Code in the project directory.
@@ -1074,11 +838,6 @@ namespace Hackerzhuli.Code.Editor
 		/// The identifier for the Visual Studio Tools for Unity extension for VS Code.
 		/// </summary>
 		private const string MicrosoftUnityExtensionId = "visualstudiotoolsforunity.vstuc";
-
-		/// <summary>
-		/// The identifier for the C# Dev Kit extension for VS Code.
-		/// </summary>
-		private const string CSharpDevKitExtensionId = "ms-dotnettools.csdevkit";
 
 		/// <summary>
 		/// The identifier for the DotRush extension for VS Code.

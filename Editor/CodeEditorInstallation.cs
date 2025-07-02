@@ -11,7 +11,7 @@ using IOPath = System.IO.Path;
 
 namespace Hackerzhuli.Code.Editor
 {
-	internal interface IVisualStudioInstallation
+	internal interface ICodeEditorInstallation
 	{
 		string Path { get; }
 		bool SupportsAnalyzers { get; }
@@ -23,7 +23,7 @@ namespace Hackerzhuli.Code.Editor
 		void CreateExtraFiles(string projectDirectory);
 	}
 
-	internal abstract class VisualStudioInstallation : IVisualStudioInstallation
+	internal abstract class CodeEditorInstallation : ICodeEditorInstallation
 	{
 		public string Name { get; set; }
 		public string Path { get; set; }

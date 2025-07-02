@@ -22,7 +22,7 @@ namespace Hackerzhuli.Code.Editor
     /// Represents a connected IDE client with endpoint information and connection tracking.
     /// </summary>
     [Serializable]
-    public class IdeClient : ISerializationCallbackReceiver
+    public class CodeEditorClient : ISerializationCallbackReceiver
     {
         [SerializeField] private string _address;
         [SerializeField] private int _port;
@@ -115,11 +115,11 @@ namespace Hackerzhuli.Code.Editor
     /// - No manual reconnection required from IDE clients
     /// </remarks>
     [CreateAssetMenu(fileName = "VisualStudioIntegrationCore", menuName = "Visual Studio/Integration Core")]
-    internal class VisualStudioIntegrationCore : ScriptableObject
+    internal class CodeEditorIntegrationCore : ScriptableObject
     {
         [SerializeField] private double _lastUpdateTime = 0;
         [SerializeField] private bool _refreshRequested = false;
-        [SerializeField] private List<IdeClient> _clients = new();
+        [SerializeField] private List<CodeEditorClient> _clients = new();
 
         [System.NonSerialized] private Messenger _messenger;
         [System.NonSerialized] private bool _needsOnlineNotification = false;
@@ -228,13 +228,13 @@ namespace Hackerzhuli.Code.Editor
 
         private string GetPackageVersion()
         {
-            var package = UnityEditor.PackageManager.PackageInfo.FindForAssembly(typeof(VisualStudioIntegration).Assembly);
+            var package = UnityEditor.PackageManager.PackageInfo.FindForAssembly(typeof(CodeEditorIntegration).Assembly);
             return package.version;
         }
 
         private string GetPackageName()
         {
-            var package = UnityEditor.PackageManager.PackageInfo.FindForAssembly(typeof(VisualStudioIntegration).Assembly);
+            var package = UnityEditor.PackageManager.PackageInfo.FindForAssembly(typeof(CodeEditorIntegration).Assembly);
             return package.name;
         }
 
@@ -373,7 +373,7 @@ namespace Hackerzhuli.Code.Editor
             var client = _clients.FirstOrDefault(c => c.EndPoint.Equals(endPoint));
             if (client == null)
             {
-                client = new IdeClient
+                client = new CodeEditorClient
                 {
                     EndPoint = endPoint,
                     ElapsedTime = 0
@@ -429,7 +429,7 @@ namespace Hackerzhuli.Code.Editor
 
         private void EnsureMessengerInitialized()
         {
-            if (_messenger != null || !VisualStudioEditor.IsEnabled)
+            if (_messenger != null || !VisualStudioCodeEditor.IsEnabled)
                 return;
 
             var messagingPort = MessagingPort();

@@ -17,12 +17,12 @@ namespace Hackerzhuli.Code.Editor
 			Console.WriteLine($"[VisualStudio.Editor.{nameof(Cli)}] {message}");
 		}
 
-		internal static string GetInstallationDetails(IVisualStudioInstallation installation)
+		internal static string GetInstallationDetails(ICodeEditorInstallation installation)
 		{
 			return $"{installation.ToCodeEditorInstallation().Name} Path:{installation.Path}, LanguageVersionSupport:{installation.LatestLanguageVersionSupported} AnalyzersSupport:{installation.SupportsAnalyzers}";
 		}
 
-		internal static void GenerateSolutionWith(VisualStudioEditor vse, string installationPath)
+		internal static void GenerateSolutionWith(VisualStudioCodeEditor vse, string installationPath)
 		{
 			if (vse != null && vse.TryGetVisualStudioInstallationForPath(installationPath, lookupDiscoveredInstallations: true, out var vsi))
 			{
@@ -37,7 +37,7 @@ namespace Hackerzhuli.Code.Editor
 
 		internal static void GenerateSolution()
 		{
-			if (CodeEditor.CurrentEditor is VisualStudioEditor vse)
+			if (CodeEditor.CurrentEditor is VisualStudioCodeEditor vse)
 			{
 				Log($"Using default editor settings for Visual Studio installation");
 				GenerateSolutionWith(vse, CodeEditor.CurrentEditorInstallation);
@@ -49,7 +49,7 @@ namespace Hackerzhuli.Code.Editor
 				{
 					var installations = Discovery
 						.GetVisualStudioInstallations()
-						.Cast<VisualStudioInstallation>()
+						.Cast<CodeEditorInstallation>()
 						.OrderByDescending(vsi => !vsi.IsPrerelease)
 						.ThenBy(vsi => vsi.Version)
 						.ToArray();
@@ -68,7 +68,7 @@ namespace Hackerzhuli.Code.Editor
 						try
 						{
 							CodeEditor.SetExternalScriptEditor(installation.Path);
-							GenerateSolutionWith(CodeEditor.CurrentEditor as VisualStudioEditor, installation.Path);
+							GenerateSolutionWith(CodeEditor.CurrentEditor as VisualStudioCodeEditor, installation.Path);
 						}
 						finally
 						{

@@ -11,17 +11,17 @@ namespace Hackerzhuli.Code.Editor
 {
 	internal static class Discovery
 	{
-		public static IEnumerable<IVisualStudioInstallation> GetVisualStudioInstallations()
+		public static IEnumerable<ICodeEditorInstallation> GetVisualStudioInstallations()
 		{
-			foreach (var installation in VisualStudioCodeInstallation.GetVisualStudioInstallations())
+			foreach (var installation in CodeInstallation.GetInstallations())
 				yield return installation;
 		}
 
-		public static bool TryDiscoverInstallation(string editorPath, out IVisualStudioInstallation installation)
+		public static bool TryDiscoverInstallation(string editorPath, out ICodeEditorInstallation installation)
 		{
 			try
 			{
-				if (VisualStudioCodeInstallation.TryDiscoverInstallation(editorPath, out installation))
+				if (CodeInstallation.TryDiscoverInstallation(editorPath, out installation))
 					return true;
 			}
 			catch (IOException)
@@ -34,7 +34,7 @@ namespace Hackerzhuli.Code.Editor
 
 		public static void Initialize()
 		{
-			VisualStudioCodeInstallation.Initialize();
+			CodeInstallation.Initialize();
 		}
 	}
 }

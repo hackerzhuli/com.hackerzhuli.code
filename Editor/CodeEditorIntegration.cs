@@ -14,13 +14,13 @@ namespace Hackerzhuli.Code.Editor
 	/// Static wrapper for Visual Studio integration that delegates to a ScriptableObject core implementation.
 	/// </summary>
 	[InitializeOnLoad]
-	internal class VisualStudioIntegration
+	internal class CodeEditorIntegration
 	{
-		private static readonly VisualStudioIntegrationCore _core;
+		private static readonly CodeEditorIntegrationCore _core;
 
-		static VisualStudioIntegration()
+		static CodeEditorIntegration()
 		{
-			if (!VisualStudioEditor.IsEnabled)
+			if (!VisualStudioCodeEditor.IsEnabled)
 				return;
 
 			// Create or find the core ScriptableObject instance
@@ -30,17 +30,17 @@ namespace Hackerzhuli.Code.Editor
 		/// <summary>
 		/// Gets or creates the core ScriptableObject instance.
 		/// </summary>
-		private static VisualStudioIntegrationCore GetOrCreateCore()
+		private static CodeEditorIntegrationCore GetOrCreateCore()
 		{
 			// Try to find existing instance first
-			var existingCore = Resources.FindObjectsOfTypeAll<VisualStudioIntegrationCore>().FirstOrDefault();
+			var existingCore = Resources.FindObjectsOfTypeAll<CodeEditorIntegrationCore>().FirstOrDefault();
 			if (existingCore != null){
 				//Debug.Log("reusing existing core");
 				return existingCore;
 			}
 
 			// Create new instance if none exists
-			var core = ScriptableObject.CreateInstance<VisualStudioIntegrationCore>();
+			var core = ScriptableObject.CreateInstance<CodeEditorIntegrationCore>();
 			core.hideFlags = HideFlags.HideAndDontSave; // Don't save to scene or show in inspector
 			return core;
 		}
@@ -52,7 +52,7 @@ namespace Hackerzhuli.Code.Editor
 		/// </summary>
 		internal static string PackageVersion()
 		{
-			var package = UnityEditor.PackageManager.PackageInfo.FindForAssembly(typeof(VisualStudioIntegration).Assembly);
+			var package = UnityEditor.PackageManager.PackageInfo.FindForAssembly(typeof(CodeEditorIntegration).Assembly);
 			return package.version;
 		}
 

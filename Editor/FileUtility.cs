@@ -75,8 +75,7 @@ namespace Hackerzhuli.Code.Editor
 			if (!fileName.StartsWith(basePath, StringComparison.OrdinalIgnoreCase))
 				return null;
 
-			return fileName
-				.Substring(basePath.Length)
+			return fileName[basePath.Length..]
 				.Trim(Path.DirectorySeparatorChar);
 		}
 	}

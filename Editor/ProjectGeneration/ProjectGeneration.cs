@@ -67,7 +67,7 @@ namespace Hackerzhuli.Code.Editor.ProjectGeneration
 		readonly IFileIO m_FileIOProvider;
 		readonly IGUIDGenerator m_GUIDGenerator;
 		bool m_ShouldGenerateAll;
-		IVisualStudioInstallation m_CurrentInstallation;
+		ICodeEditorInstallation m_CurrentInstallation;
 
 		public ProjectGeneration() : this(Directory.GetParent(Application.dataPath).FullName)
 		{
@@ -151,7 +151,7 @@ namespace Hackerzhuli.Code.Editor.ProjectGeneration
 			}
 		}
 
-		private void CreateExtraFiles(IVisualStudioInstallation installation)
+		private void CreateExtraFiles(ICodeEditorInstallation installation)
 		{
 			installation?.CreateExtraFiles(ProjectDirectory);
 		}
@@ -168,7 +168,7 @@ namespace Hackerzhuli.Code.Editor.ProjectGeneration
 
 		private void RefreshCurrentInstallation()
 		{
-			var editor = CodeEditor.CurrentEditor as VisualStudioEditor;
+			var editor = CodeEditor.CurrentEditor as VisualStudioCodeEditor;
 			editor?.TryGetVisualStudioInstallationForPath(CodeEditor.CurrentEditorInstallation, lookupDiscoveredInstallations: true, out m_CurrentInstallation);
 		}
 
@@ -721,7 +721,7 @@ namespace Hackerzhuli.Code.Editor.ProjectGeneration
 				FlavoringProjectType = projectType + ":" + (int)projectType,
 				FlavoringBuildTarget = EditorUserBuildSettings.activeBuildTarget + ":" + (int)EditorUserBuildSettings.activeBuildTarget,
 				FlavoringUnityVersion = Application.unityVersion,
-				FlavoringPackageVersion = VisualStudioIntegration.PackageVersion(),
+				FlavoringPackageVersion = CodeEditorIntegration.PackageVersion(),
 			};
 
 			SetAnalyzerAndSourceGeneratorProperties(assembly, responseFilesData, projectProperties);

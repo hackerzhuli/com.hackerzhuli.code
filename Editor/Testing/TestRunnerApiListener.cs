@@ -14,7 +14,7 @@ namespace Hackerzhuli.Code.Editor.Testing
 
 		static TestRunnerApiListener()
 		{
-			if (!VisualStudioEditor.IsEnabled)
+			if (!VisualStudioCodeEditor.IsEnabled)
 				return;
 
 			_testRunnerApi = ScriptableObject.CreateInstance<TestRunnerApi>();
