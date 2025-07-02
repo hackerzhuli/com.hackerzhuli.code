@@ -5,6 +5,7 @@ using UnityEditor.Experimental.GraphView;
 using UnityEditor.TestTools.TestRunner.Api;
 using Hackerzhuli.Code.Editor.Hash;
 using System.Text;
+using UnityEngine;
 
 namespace Hackerzhuli.Code.Editor.Testing{
     public static class TestAdaptorUtils
@@ -96,21 +97,54 @@ namespace Hackerzhuli.Code.Editor.Testing{
         }
 
         /// <summary>
-        /// Get a unique id for test that will persist across compiles and not conflict across test modes
+        /// Get the string representation of TestMode without allocation
+        /// </summary>
+        /// <param name="mode">The test mode</param>
+        /// <returns>ReadOnlySpan of chars representing the mode</returns>
+        public static string GetModeString(this TestMode mode)
+        {
+            return mode switch
+            {
+                TestMode.EditMode => "EditMode",
+                TestMode.PlayMode => "PlayMode",
+                _ => "Unknown"
+            };
+        }
+        
+        /// <summary>
+        /// Get a unique id for test that will persist across compiles and not conflict across test modes <br/>
+        /// It is allocation free (in most cases) except for the return string
         /// </summary>
         /// <param name="testAdaptor"></param>
-        /// <returns></returns>
-        public static string GetId(this ITestAdaptor testAdaptor){
-            // Create the original long ID format(which can be 100 bytes or longer)
-            var originalId = $"{GetMode(testAdaptor)}/{testAdaptor.UniqueName}";
-
-            var bytes = Encoding.UTF8.GetBytes(originalId);
+        /// <returns>A unique id</returns>
+        public static unsafe string GetId(this ITestAdaptor testAdaptor){
+            // Optimization: totally allocation free (most of the time) except for the returned string
+            // Create the original long ID format without string allocation
+            var mode = GetModeString(GetMode(testAdaptor));
+            var uniqueName = testAdaptor.UniqueName;
             
-            // Hash it using xxHash64 to get a fixed-size hash
-            var hash = xxHash64.ComputeHash(bytes);
+            // Use stackalloc for the combined string chars to avoid allocation if possible
+            var totalLength = mode.Length + 1 + uniqueName.Length;            
+            // it can go to a few hundred characters but longer than that is unlikely
+            Span<char> originalIdChars = totalLength < 1024 ? stackalloc char[totalLength] : new char[totalLength];
             
-            // Convert to base64 for a shorter string representation
-            var hashBytes = BitConverter.GetBytes(hash);
+            // Manually construct the string: "mode/uniqueName"
+            var pos = 0;
+            mode.AsSpan().CopyTo(originalIdChars[pos..]);
+            pos += mode.Length;
+            originalIdChars[pos++] = '/';
+            uniqueName.AsSpan().CopyTo(originalIdChars[pos..]);
+            
+            // Use stackalloc for temporary UTF8 bytes to avoid allocation if possible
+            var maxByteCount = Encoding.UTF8.GetMaxByteCount(totalLength);
+            // typically it is the same as totalLength as Unicode is rarely used in class/method names etc.
+            Span<byte> utf8Bytes = maxByteCount < 2048 ? stackalloc byte[maxByteCount] : new byte[maxByteCount];
+            var actualByteCount = Encoding.UTF8.GetBytes(originalIdChars, utf8Bytes);
+            var hash = xxHash64.ComputeHash(utf8Bytes, actualByteCount);
+            
+            // Convert to base64 for a shorter string representation using stackalloc
+            Span<byte> hashBytes = stackalloc byte[8];
+            BitConverter.TryWriteBytes(hashBytes, hash);
             return Convert.ToBase64String(hashBytes);
         }
     }

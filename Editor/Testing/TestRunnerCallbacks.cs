@@ -80,23 +80,12 @@ namespace Hackerzhuli.Code.Editor.Testing
 			VisualStudioIntegration.BroadcastMessage(Messaging.MessageType.TestStarted, SerializeTopLevelOnlyWithNoSource(testAdaptor));
 		}
 
-		private static string TestModeName(TestMode testMode)
-		{
-			switch (testMode)
-			{
-				case TestMode.EditMode: return "EditMode";
-				case TestMode.PlayMode: return "PlayMode";
-			}
-
-			throw new ArgumentOutOfRangeException();
-		}
-
 		internal void TestListRetrieved(TestMode testMode, ITestAdaptor testAdaptor)
 		{
 			// TestListRetrieved format:
 			// TestMode:Json
 
-			var value = TestModeName(testMode) + ":" + Serialize(testAdaptor);
+			var value = testMode.GetModeString() + ":" + Serialize(testAdaptor);
 			VisualStudioIntegration.BroadcastMessage(Messaging.MessageType.TestListRetrieved, value);
 		}
 	}
