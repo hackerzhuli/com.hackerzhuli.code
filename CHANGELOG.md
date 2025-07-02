@@ -1,5 +1,28 @@
 # Code Editor Package for Visual Studio
 
+## [1.0.0] - 2025-7-3
+
+**Note:** This version represents a restart of the package versioning as this is now released as a new package `com.hackerzhuli.code` (previously `com.unity.ide.visualstudio`).
+
+Integration:
+
+- Added support for popular VS Code forks including Cursor Windsurf and Trae.
+- Added support for Dot Rush extesion for VS Code, automatically add needed setting and launch options
+- Added support for Unity Code extension for VS Code, automatically add launch options
+
+Messaging Protocol:
+- Improved existing messages (eg. testing related messages) to for better performance, and integration with external IDE
+- Added new messages (eg. CompilationFinished, IsPlaying) for better development experience in external IDE
+- Added MessagingProtocol documentation for easier development of external IDE extensions.
+
+Code Improvement:
+- Improve some code with better structure and documentation
+- Changed VisualStudioIntegration core logic into a ScriptableObject VisualStudioIntegrationCore, to make code less error prone and make use of Unity lifecycle events and automatic state preservation through serialization and deserialization
+- Improve code quality for some classes(eg. VisualStudioIntegrationCore) by making it single threaded to avoid problems.
+  
+Removed:
+- Removed support for Visual Studio
+
 ## [2.0.23] - 2025-02-03
 
 Integration:
