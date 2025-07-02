@@ -58,11 +58,7 @@ namespace Hackerzhuli.Code.Editor.Testing
 
         public void RunFinished(ITestResultAdaptor testResultAdaptor)
         {
-            // Send only summary information without individual test results to avoid redundancy
-            var summary = new TestResultAdaptor(testResultAdaptor, -1);
-            var container = new TestResultAdaptorContainer { TestResultAdaptors = new[] { summary } };
-            var result = JsonUtility.ToJson(container);
-            VisualStudioIntegration.BroadcastMessage(Messaging.MessageType.TestRunFinished, result);
+            VisualStudioIntegration.BroadcastMessage(Messaging.MessageType.TestRunFinished, Serialize(testResultAdaptor));
         }
 
         public void RunStarted(ITestAdaptor testAdaptor)
