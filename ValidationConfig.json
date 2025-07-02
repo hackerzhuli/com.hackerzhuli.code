@@ -8,10 +8,6 @@
 				"Files":
 				[
 					"Editor/VisualStudioForWindowsInstallation.cs"
-				],
-				"Patterns":
-				[
-					"vswhere\\.exe"
 				]
 			}
 		]
