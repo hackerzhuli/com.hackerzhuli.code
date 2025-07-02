@@ -104,7 +104,7 @@ namespace Hackerzhuli.Code.Editor
 		/// <summary>
 		/// The fork data for this installation.
 		/// </summary>
-		private CodeForkData ForkData { get; set; }
+		private CodeFork ForkData { get; set; }
 
 		/// <summary>
 		/// Dictionary of extension states with extension ID as the key.
@@ -146,16 +146,16 @@ namespace Hackerzhuli.Code.Editor
 		/// <summary>
 		/// Pre-created platform discoverers for each fork to avoid repeated instantiation.
 		/// </summary>
-		private static readonly Dictionary<CodeForkData, IAppDiscover> _discoverers = InitializeDiscoverers();
+		private static readonly Dictionary<CodeFork, IAppDiscover> _discoverers = InitializeDiscoverers();
 
 		/// <summary>
 		/// Initializes the platform discoverers for all supported forks.
 		/// </summary>
 		/// <returns>A dictionary mapping each fork to its corresponding discoverer.</returns>
-		private static Dictionary<CodeForkData, IAppDiscover> InitializeDiscoverers()
+		private static Dictionary<CodeFork, IAppDiscover> InitializeDiscoverers()
 		{
-			var discoverers = new Dictionary<CodeForkData, IAppDiscover>();
-			foreach (var fork in CodeForkData.Forks)
+			var discoverers = new Dictionary<CodeFork, IAppDiscover>();
+			foreach (var fork in CodeFork.Forks)
 			{
 				discoverers[fork] = new PlatformAppDiscover(fork);
 			}
@@ -171,7 +171,7 @@ namespace Hackerzhuli.Code.Editor
 		/// <summary>
 		/// Gets the latest C# language version supported by this VS Code installation.
 		/// </summary>
-		/// <returns>The fork-specific latest supported C# language version, default to 11 if not defined in <see cref="CodeForkData"/></returns>
+		/// <returns>The fork-specific latest supported C# language version, default to 11 if not defined in <see cref="CodeFork"/></returns>
 		public override Version LatestLanguageVersionSupported => ForkData?.LatestLanguageVersion ?? new Version(11, 0);
 
 		/// <summary>
@@ -278,7 +278,7 @@ namespace Hackerzhuli.Code.Editor
 		/// </summary>
 		/// <param name="exePath">The path to the VS Code executable.</param>
 		/// <returns>The VSCodeForkData if a supported fork is identified; otherwise, null.</returns>
-		private static CodeForkData GetForkDataByPath(string exePath)
+		private static CodeFork GetForkDataByPath(string exePath)
 		{
 			if (string.IsNullOrEmpty(exePath))
 				return null;

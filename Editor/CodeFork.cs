@@ -10,16 +10,16 @@ namespace Hackerzhuli.Code.Editor
     /// <summary>
     /// Data for a Visual Studio Code fork.
     /// </summary>
-    public record CodeForkData : IAppInfo
+    public record CodeFork : IAppInfo
 	{
 		/// <summary>
 		/// Static array of supported Visual Studio Code forks.<br/>
 		/// VS Code Insiders is treated as a fork because it have a different executable name than the stable version<br/>
 		/// If for a fork, a prerelease version and the stable version have same executable name, then it should be treated as the same fork
 		/// </summary>
-		public static readonly CodeForkData[] Forks = new[]
+		public static readonly CodeFork[] Forks = new[]
 		{
-			new CodeForkData
+			new CodeFork
 			{
 				Name = "Visual Studio Code",
 				WindowsDefaultDirName = "Microsoft VS Code",
@@ -31,7 +31,7 @@ namespace Hackerzhuli.Code.Editor
 				IsPrerelease = false,
 				IsMicrosoft = true
 			},
-			new CodeForkData
+			new CodeFork
 			{
 				Name = "Visual Studio Code Insiders",
 				WindowsDefaultDirName = "Microsoft VS Code Insiders",
@@ -43,7 +43,7 @@ namespace Hackerzhuli.Code.Editor
 				IsPrerelease = true,
 				IsMicrosoft = true
 			},
-			new CodeForkData
+			new CodeFork
 			{
 				Name = "Cursor",
 				WindowsDefaultDirName = "Cursor",
@@ -52,7 +52,7 @@ namespace Hackerzhuli.Code.Editor
 				LinuxExeName = "cursor",
 				UserDataDirName = ".cursor",
 			},
-			new CodeForkData
+			new CodeFork
 			{
 				Name = "Windsurf",
 				WindowsDefaultDirName = "Windsurf",
@@ -61,7 +61,7 @@ namespace Hackerzhuli.Code.Editor
 				LinuxExeName = "windsurf",
 				UserDataDirName = ".windsurf",
 			},
-			new CodeForkData
+			new CodeFork
 			{
 				Name = "Windsurf Next",
 				WindowsDefaultDirName = "Windsurf Next",
@@ -70,7 +70,7 @@ namespace Hackerzhuli.Code.Editor
 				LinuxExeName = "windsurf-next",
 				UserDataDirName = ".windsurf-next",
 			},
-			new CodeForkData
+			new CodeFork
 			{
 				Name = "Trae",
 				WindowsDefaultDirName = "Trae",
