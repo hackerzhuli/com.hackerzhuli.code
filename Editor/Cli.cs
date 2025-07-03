@@ -5,6 +5,7 @@
 
 using System;
 using System.Linq;
+using Hackerzhuli.Code.Editor.Code;
 using Unity.CodeEditor;
 
 namespace Hackerzhuli.Code.Editor

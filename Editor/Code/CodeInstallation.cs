@@ -12,7 +12,7 @@ using Hackerzhuli.Code.Editor.ProjectGeneration;
 using UnityEngine;
 using IOPath = System.IO.Path;
 
-namespace Hackerzhuli.Code.Editor
+namespace Hackerzhuli.Code.Editor.Code
 {
 	/// <summary>
 	/// Represents the manifest data structure for a Visual Studio Code installation.

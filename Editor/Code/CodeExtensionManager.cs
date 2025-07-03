@@ -10,7 +10,7 @@ using UnityEngine;
 using IOPath = System.IO.Path;
 using Debug = UnityEngine.Debug;
 
-namespace Hackerzhuli.Code.Editor
+namespace Hackerzhuli.Code.Editor.Code
 {
 	/// <summary>
 	/// Represents the state of a VS Code extension.

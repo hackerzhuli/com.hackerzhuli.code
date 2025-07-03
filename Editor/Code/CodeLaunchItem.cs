@@ -6,7 +6,7 @@
 using System;
 using System.Collections.Generic;
 
-namespace Hackerzhuli.Code.Editor
+namespace Hackerzhuli.Code.Editor.Code
 {
     /// <summary>
     /// Represents a launch configuration item for VS Code launch.json file.

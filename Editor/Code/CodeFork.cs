@@ -5,7 +5,7 @@
 
 using System;
 
-namespace Hackerzhuli.Code.Editor
+namespace Hackerzhuli.Code.Editor.Code
 {
     /// <summary>
     /// Data for a Visual Studio Code fork.

@@ -12,6 +12,7 @@ using System.Security;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.RegularExpressions;
+using Hackerzhuli.Code.Editor.Code;
 using Unity.CodeEditor;
 using Unity.Profiling;
 using UnityEditor;

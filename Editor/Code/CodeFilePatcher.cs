@@ -12,7 +12,7 @@ using Hackerzhuli.Code.Editor.ProjectGeneration;
 using IOPath = System.IO.Path;
 using Debug = UnityEngine.Debug;
 
-namespace Hackerzhuli.Code.Editor
+namespace Hackerzhuli.Code.Editor.Code
 {
 	/// <summary>
 	/// Handles file patching for VS Code installations.

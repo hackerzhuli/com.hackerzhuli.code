@@ -6,10 +6,9 @@
 using System;
 using System.IO;
 using Hackerzhuli.Code.Editor.ProjectGeneration;
-using Unity.CodeEditor;
 using IOPath = System.IO.Path;
 
-namespace Hackerzhuli.Code.Editor
+namespace Hackerzhuli.Code.Editor.Code
 {
 	internal interface ICodeEditorInstallation
 	{
