@@ -28,8 +28,7 @@ namespace Hackerzhuli.Code.Editor
 				LinuxExeName = "code",
 				UserDataDirName = ".vscode",
 				LatestLanguageVersion = new Version(13, 0),
-				IsPrerelease = false,
-				IsMicrosoft = true
+				IsPrerelease = false
 			},
 			new CodeFork
 			{
@@ -40,8 +39,7 @@ namespace Hackerzhuli.Code.Editor
 				LinuxExeName = "code-insiders",
 				UserDataDirName = ".vscode-insiders",
 				LatestLanguageVersion = new Version(13, 0),
-				IsPrerelease = true,
-				IsMicrosoft = true
+				IsPrerelease = true
 			},
 			new CodeFork
 			{
@@ -121,9 +119,6 @@ namespace Hackerzhuli.Code.Editor
 		/// </summary>
 		public bool IsPrerelease { get; set; }
 
-		/// <summary>
-		/// True if this fork is from Microsoft, otherwise false. This affects how launch files are patched.
-		/// </summary>
-		public bool IsMicrosoft { get; set; }
+
 	}
 }

@@ -475,8 +475,8 @@ namespace Hackerzhuli.Code.Editor
 
 			bool patched = false;
 
-			// Add Unity Tools configuration if installed, not already present, and using a Microsoft fork
-			if (ForkData.IsMicrosoft && UnityToolsExtensionState.IsInstalled && 
+			// Add Unity Tools configuration if installed and not already present
+			if (UnityToolsExtensionState.IsInstalled && 
 			    !configurations.Linq.Any(entry => entry.Value[typeKey].Value == "vstuc"))
 			{
 				var unityToolsConfig = new JSONObject();
