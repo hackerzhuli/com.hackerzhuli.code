@@ -168,8 +168,8 @@ namespace Hackerzhuli.Code.Editor.ProjectGeneration
 
 		private void RefreshCurrentInstallation()
 		{
-			var editor = CodeEditor.CurrentEditor as VisualStudioCodeEditor;
-			editor?.TryGetVisualStudioInstallationForPath(CodeEditor.CurrentEditorInstallation, lookupDiscoveredInstallations: true, out m_CurrentInstallation);
+			var editor = Unity.CodeEditor.CodeEditor.CurrentEditor as CodeEditor;
+			editor?.TryGetVisualStudioInstallationForPath(Unity.CodeEditor.CodeEditor.CurrentEditorInstallation, lookupDiscoveredInstallations: true, out m_CurrentInstallation);
 		}
 
 		static ProfilerMarker solutionSyncMarker = new ProfilerMarker("SolutionSynchronizerSync");

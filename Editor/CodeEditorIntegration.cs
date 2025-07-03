@@ -20,7 +20,7 @@ namespace Hackerzhuli.Code.Editor
 
 		static CodeEditorIntegration()
 		{
-			if (!VisualStudioCodeEditor.IsEnabled)
+			if (!CodeEditor.IsEnabled)
 				return;
 
 			// Create or find the core ScriptableObject instance

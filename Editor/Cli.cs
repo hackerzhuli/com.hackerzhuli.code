@@ -22,7 +22,7 @@ namespace Hackerzhuli.Code.Editor
 			return $"{installation.ToCodeEditorInstallation().Name} Path:{installation.Path}, LanguageVersionSupport:{installation.LatestLanguageVersionSupported} AnalyzersSupport:{installation.SupportsAnalyzers}";
 		}
 
-		internal static void GenerateSolutionWith(VisualStudioCodeEditor vse, string installationPath)
+		internal static void GenerateSolutionWith(CodeEditor vse, string installationPath)
 		{
 			if (vse != null && vse.TryGetVisualStudioInstallationForPath(installationPath, lookupDiscoveredInstallations: true, out var vsi))
 			{
@@ -37,18 +37,18 @@ namespace Hackerzhuli.Code.Editor
 
 		internal static void GenerateSolution()
 		{
-			if (CodeEditor.CurrentEditor is VisualStudioCodeEditor vse)
+			if (Unity.CodeEditor.CodeEditor.CurrentEditor is CodeEditor vse)
 			{
-				Log($"Using default editor settings for Visual Studio installation");
-				GenerateSolutionWith(vse, CodeEditor.CurrentEditorInstallation);
+                Log($"Using default editor settings for Visual Studio installation");
+                GenerateSolutionWith(vse, Unity.CodeEditor.CodeEditor.CurrentEditorInstallation);
 			}
 			else
 			{
-				Log($"Visual Studio is not set as your default editor, looking for installations");
+                Log($"Visual Studio is not set as your default editor, looking for installations");
 				try
 				{
 					var installations = Discovery
-						.GetVisualStudioInstallations()
+                        .GetVisualStudioInstallations()
 						.Cast<CodeEditorInstallation>()
 						.OrderByDescending(vsi => !vsi.IsPrerelease)
 						.ThenBy(vsi => vsi.Version)
@@ -56,7 +56,7 @@ namespace Hackerzhuli.Code.Editor
 
 					foreach(var vsi in installations)
 					{
-						Log($"Detected {GetInstallationDetails(vsi)}");
+                        Log($"Detected {GetInstallationDetails(vsi)}");
 					}
 
 					var installation = installations
@@ -64,24 +64,24 @@ namespace Hackerzhuli.Code.Editor
 
 					if (installation != null)
 					{
-						var current = CodeEditor.CurrentEditorInstallation;
+						var current = Unity.CodeEditor.CodeEditor.CurrentEditorInstallation;
 						try
 						{
-							CodeEditor.SetExternalScriptEditor(installation.Path);
-							GenerateSolutionWith(CodeEditor.CurrentEditor as VisualStudioCodeEditor, installation.Path);
+                            Unity.CodeEditor.CodeEditor.SetExternalScriptEditor(installation.Path);
+                            GenerateSolutionWith(Unity.CodeEditor.CodeEditor.CurrentEditor as CodeEditor, installation.Path);
 						}
 						finally
 						{
-							CodeEditor.SetExternalScriptEditor(current);
+                            Unity.CodeEditor.CodeEditor.SetExternalScriptEditor(current);
 						}
 					} else
 					{
-						Log($"No Visual Studio installation found!");
+                        Log($"No Visual Studio installation found!");
 					}
 				}
 				catch (Exception ex)
 				{
-					Log($"Error detecting Visual Studio installations: {ex}");
+                    Log($"Error detecting Visual Studio installations: {ex}");
 				}
 			}
 		}

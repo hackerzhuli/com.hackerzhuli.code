@@ -20,10 +20,13 @@ using UnityEngine;
 
 namespace Hackerzhuli.Code.Editor
 {
+	/// <summary>
+	/// Provides code editor installations to Unity Editor
+	/// </summary>
 	[InitializeOnLoad]
-	public class VisualStudioCodeEditor : IExternalCodeEditor
+	public class CodeEditor : IExternalCodeEditor
 	{
-		CodeEditor.Installation[] IExternalCodeEditor.Installations => _discoverInstallations
+        Unity.CodeEditor.CodeEditor.Installation[] IExternalCodeEditor.Installations => _discoverInstallations
 			.Result
 			.Values
 			.Select(v => v.ToCodeEditorInstallation())
@@ -31,13 +34,13 @@ namespace Hackerzhuli.Code.Editor
 
 		private static readonly AsyncOperation<Dictionary<string, ICodeEditorInstallation>> _discoverInstallations;
 
-		static VisualStudioCodeEditor()
+		static CodeEditor()
 		{
 			if (!UnityInstallation.IsMainUnityEditorProcess)
 				return;
 
 			Discovery.Initialize();
-			CodeEditor.Register(new VisualStudioCodeEditor());
+            Unity.CodeEditor.CodeEditor.Register(new CodeEditor());
 
 			_discoverInstallations = AsyncOperation<Dictionary<string, ICodeEditorInstallation>>.Run(DiscoverInstallations);
 		}
@@ -47,11 +50,11 @@ namespace Hackerzhuli.Code.Editor
 		static void LegacyVisualStudioCodePackageDisabler()
 		{
 			// disable legacy Visual Studio Code packages
-			var editor = CodeEditor.Editor.GetCodeEditorForPath("code.cmd");
+			var editor = Unity.CodeEditor.CodeEditor.Editor.GetCodeEditorForPath("code.cmd");
 			if (editor == null)
 				return;
 
-			if (editor is VisualStudioCodeEditor)
+			if (editor is CodeEditor)
 				return;
 
 			// only disable the com.unity.ide.vscode package
@@ -60,7 +63,7 @@ namespace Hackerzhuli.Code.Editor
 			if (assemblyName != "Unity.VSCode.Editor")
 				return;
 
-			CodeEditor.Unregister(editor);
+            Unity.CodeEditor.CodeEditor.Unregister(editor);
 		}
 #endif
 
@@ -79,13 +82,13 @@ namespace Hackerzhuli.Code.Editor
 			}
 		}
 
-		internal static bool IsEnabled => CodeEditor.CurrentEditor is VisualStudioCodeEditor && UnityInstallation.IsMainUnityEditorProcess;
+		internal static bool IsEnabled => Unity.CodeEditor.CodeEditor.CurrentEditor is CodeEditor && UnityInstallation.IsMainUnityEditorProcess;
 
 		// this one seems legacy and not used anymore
 		// keeping it for now given it is public, so we need a major bump to remove it 
 		public void CreateIfDoesntExist()
 		{
-			if (!TryGetVisualStudioInstallationForPath(CodeEditor.CurrentEditorInstallation, true, out var installation)) 
+			if (!TryGetVisualStudioInstallationForPath(Unity.CodeEditor.CodeEditor.CurrentEditorInstallation, true, out var installation)) 
 				return;
 
 			var generator = installation.ProjectGenerator;
@@ -108,7 +111,7 @@ namespace Hackerzhuli.Code.Editor
 			return Discovery.TryDiscoverInstallation(editorPath, out installation);
 		}
 
-		public virtual bool TryGetInstallationForPath(string editorPath, out CodeEditor.Installation installation)
+		public virtual bool TryGetInstallationForPath(string editorPath, out Unity.CodeEditor.CodeEditor.Installation installation)
 		{
 			var result = TryGetVisualStudioInstallationForPath(editorPath, lookupDiscoveredInstallations: false, out var vsi);
 			installation = vsi?.ToCodeEditorInstallation() ?? default;
@@ -120,7 +123,7 @@ namespace Hackerzhuli.Code.Editor
 			GUILayout.BeginHorizontal();
 			GUILayout.FlexibleSpace();
 
-			if (!TryGetVisualStudioInstallationForPath(CodeEditor.CurrentEditorInstallation, true, out var installation))
+			if (!TryGetVisualStudioInstallationForPath(Unity.CodeEditor.CodeEditor.CurrentEditorInstallation, true, out var installation))
 				return;
 
 			var package = UnityEditor.PackageManager.PackageInfo.FindForAssembly(GetType().Assembly);
@@ -170,7 +173,7 @@ namespace Hackerzhuli.Code.Editor
 
 		public void SyncIfNeeded(string[] addedFiles, string[] deletedFiles, string[] movedFiles, string[] movedFromFiles, string[] importedFiles)
 		{
-			if (TryGetVisualStudioInstallationForPath(CodeEditor.CurrentEditorInstallation, true, out var installation))
+			if (TryGetVisualStudioInstallationForPath(Unity.CodeEditor.CodeEditor.CurrentEditorInstallation, true, out var installation))
 			{
 				installation.ProjectGenerator.SyncIfNeeded(addedFiles.Union(deletedFiles).Union(movedFiles).Union(movedFromFiles), importedFiles);
 			}
@@ -196,7 +199,7 @@ namespace Hackerzhuli.Code.Editor
 
 		public void SyncAll()
 		{
-			if (TryGetVisualStudioInstallationForPath(CodeEditor.CurrentEditorInstallation, true, out var installation))
+			if (TryGetVisualStudioInstallationForPath(Unity.CodeEditor.CodeEditor.CurrentEditorInstallation, true, out var installation))
 			{
 				installation.ProjectGenerator.Sync();
 			}
@@ -216,7 +219,7 @@ namespace Hackerzhuli.Code.Editor
 
 		public bool OpenProject(string path, int line, int column)
 		{
-			var editorPath = CodeEditor.CurrentEditorInstallation;
+			var editorPath = Unity.CodeEditor.CodeEditor.CurrentEditorInstallation;
 
 			if (!Discovery.TryDiscoverInstallation(editorPath, out var installation)) {
 				Debug.LogWarning($"Visual Studio executable {editorPath} is not found. Please change your settings in Edit > Preferences > External Tools.");
@@ -242,28 +245,19 @@ namespace Hackerzhuli.Code.Editor
 
 		private static string GetProjectGenerationFlagDescription(ProjectGenerationFlag flag)
 		{
-			switch (flag)
-			{
-				case ProjectGenerationFlag.BuiltIn:
-					return "Built-in packages";
-				case ProjectGenerationFlag.Embedded:
-					return "Embedded packages";
-				case ProjectGenerationFlag.Git:
-					return "Git packages";
-				case ProjectGenerationFlag.Local:
-					return "Local packages";
-				case ProjectGenerationFlag.LocalTarBall:
-					return "Local tarball";
-				case ProjectGenerationFlag.PlayerAssemblies:
-					return "Player projects";
-				case ProjectGenerationFlag.Registry:
-					return "Registry packages";
-				case ProjectGenerationFlag.Unknown:
-					return "Packages from unknown sources";
-				default:
-					return string.Empty;
-			}
-		}
+            return flag switch
+            {
+                ProjectGenerationFlag.BuiltIn => "Built-in packages",
+                ProjectGenerationFlag.Embedded => "Embedded packages",
+                ProjectGenerationFlag.Git => "Git packages",
+                ProjectGenerationFlag.Local => "Local packages",
+                ProjectGenerationFlag.LocalTarBall => "Local tarball",
+                ProjectGenerationFlag.PlayerAssemblies => "Player projects",
+                ProjectGenerationFlag.Registry => "Registry packages",
+                ProjectGenerationFlag.Unknown => "Packages from unknown sources",
+                _ => string.Empty,
+            };
+        }
 
 		private static bool IsProjectGeneratedFor(string path, IGenerator generator, out ProjectGenerationFlag missingFlag)
 		{

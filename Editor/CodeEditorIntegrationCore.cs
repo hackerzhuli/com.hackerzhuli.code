@@ -429,7 +429,7 @@ namespace Hackerzhuli.Code.Editor
 
         private void EnsureMessengerInitialized()
         {
-            if (_messenger != null || !VisualStudioCodeEditor.IsEnabled)
+            if (_messenger != null || !CodeEditor.IsEnabled)
                 return;
 
             var messagingPort = MessagingPort();

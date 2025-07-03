@@ -17,7 +17,7 @@ namespace Hackerzhuli.Code.Editor
 		bool SupportsAnalyzers { get; }
 		Version LatestLanguageVersionSupported { get; }
 		string[] GetAnalyzers();
-		CodeEditor.Installation ToCodeEditorInstallation();
+        Unity.CodeEditor.CodeEditor.Installation ToCodeEditorInstallation();
 		bool Open(string path, int line, int column, string solutionPath);
 		IGenerator ProjectGenerator { get; }
 		void CreateExtraFiles(string projectDirectory);
@@ -62,9 +62,9 @@ namespace Hackerzhuli.Code.Editor
 			return Array.Empty<string>();
 		}
 
-		public CodeEditor.Installation ToCodeEditorInstallation()
+		public Unity.CodeEditor.CodeEditor.Installation ToCodeEditorInstallation()
 		{
-			return new CodeEditor.Installation() { Name = Name, Path = Path };
+			return new Unity.CodeEditor.CodeEditor.Installation() { Name = Name, Path = Path };
 		}
 	}
 }
