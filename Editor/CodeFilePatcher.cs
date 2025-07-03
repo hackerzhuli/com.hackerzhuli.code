@@ -79,12 +79,12 @@ namespace Hackerzhuli.Code.Editor
 		/// <summary>
 		/// The identifier for the Visual Studio Tools for Unity extension for VS Code.
 		/// </summary>
-		private const string UnityExtensionId = "visualstudiotoolsforunity.vstuc";
+		public const string UnityExtensionId = "visualstudiotoolsforunity.vstuc";
 
 		/// <summary>
 		/// The identifier for the DotRush extension for VS Code.
 		/// </summary>
-		private const string DotRushExtensionId = "nromanov.dotrush";
+		public const string DotRushExtensionId = "nromanov.dotrush";
 
 		/// <summary>
 		/// The path to the extensions directory for this VS Code installation.
@@ -153,13 +153,7 @@ namespace Hackerzhuli.Code.Editor
 		/// <param name="extensionsDirectory">The directory containing the extensions.</param>
 		private void LoadExtensionStates(string extensionsDirectory)
 		{
-			// Initialize dictionary with default empty states for known extensions
-			// These will be updated if found in extensions.json, and any other extensions will also be added
-			ExtensionStates = new Dictionary<string, CodeExtensionState>
-			{
-				[UnityExtensionId] = new() { Id = UnityExtensionId },
-				[DotRushExtensionId] = new() { Id = DotRushExtensionId }
-			};
+			ExtensionStates = new Dictionary<string, CodeExtensionState>();
 
 			if (string.IsNullOrEmpty(extensionsDirectory))
 			{
@@ -190,11 +184,6 @@ namespace Hackerzhuli.Code.Editor
 						continue;
 
 					var extensionId = extension.identifier.id;
-
-					if (!ExtensionStates.ContainsKey(extensionId))
-					{
-						continue;
-					}
 
 					var state = new CodeExtensionState
 					{
@@ -270,27 +259,31 @@ namespace Hackerzhuli.Code.Editor
 
 			bool patched = false;
 
-			// Add Unity Tools configuration if installed and not already present
-			if (UnityToolsExtensionState.IsInstalled && 
-			    !configurations.Linq.Any(entry => entry.Value[typeKey].Value == "vstuc"))
+			// Iterate through all launch configurations and add them if the extension is installed
+			foreach (var launchConfig in CodeLaunchItem.Items)
 			{
-				var unityToolsConfig = new JSONObject();
-				unityToolsConfig.Add(nameKey, "Attach to Unity");
-				unityToolsConfig.Add(typeKey, "vstuc");
-				unityToolsConfig.Add(requestKey, "attach");
-				configurations.Add(unityToolsConfig);
-				patched = true;
-			}
+				// Check if the extension is installed
+				var extensionState = GetExtensionState(launchConfig.ExtensionId);
+				if (!extensionState.IsInstalled)
+					continue;
 
-			// Add DotRush configuration if installed and not already present
-			if (DotRushExtensionState.IsInstalled && 
-			    !configurations.Linq.Any(entry => entry.Value[typeKey].Value == "unity"))
-			{
-				var dotRushConfig = new JSONObject();
-				dotRushConfig.Add(nameKey, "Attach to Unity with DotRush");
-				dotRushConfig.Add(typeKey, "unity");
-				dotRushConfig.Add(requestKey, "attach");
-				configurations.Add(dotRushConfig);
+				// Check if configuration with this type already exists
+				if (configurations.Linq.Any(entry => entry.Value[typeKey].Value == launchConfig.Type))
+					continue;
+
+				// Create the launch configuration
+				var configObject = new JSONObject();
+				configObject.Add(nameKey, launchConfig.Name);
+				configObject.Add(typeKey, launchConfig.Type);
+				configObject.Add(requestKey, launchConfig.Request);
+
+				// Add any additional properties
+				foreach (var additionalProperty in launchConfig.AdditionalProperties)
+				{
+					configObject.Add(additionalProperty.Key, additionalProperty.Value.ToString());
+				}
+
+				configurations.Add(configObject);
 				patched = true;
 			}
 
