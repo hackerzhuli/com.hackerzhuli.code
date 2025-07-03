@@ -14,23 +14,28 @@ namespace Hackerzhuli.Code.Editor.Code
     [Serializable]
 	public class CodeLaunchItem
 	{
+		/// <summary>
+		/// The launch.json configuration items for VS Code depending on the extension installed.
+		/// </summary>
 		public static readonly CodeLaunchItem[] Items = new CodeLaunchItem[]
 		{
 			new() {
-				ExtensionId = CodeExtensionManager.UnityExtensionId,
-				Name = "Unity Editor",
-				Type = "unity",
-				Request = "launch"
-			},
+				ExtensionId = "hackerzhuli.unity-code",
+				Name = "Attach to Unity Editor with Unity Code",
+				Type = "unity-code",
+				Request = "attach",
+			},			
 			new() {
 				ExtensionId = CodeExtensionManager.DotRushExtensionId,
-				Name = "DotRush: Attach to Unity",
-				Type = "dotrush",
+				Name = "Attach to Unity Editor with Dot Rush",
+				Type = "unity",
 				Request = "attach",
-				AdditionalProperties = new Dictionary<string, object>
-				{
-					{ "processName", "Unity" }
-				}
+			},
+			new() {
+				ExtensionId = CodeExtensionManager.UnityExtensionId,
+				Name = "Attach to Unity Editor",
+				Type = "vstuc",
+				Request = "launch"
 			}
 		};
 
