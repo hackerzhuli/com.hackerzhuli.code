@@ -84,6 +84,11 @@ namespace Hackerzhuli.Code.Editor.Code
 		public const string DotRushExtensionId = "nromanov.dotrush";
 
 		/// <summary>
+        /// The identifier for the Unity Code extension for VS Code.
+        /// </summary>
+        public const string UnityCodeExtensionId = "hackerzhuli.unity-code";
+
+		/// <summary>
 		/// The path to the extensions directory for this VS Code installation.
 		/// </summary>
 		public string ExtensionsDirectory { get; }
@@ -130,11 +135,16 @@ namespace Hackerzhuli.Code.Editor.Code
 		/// </summary>
 		public CodeExtensionState DotRushExtensionState => GetExtensionState(DotRushExtensionId);
 
-		/// <summary>
-		/// Updates extension states by reloading from the extensions.json file.
-		/// This should be called before any file operations to ensure we have the latest extension information.
-		/// </summary>
-		public void UpdateExtensionStates()
+        /// <summary>
+        /// Gets the state of the Unity Code extension.
+        /// </summary>
+        public CodeExtensionState UnityCodeExtensionState => GetExtensionState(UnityCodeExtensionId);
+
+        /// <summary>
+        /// Updates extension states by reloading from the extensions.json file.
+        /// This should be called before any file operations to ensure we have the latest extension information.
+        /// </summary>
+        public void UpdateExtensionStates()
 		{
 			LoadExtensionStates(ExtensionsDirectory);
 		}

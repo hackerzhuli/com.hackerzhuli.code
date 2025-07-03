@@ -53,7 +53,7 @@ namespace Hackerzhuli.Code.Editor.Code
 
 		protected static string[] GetAnalyzers(string path)
 		{
-			var analyzersDirectory = IOPath.GetFullPath(IOPath.Combine(path, "Analyzers"));
+			var analyzersDirectory = IOPath.GetFullPath(path);
 
 			if (Directory.Exists(analyzersDirectory))
 				return Directory.GetFiles(analyzersDirectory, "*Analyzers.dll", SearchOption.AllDirectories);

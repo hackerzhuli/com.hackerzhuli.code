@@ -108,11 +108,16 @@ namespace Hackerzhuli.Code.Editor.Code
 			// Update extension states to ensure we have the latest information
 			ExtensionManager?.UpdateExtensionStates();
 
-			if (ExtensionManager?.UnityToolsExtensionState?.IsInstalled != true)
-				return Array.Empty<string>();
+			if(ExtensionManager?.UnityCodeExtensionState?.IsInstalled == true){
+				var path = IOPath.Combine(ExtensionManager.ExtensionsDirectory, ExtensionManager.UnityCodeExtensionState.RelativePath, "assemblies");
+				return GetAnalyzers(path);
+			}
+			else if (ExtensionManager?.UnityToolsExtensionState?.IsInstalled == true){
+				var path = IOPath.Combine(ExtensionManager.ExtensionsDirectory, ExtensionManager.UnityToolsExtensionState.RelativePath, "Analyzers");
+				return GetAnalyzers(path);
+			}
 
-			var extensionPath = IOPath.Combine(ExtensionManager.ExtensionsDirectory, ExtensionManager.UnityToolsExtensionState.RelativePath);
-			return GetAnalyzers(extensionPath);
+			return Array.Empty<string>();
 		}
 
 		/// <summary>

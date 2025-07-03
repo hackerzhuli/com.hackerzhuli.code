@@ -20,7 +20,7 @@ namespace Hackerzhuli.Code.Editor.Code
 		public static readonly CodeLaunchItem[] Items = new CodeLaunchItem[]
 		{
 			new() {
-				ExtensionId = "hackerzhuli.unity-code",
+				ExtensionId = CodeExtensionManager.UnityCodeExtensionId,
 				Name = "Attach to Unity Editor with Unity Code",
 				Type = "unity-code",
 				Request = "attach",
