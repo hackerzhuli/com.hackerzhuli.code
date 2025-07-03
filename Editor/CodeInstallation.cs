@@ -11,15 +11,6 @@ using System.Linq;
 using Hackerzhuli.Code.Editor.ProjectGeneration;
 using UnityEngine;
 using IOPath = System.IO.Path;
-using Debug = UnityEngine.Debug;
-using System.Text.RegularExpressions;
-#if UNITY_EDITOR_WIN
-using PlatformAppDiscover = Hackerzhuli.Code.Editor.WindowsAppDiscover;
-#elif UNITY_EDITOR_OSX
-using PlatformAppDiscover = Hackerzhuli.Code.Editor.MacOSAppDiscover;
-#else
-using PlatformAppDiscover = Hackerzhuli.Code.Editor.LinuxAppDiscover;
-#endif
 
 namespace Hackerzhuli.Code.Editor
 {
@@ -41,7 +32,7 @@ namespace Hackerzhuli.Code.Editor
 	}
 
 	/// <summary>
-	/// Represents a Visual Studio Code fork installation.
+	/// Represents a VS Code fork installation on the system.
 	/// Provides functionality for discovering, interacting with, and configuring VS Code.
 	/// </summary>
 	internal class CodeInstallation : CodeEditorInstallation
@@ -55,6 +46,8 @@ namespace Hackerzhuli.Code.Editor
 		/// The file patcher instance for handling VS Code configuration files.
 		/// </summary>
 		private CodeFilePatcher FilePatcher { get; set; }
+
+		private CodeExtensionManager ExtensionManager { get; set;}
 
 		/// <summary>
 		/// The generator instance used for creating project files.
@@ -75,7 +68,7 @@ namespace Hackerzhuli.Code.Editor
 			var discoverers = new Dictionary<CodeFork, IAppDiscover>();
 			foreach (var fork in CodeFork.Forks)
 			{
-				discoverers[fork] = new PlatformAppDiscover(fork);
+				discoverers[fork] = AppDiscoverUtils.CreateAppDiscover(fork);
 			}
 			return discoverers;
 		}
@@ -113,12 +106,12 @@ namespace Hackerzhuli.Code.Editor
 		public override string[] GetAnalyzers()
 		{
 			// Update extension states to ensure we have the latest information
-			FilePatcher?.UpdateExtensionStates();
+			ExtensionManager?.UpdateExtensionStates();
 
-			if (FilePatcher?.UnityToolsExtensionState?.IsInstalled != true)
+			if (ExtensionManager?.UnityToolsExtensionState?.IsInstalled != true)
 				return Array.Empty<string>();
 
-			var extensionPath = IOPath.Combine(FilePatcher.ExtensionsDirectory, FilePatcher.UnityToolsExtensionState.RelativePath);
+			var extensionPath = IOPath.Combine(ExtensionManager.ExtensionsDirectory, ExtensionManager.UnityToolsExtensionState.RelativePath);
 			return GetAnalyzers(extensionPath);
 		}
 
@@ -241,11 +234,13 @@ namespace Hackerzhuli.Code.Editor
 			};
 			installation = installation2;
 
-			// Initialize file patcher
+			// Initialize file patcher and extension manager
 			var extensionsDirectory = installation2.GetExtensionsDirectory();
 			if (extensionsDirectory != null)
 			{
-				installation2.FilePatcher = new CodeFilePatcher(extensionsDirectory);
+				var extensionManager = new CodeExtensionManager(extensionsDirectory);
+				installation2.ExtensionManager = extensionManager;
+				installation2.FilePatcher = new CodeFilePatcher(extensionManager);
 			}
 
 			//Debug.Log($"discovered vs code installation {name} at {installation.Path}");

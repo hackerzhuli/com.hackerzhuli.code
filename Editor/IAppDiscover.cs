@@ -68,4 +68,21 @@ namespace Hackerzhuli.Code.Editor
         /// <returns>True if the path is a valid candidate; otherwise, false.</returns>
         bool IsCandidate(string exePath);
     }
+
+    internal static class AppDiscoverUtils{
+        /// <summary>
+        /// Creates an appropriate IAppDiscover instance based on the current platform.
+        /// </summary>
+        /// <returns>An IAppDiscover instance for the current platform.</returns>
+        public static IAppDiscover CreateAppDiscover(IAppInfo appInfo)
+		{
+			#if UNITY_EDITOR_WIN
+			return new WindowsAppDiscover(appInfo);
+			#elif UNITY_EDITOR_OSX
+			return new MacOSAppDiscover(appInfo);
+			#else
+			return new LinuxAppDiscover(appInfo);
+			#endif
+		}
+    }
 }

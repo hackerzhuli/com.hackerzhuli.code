@@ -9,92 +9,21 @@ using System.IO;
 using System.Linq;
 using System.Text.RegularExpressions;
 using Hackerzhuli.Code.Editor.ProjectGeneration;
-using UnityEngine;
 using IOPath = System.IO.Path;
 using Debug = UnityEngine.Debug;
 
 namespace Hackerzhuli.Code.Editor
 {
 	/// <summary>
-	/// Represents the state of a VS Code extension.
-	/// </summary>
-	public record CodeExtensionState
-	{
-		/// <summary>
-		/// The identifier of the extension.
-		/// </summary>
-		public string Id { get; set; }
-
-		/// <summary>
-		/// The version of the extension if installed, otherwise null.
-		/// </summary>
-		public string Version { get; set; }
-
-		/// <summary>
-		/// The relative path to the extension if installed, otherwise null.
-		/// </summary>
-		public string RelativePath { get; set; }
-
-		/// <summary>
-		/// Whether the extension is installed.
-		/// </summary>
-		public bool IsInstalled => !string.IsNullOrEmpty(RelativePath);
-	}
-
-	/// <summary>
-	/// Wrapper class for deserializing the extensions.json file.
-	/// </summary>
-	[Serializable]
-	internal class CodeExtensionsWrapper
-	{
-		public CodeExtensionInfo[] extensions;
-	}
-
-	/// <summary>
-	/// Represents an extension entry in the extensions.json file.
-	/// </summary>
-	[Serializable]
-	internal class CodeExtensionInfo
-	{
-		public CodeExtensionIdentifier identifier;
-		public string version;
-		public string relativeLocation;
-	}
-
-	/// <summary>
-	/// Represents the identifier of an extension.
-	/// </summary>
-	[Serializable]
-	internal class CodeExtensionIdentifier
-	{
-		public string id;
-	}
-
-	/// <summary>
-	/// Handles file patching and extension discovery for VS Code installations.
+	/// Handles file patching for VS Code installations.
 	/// Provides functionality for creating and patching VS Code configuration files based on installed extensions.
 	/// </summary>
 	internal class CodeFilePatcher
 	{
 		/// <summary>
-		/// The identifier for the Visual Studio Tools for Unity extension for VS Code.
+		/// The extension manager instance for handling VS Code extension discovery.
 		/// </summary>
-		public const string UnityExtensionId = "visualstudiotoolsforunity.vstuc";
-
-		/// <summary>
-		/// The identifier for the DotRush extension for VS Code.
-		/// </summary>
-		public const string DotRushExtensionId = "nromanov.dotrush";
-
-		/// <summary>
-		/// The path to the extensions directory for this VS Code installation.
-		/// </summary>
-		public string ExtensionsDirectory { get; }
-
-		/// <summary>
-		/// Dictionary of extension states with extension ID as the key.
-		/// </summary>
-		private Dictionary<string, CodeExtensionState> ExtensionStates { get; set; } = new();
+		private CodeExtensionManager ExtensionManager { get; }
 
 		/// <summary>
 		/// The generator instance used for creating project files.
@@ -104,39 +33,11 @@ namespace Hackerzhuli.Code.Editor
 		/// <summary>
 		/// Initializes a new instance of the CodeFilePatcher class.
 		/// </summary>
-		/// <param name="extensionsDirectory">The path to the VS Code extensions directory.</param>
-		public CodeFilePatcher(string extensionsDirectory)
+		/// <param name="extensionManager">The extension manager instance for handling VS Code extension discovery.</param>
+		public CodeFilePatcher(CodeExtensionManager extensionManager)
 		{
-			ExtensionsDirectory = extensionsDirectory;
-			UpdateExtensionStates();
+			ExtensionManager = extensionManager ?? throw new ArgumentNullException(nameof(extensionManager));
 		}
-
-		/// <summary>
-		/// Gets the state of a specific extension. If the extension state doesn't exist in the dictionary,
-		/// a new state will be created, added to the dictionary, and returned.
-		/// </summary>
-		/// <param name="extensionId">The ID of the extension.</param>
-		/// <returns>The existing extension state or a newly created state.</returns>
-		private CodeExtensionState GetExtensionState(string extensionId)
-		{
-			if (ExtensionStates.TryGetValue(extensionId, out var state))
-				return state;
-			
-			// Create a new extension state, add it to the dictionary, and return it
-			var newState = new CodeExtensionState { Id = extensionId };
-			ExtensionStates[extensionId] = newState;
-			return newState;
-		}
-
-		/// <summary>
-		/// Gets the state of the Visual Studio Tools for Unity extension.
-		/// </summary>
-		public CodeExtensionState UnityToolsExtensionState => GetExtensionState(UnityExtensionId);
-
-		/// <summary>
-		/// Gets the state of the DotRush extension.
-		/// </summary>
-		public CodeExtensionState DotRushExtensionState => GetExtensionState(DotRushExtensionId);
 
 		/// <summary>
 		/// Updates extension states by reloading from the extensions.json file.
@@ -144,61 +45,7 @@ namespace Hackerzhuli.Code.Editor
 		/// </summary>
 		public void UpdateExtensionStates()
 		{
-			LoadExtensionStates(ExtensionsDirectory);
-		}
-
-		/// <summary>
-		/// Loads extension states from the extensions.json file.
-		/// </summary>
-		/// <param name="extensionsDirectory">The directory containing the extensions.</param>
-		private void LoadExtensionStates(string extensionsDirectory)
-		{
-			ExtensionStates = new Dictionary<string, CodeExtensionState>();
-
-			if (string.IsNullOrEmpty(extensionsDirectory))
-			{
-				Debug.LogError($"Extensions directory is null or empty");
-				return;
-			}
-
-			try
-			{
-				var extensionsJsonPath = IOPath.Combine(extensionsDirectory, "extensions.json");
-				if (!File.Exists(extensionsJsonPath))
-					return;
-
-				var json = File.ReadAllText(extensionsJsonPath);
-				// Wrap the JSON array in an object for JsonUtility
-				json = $"{{\"extensions\":{json}}}";
-
-				var wrapper = JsonUtility.FromJson<CodeExtensionsWrapper>(json);
-				if (wrapper?.extensions == null)
-				{
-					Debug.LogError($"Extensions wrapper is null");
-					return;
-				}
-
-				foreach (var extension in wrapper.extensions)
-				{
-					if (extension?.identifier?.id == null || extension?.relativeLocation == null)
-						continue;
-
-					var extensionId = extension.identifier.id;
-
-					var state = new CodeExtensionState
-					{
-						Id = extensionId,
-						RelativePath = extension.relativeLocation,
-						Version = extension.version
-					};
-
-					ExtensionStates[extensionId] = state;
-				}
-			}
-			catch (Exception ex)
-			{
-				Debug.LogError($"Error loading extensions.json: {ex.Message}");
-			}
+			ExtensionManager.UpdateExtensionStates();
 		}
 
 		/// <summary>
@@ -263,7 +110,7 @@ namespace Hackerzhuli.Code.Editor
 			foreach (var launchConfig in CodeLaunchItem.Items)
 			{
 				// Check if the extension is installed
-				var extensionState = GetExtensionState(launchConfig.ExtensionId);
+				var extensionState = ExtensionManager.GetExtensionState(launchConfig.ExtensionId);
 				if (!extensionState.IsInstalled)
 					continue;
 
@@ -486,13 +333,13 @@ namespace Hackerzhuli.Code.Editor
 			// If Unity extension is not installed, add .uxml to xml and .uss to css associations
 			// If Unity extension is installed but DotRush is not, remove those associations
 			// If both Unity and DotRush are installed, keep the associations as they are
-			if (!UnityToolsExtensionState.IsInstalled)
+			if (!ExtensionManager.UnityToolsExtensionState.IsInstalled)
 			{
 				// Unity extension not installed, add associations
 				defaultAssociations["*.uxml"] = "xml";
 				defaultAssociations["*.uss"] = "css";
 			}
-			else if (UnityToolsExtensionState.IsInstalled && !DotRushExtensionState.IsInstalled)
+			else if (ExtensionManager.UnityToolsExtensionState.IsInstalled && !ExtensionManager.DotRushExtensionState.IsInstalled)
 			{
 				// Unity extension installed but DotRush is not, remove associations if they exist
 				if (associations.HasKey("*.uxml") && associations["*.uxml"] == "xml")
@@ -575,7 +422,7 @@ namespace Hackerzhuli.Code.Editor
 			}
 
 			// Check dotrush.roslyn.projectOrSolutionFiles setting
-			if (DotRushExtensionState.IsInstalled)
+			if (ExtensionManager.DotRushExtensionState.IsInstalled)
 			{
 				const string dotRushSolutionKey = "dotrush.roslyn.projectOrSolutionFiles";
 				var dotRushSolutionSetting = settings[dotRushSolutionKey];
@@ -725,9 +572,9 @@ namespace Hackerzhuli.Code.Editor
 			}
 
 			// Add Microsoft Unity extension if not already present
-			if (!recommendations.Linq.Any(entry => entry.Value.Value == UnityExtensionId))
+			if (!recommendations.Linq.Any(entry => entry.Value.Value == CodeExtensionManager.UnityExtensionId))
 			{
-				recommendations.Add(UnityExtensionId);
+				recommendations.Add(CodeExtensionManager.UnityExtensionId);
 				patched = true;
 			}
 

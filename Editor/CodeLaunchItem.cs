@@ -17,16 +17,20 @@ namespace Hackerzhuli.Code.Editor
 		public static readonly CodeLaunchItem[] Items = new CodeLaunchItem[]
 		{
 			new() {
-				ExtensionId = CodeFilePatcher.UnityExtensionId,
-				Name = "Attach to Unity",
-				Type = "vstuc",
-				Request = "attach"
+				ExtensionId = CodeExtensionManager.UnityExtensionId,
+				Name = "Unity Editor",
+				Type = "unity",
+				Request = "launch"
 			},
 			new() {
-				ExtensionId = CodeFilePatcher.DotRushExtensionId,
-				Name = "Attach to Unity with DotRush",
-				Type = "unity",
-				Request = "attach"
+				ExtensionId = CodeExtensionManager.DotRushExtensionId,
+				Name = "DotRush: Attach to Unity",
+				Type = "dotrush",
+				Request = "attach",
+				AdditionalProperties = new Dictionary<string, object>
+				{
+					{ "processName", "Unity" }
+				}
 			}
 		};
 
