@@ -100,7 +100,7 @@ namespace Hackerzhuli.Code.Editor.Code
 		}
 
 		/// <summary>
-		/// Gets the array of analyzer assemblies available in the Visual Studio Tools for Unity extension for the VS Code installation.
+		/// Gets the array of analyzer assemblies available from all installed extensions for the VS Code installation.
 		/// </summary>
 		/// <returns>Array of analyzer assembly paths or an empty array if none found.</returns>
 		public override string[] GetAnalyzers()
@@ -108,16 +108,45 @@ namespace Hackerzhuli.Code.Editor.Code
 			// Update extension states to ensure we have the latest information
 			ExtensionManager?.UpdateExtensionStates();
 
-			if(ExtensionManager?.UnityCodeExtensionState?.IsInstalled == true){
-				var path = IOPath.Combine(ExtensionManager.ExtensionsDirectory, ExtensionManager.UnityCodeExtensionState.RelativePath, "assemblies");
-				return GetAnalyzers(path);
-			}
-			else if (ExtensionManager?.UnityToolsExtensionState?.IsInstalled == true){
-				var path = IOPath.Combine(ExtensionManager.ExtensionsDirectory, ExtensionManager.UnityToolsExtensionState.RelativePath, "Analyzers");
-				return GetAnalyzers(path);
+			if (ExtensionManager == null)
+				return Array.Empty<string>();
+
+			var allAnalyzers = new List<string>();
+			var analyzerFileNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+			// Search through all configured extensions
+			foreach (var config in CodeExtensionAnalyzerConfig.Configs)
+			{
+				var extensionState = ExtensionManager.GetExtensionState(config.ExtensionId);
+				if (!extensionState.IsInstalled)
+					continue;
+
+				var analyzersPath = IOPath.Combine(ExtensionManager.ExtensionsDirectory, 
+					extensionState.RelativePath, config.AnalyzersRelativePath);
+				
+				var analyzersDirectory = IOPath.GetFullPath(analyzersPath);
+				if (!Directory.Exists(analyzersDirectory))
+					continue;
+
+				var files = Directory.GetFiles(analyzersDirectory, config.FilePattern, SearchOption.AllDirectories);
+				
+				// Add files while checking for collisions
+				foreach (var file in files)
+				{
+					var fileName = IOPath.GetFileName(file);
+					// Ensure the file has a .dll extension
+					if (!fileName.EndsWith(".dll", StringComparison.OrdinalIgnoreCase))
+						continue;
+					
+					if (analyzerFileNames.Add(fileName))
+					{
+						allAnalyzers.Add(file);
+					}
+					// If collision detected, the first one found is kept
+				}
 			}
 
-			return Array.Empty<string>();
+			return allAnalyzers.ToArray();
 		}
 
 		/// <summary>

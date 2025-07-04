@@ -51,15 +51,7 @@ namespace Hackerzhuli.Code.Editor.Code
 			return new Version(7, 0);
 		}
 
-		protected static string[] GetAnalyzers(string path)
-		{
-			var analyzersDirectory = IOPath.GetFullPath(path);
 
-			if (Directory.Exists(analyzersDirectory))
-				return Directory.GetFiles(analyzersDirectory, "*Analyzers.dll", SearchOption.AllDirectories);
-
-			return Array.Empty<string>();
-		}
 
 		public Unity.CodeEditor.CodeEditor.Installation ToCodeEditorInstallation()
 		{

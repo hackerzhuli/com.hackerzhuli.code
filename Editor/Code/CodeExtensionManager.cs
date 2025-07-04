@@ -74,7 +74,7 @@ namespace Hackerzhuli.Code.Editor.Code
 	internal class CodeExtensionManager
 	{
 		/// <summary>
-		/// The identifier for the Visual Studio Tools for Unity extension for VS Code.
+		/// The identifier for the Visual Studio Tools for Unity extension for VS Code.< br/>
 		/// </summary>
 		public const string UnityExtensionId = "visualstudiotoolsforunity.vstuc";
 
