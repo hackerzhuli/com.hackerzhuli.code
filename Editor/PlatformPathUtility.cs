@@ -6,12 +6,12 @@
 namespace Hackerzhuli.Code.Editor
 {
     /// <summary>
-    /// Static utility class for platform-specific path operations.
+    ///     Static utility class for platform-specific path operations.
     /// </summary>
     internal static class PlatformPathUtility
     {
         /// <summary>
-        /// Gets the real path by resolving symbolic links or shortcuts.
+        ///     Gets the real path by resolving symbolic links or shortcuts.
         /// </summary>
         /// <param name="path">The path that might be a symbolic link.</param>
         /// <returns>The resolved path if it's a symbolic link; otherwise, the original path.</returns>
@@ -19,7 +19,7 @@ namespace Hackerzhuli.Code.Editor
         {
             if (string.IsNullOrEmpty(path))
                 return path;
-                
+
 #if UNITY_EDITOR_WIN
             return path;
 #elif UNITY_EDITOR_OSX || UNITY_EDITOR_LINUX

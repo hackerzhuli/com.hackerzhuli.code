@@ -8,31 +8,31 @@ using System.Text;
 
 namespace Hackerzhuli.Code.Editor.Messaging
 {
-	internal class Deserializer
-	{
-		private readonly BinaryReader _reader;
+    internal class Deserializer
+    {
+        private readonly BinaryReader _reader;
 
-		public Deserializer(byte[] buffer)
-		{
-			_reader = new BinaryReader(new MemoryStream(buffer));
-		}
+        public Deserializer(byte[] buffer)
+        {
+            _reader = new BinaryReader(new MemoryStream(buffer));
+        }
 
-		public int ReadInt32()
-		{
-			return _reader.ReadInt32();
-		}
+        public int ReadInt32()
+        {
+            return _reader.ReadInt32();
+        }
 
-		public string ReadString()
-		{
-			var length = ReadInt32();
-			return length > 0
-				? Encoding.UTF8.GetString(_reader.ReadBytes(length))
-				: "";
-		}
+        public string ReadString()
+        {
+            var length = ReadInt32();
+            return length > 0
+                ? Encoding.UTF8.GetString(_reader.ReadBytes(length))
+                : "";
+        }
 
-		public bool CanReadMore()
-		{
-			return _reader.BaseStream.Position < _reader.BaseStream.Length;
-		}
-	}
+        public bool CanReadMore()
+        {
+            return _reader.BaseStream.Position < _reader.BaseStream.Length;
+        }
+    }
 }

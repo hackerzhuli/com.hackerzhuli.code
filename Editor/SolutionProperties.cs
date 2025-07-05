@@ -7,10 +7,10 @@ using System.Collections.Generic;
 
 namespace Hackerzhuli.Code.Editor
 {
-	internal class SolutionProperties
-	{
-		public string Name { get; set; }
-		public IList<KeyValuePair<string, string>> Entries { get; set; }
-		public string Type { get; set; }
-	}
+    internal class SolutionProperties
+    {
+        public string Name { get; set; }
+        public IList<KeyValuePair<string, string>> Entries { get; set; }
+        public string Type { get; set; }
+    }
 }

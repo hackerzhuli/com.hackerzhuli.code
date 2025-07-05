@@ -14,7 +14,7 @@ namespace Hackerzhuli.Code.Editor.Hash
     public static partial class xxHash64
     {
         /// <summary>
-        /// Compute xxHash for the data byte array
+        ///     Compute xxHash for the data byte array
         /// </summary>
         /// <param name="data">The source of data</param>
         /// <param name="length">The length of the data for hashing</param>
@@ -33,7 +33,7 @@ namespace Hackerzhuli.Code.Editor.Hash
         }
 
         /// <summary>
-        /// Compute xxHash for the data byte array
+        ///     Compute xxHash for the data byte array
         /// </summary>
         /// <param name="data">The source of data</param>
         /// <param name="length">The length of the data for hashing</param>
@@ -53,12 +53,12 @@ namespace Hackerzhuli.Code.Editor.Hash
         }
 
         /// <summary>
-        /// Compute xxHash for the data byte array
+        ///     Compute xxHash for the data byte array
         /// </summary>
         /// <param name="data">The source of data</param>
         /// <param name="seed">The seed number</param>
         /// <returns>hash</returns>
-        public static unsafe ulong ComputeHash(System.ArraySegment<byte> data, ulong seed = 0)
+        public static ulong ComputeHash(ArraySegment<byte> data, ulong seed = 0)
         {
             Debug.Assert(data != null);
 
@@ -66,7 +66,7 @@ namespace Hackerzhuli.Code.Editor.Hash
         }
 
         /// <summary>
-        /// Compute xxHash for the async stream
+        ///     Compute xxHash for the async stream
         /// </summary>
         /// <param name="stream">The stream of data</param>
         /// <param name="bufferSize">The buffer size</param>
@@ -78,7 +78,7 @@ namespace Hackerzhuli.Code.Editor.Hash
         }
 
         /// <summary>
-        /// Compute xxHash for the async stream
+        ///     Compute xxHash for the async stream
         /// </summary>
         /// <param name="stream">The stream of data</param>
         /// <param name="bufferSize">The buffer size</param>
@@ -92,31 +92,32 @@ namespace Hackerzhuli.Code.Editor.Hash
             Debug.Assert(bufferSize > 32);
 
             // Optimizing memory allocation
-            byte[] buffer = ArrayPool<byte>.Shared.Rent(bufferSize + 32);
+            var buffer = ArrayPool<byte>.Shared.Rent(bufferSize + 32);
 
             int readBytes;
-            int offset = 0;
+            var offset = 0;
             long length = 0;
 
             // Prepare the seed vector
-            ulong v1 = seed + XXH_PRIME64_1 + XXH_PRIME64_2;
-            ulong v2 = seed + XXH_PRIME64_2;
-            ulong v3 = seed + 0;
-            ulong v4 = seed - XXH_PRIME64_1;
+            var v1 = seed + XXH_PRIME64_1 + XXH_PRIME64_2;
+            var v2 = seed + XXH_PRIME64_2;
+            var v3 = seed + 0;
+            var v4 = seed - XXH_PRIME64_1;
 
             try
             {
                 // Read flow of bytes
                 while ((readBytes =
-                           await stream.ReadAsync(buffer, offset, bufferSize, cancellationToken).ConfigureAwait(false)) > 0)
+                           await stream.ReadAsync(buffer, offset, bufferSize, cancellationToken)
+                               .ConfigureAwait(false)) > 0)
                 {
                     length = length + readBytes;
                     offset = offset + readBytes;
 
                     if (offset < 32) continue;
 
-                    int r = offset % 32; // remain
-                    int l = offset - r; // length
+                    var r = offset % 32; // remain
+                    var l = offset - r; // length
 
                     // Process the next chunk 
                     __inline__XXH64_stream_process(buffer, l, ref v1, ref v2, ref v3, ref v4);
@@ -127,7 +128,7 @@ namespace Hackerzhuli.Code.Editor.Hash
                 }
 
                 // Process the final chunk
-                ulong h64 = __inline__XXH64_stream_finalize(buffer, offset, ref v1, ref v2, ref v3, ref v4, length, seed);
+                var h64 = __inline__XXH64_stream_finalize(buffer, offset, ref v1, ref v2, ref v3, ref v4, length, seed);
 
                 return h64;
             }
@@ -139,7 +140,7 @@ namespace Hackerzhuli.Code.Editor.Hash
         }
 
         /// <summary>
-        /// Compute xxHash for the data byte span
+        ///     Compute xxHash for the data byte span
         /// </summary>
         /// <param name="data">The source of data</param>
         /// <param name="length">The length of the data for hashing</param>
@@ -158,7 +159,7 @@ namespace Hackerzhuli.Code.Editor.Hash
         }
 
         /// <summary>
-        /// Compute xxHash for the data byte span
+        ///     Compute xxHash for the data byte span
         /// </summary>
         /// <param name="data">The source of data</param>
         /// <param name="length">The length of the data for hashing</param>
@@ -177,7 +178,7 @@ namespace Hackerzhuli.Code.Editor.Hash
         }
 
         /// <summary>
-        /// Compute xxHash for the stream
+        ///     Compute xxHash for the stream
         /// </summary>
         /// <param name="stream">The stream of data</param>
         /// <param name="bufferSize">The buffer size</param>
@@ -189,17 +190,17 @@ namespace Hackerzhuli.Code.Editor.Hash
             Debug.Assert(bufferSize > 32);
 
             // Optimizing memory allocation
-            byte[] buffer = ArrayPool<byte>.Shared.Rent(bufferSize + 32);
+            var buffer = ArrayPool<byte>.Shared.Rent(bufferSize + 32);
 
             int readBytes;
-            int offset = 0;
+            var offset = 0;
             long length = 0;
 
             // Prepare the seed vector
-            ulong v1 = seed + XXH_PRIME64_1 + XXH_PRIME64_2;
-            ulong v2 = seed + XXH_PRIME64_2;
-            ulong v3 = seed + 0;
-            ulong v4 = seed - XXH_PRIME64_1;
+            var v1 = seed + XXH_PRIME64_1 + XXH_PRIME64_2;
+            var v2 = seed + XXH_PRIME64_2;
+            var v3 = seed + 0;
+            var v4 = seed - XXH_PRIME64_1;
 
             try
             {
@@ -211,8 +212,8 @@ namespace Hackerzhuli.Code.Editor.Hash
 
                     if (offset < 32) continue;
 
-                    int r = offset % 32; // remain
-                    int l = offset - r; // length
+                    var r = offset % 32; // remain
+                    var l = offset - r; // length
 
                     // Process the next chunk 
                     __inline__XXH64_stream_process(buffer, l, ref v1, ref v2, ref v3, ref v4);
@@ -223,7 +224,7 @@ namespace Hackerzhuli.Code.Editor.Hash
                 }
 
                 // Process the final chunk
-                ulong h64 = __inline__XXH64_stream_finalize(buffer, offset, ref v1, ref v2, ref v3, ref v4, length, seed);
+                var h64 = __inline__XXH64_stream_finalize(buffer, offset, ref v1, ref v2, ref v3, ref v4, length, seed);
 
                 return h64;
             }
@@ -233,9 +234,9 @@ namespace Hackerzhuli.Code.Editor.Hash
                 ArrayPool<byte>.Shared.Return(buffer);
             }
         }
-        
+
         /// <summary>
-        /// Compute xxHash for the string 
+        ///     Compute xxHash for the string
         /// </summary>
         /// <param name="str">The source of data</param>
         /// <param name="seed">The seed number</param>
@@ -246,21 +247,20 @@ namespace Hackerzhuli.Code.Editor.Hash
 
             fixed (char* c = str)
             {
-                byte* ptr = (byte*) c;
-                int length = str.Length * 2;
+                var ptr = (byte*)c;
+                var length = str.Length * 2;
 
                 return UnsafeComputeHash(ptr, length, seed);
             }
         }
-        
+
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private static unsafe ulong UnsafeComputeHash(byte* ptr, int length, ulong seed)
         {
             // Use inlined version
             // return XXH64(ptr, length, seed);
-            
+
             return __inline__XXH64(ptr, length, seed);
         }
-    }    
+    }
 }
-

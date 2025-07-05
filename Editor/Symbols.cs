@@ -8,24 +8,24 @@ using System.IO;
 
 namespace Hackerzhuli.Code.Editor
 {
-	internal static class Symbols
-	{
-		public static bool IsPortableSymbolFile(string pdbFile)
-		{
-			try
-			{
-				using (var stream = File.OpenRead(pdbFile))
-				{
-					return stream.ReadByte() == 'B'
-						   && stream.ReadByte() == 'S'
-						   && stream.ReadByte() == 'J'
-						   && stream.ReadByte() == 'B';
-				}
-			}
-			catch (Exception)
-			{
-				return false;
-			}
-		}
-	}
+    internal static class Symbols
+    {
+        public static bool IsPortableSymbolFile(string pdbFile)
+        {
+            try
+            {
+                using (var stream = File.OpenRead(pdbFile))
+                {
+                    return stream.ReadByte() == 'B'
+                           && stream.ReadByte() == 'S'
+                           && stream.ReadByte() == 'J'
+                           && stream.ReadByte() == 'B';
+                }
+            }
+            catch (Exception)
+            {
+                return false;
+            }
+        }
+    }
 }

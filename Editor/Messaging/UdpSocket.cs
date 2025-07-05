@@ -9,47 +9,47 @@ using System.Net.Sockets;
 
 namespace Hackerzhuli.Code.Editor.Messaging
 {
-	internal class UdpSocket : Socket
-	{
-		// Maximum UDP payload is 65507 bytes.
-		// TCP mode will be used when the payload is bigger than this BufferSize
-		public const int BufferSize = 1024 * 8;
+    internal class UdpSocket : Socket
+    {
+        // Maximum UDP payload is 65507 bytes.
+        // TCP mode will be used when the payload is bigger than this BufferSize
+        public const int BufferSize = 1024 * 8;
 
-		internal UdpSocket()
-			: base(AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.Udp)
-		{
-			SetIOControl();
-		}
+        internal UdpSocket()
+            : base(AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.Udp)
+        {
+            SetIOControl();
+        }
 
-		public void Bind(IPAddress address, int port = 0)
-		{
-			Bind(new IPEndPoint(address ?? IPAddress.Any, port));
-		}
+        public void Bind(IPAddress address, int port = 0)
+        {
+            Bind(new IPEndPoint(address ?? IPAddress.Any, port));
+        }
 
-		private void SetIOControl()
-		{
+        private void SetIOControl()
+        {
 #if UNITY_EDITOR_WIN
-			try
-			{
-				const int SIO_UDP_CONNRESET = -1744830452;
+            try
+            {
+                const int SIO_UDP_CONNRESET = -1744830452;
 
-				IOControl(SIO_UDP_CONNRESET, new byte[] { 0 }, new byte[0]);
-			}
-			catch
-			{
-				// fallback
-			}
+                IOControl(SIO_UDP_CONNRESET, new byte[] { 0 }, new byte[0]);
+            }
+            catch
+            {
+                // fallback
+            }
 #endif
-		}
+        }
 
-		public static byte[] BufferFor(IAsyncResult result)
-		{
-			return (byte[])result.AsyncState;
-		}
+        public static byte[] BufferFor(IAsyncResult result)
+        {
+            return (byte[])result.AsyncState;
+        }
 
-		public static EndPoint Any()
-		{
-			return new IPEndPoint(IPAddress.Any, 0);
-		}
-	}
+        public static EndPoint Any()
+        {
+            return new IPEndPoint(IPAddress.Any, 0);
+        }
+    }
 }

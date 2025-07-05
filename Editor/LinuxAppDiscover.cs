@@ -12,38 +12,39 @@ using IOPath = System.IO.Path;
 namespace Hackerzhuli.Code.Editor
 {
     /// <summary>
-    /// Linux-specific implementation for discovering application installations.
+    ///     Linux-specific implementation for discovering application installations.
     /// </summary>
     internal class LinuxAppDiscover : IAppDiscover
     {
         /// <summary>
-        /// Regular expression for extracting the executable path from Linux desktop files.
+        ///     Regular expression for extracting the executable path from Linux desktop files.
         /// </summary>
-        private static readonly Regex DesktopFileExecEntry = new Regex(@"Exec=(\S+)", RegexOptions.Singleline | RegexOptions.Compiled);
-        
+        private static readonly Regex DesktopFileExecEntry =
+            new(@"Exec=(\S+)", RegexOptions.Singleline | RegexOptions.Compiled);
+
         private readonly IAppInfo _executableInfo;
-        
+
         /// <summary>
-        /// Initializes a new instance of the LinuxAppDiscover class.
+        ///     Initializes a new instance of the LinuxAppDiscover class.
         /// </summary>
         /// <param name="executableInfo">The executable information to search for.</param>
         public LinuxAppDiscover(IAppInfo executableInfo)
         {
             _executableInfo = executableInfo ?? throw new ArgumentNullException(nameof(executableInfo));
         }
-        
+
         /// <summary>
-        /// Gets candidate executable paths for the configured executable.
+        ///     Gets candidate executable paths for the configured executable.
         /// </summary>
         /// <returns>A list of potential executable paths.</returns>
         public List<string> GetCandidatePaths()
         {
             var candidates = new List<string>();
             var executableName = _executableInfo.LinuxExeName;
-            
+
             if (string.IsNullOrEmpty(executableName))
                 return candidates;
-            
+
             // Check common Linux executable directories
             var executableDirs = new[]
             {
@@ -54,31 +55,23 @@ namespace Hackerzhuli.Code.Editor
                 "/bin",
                 IOPath.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".local", "bin")
             };
-            
+
             foreach (var dir in executableDirs)
             {
                 if (!Directory.Exists(dir)) continue;
-                
+
                 try
                 {
                     var executablePath = IOPath.Combine(dir, executableName);
-                    if (File.Exists(executablePath))
-                    {
-                        candidates.Add(executablePath);
-                    }
-                    
+                    if (File.Exists(executablePath)) candidates.Add(executablePath);
+
                     // For /opt, also check subdirectories
                     if (dir == "/opt")
-                    {
                         foreach (var subDir in Directory.EnumerateDirectories(dir, "*", SearchOption.TopDirectoryOnly))
                         {
                             var subDirExecutablePath = IOPath.Combine(subDir, "bin", executableName);
-                            if (File.Exists(subDirExecutablePath))
-                            {
-                                candidates.Add(subDirExecutablePath);
-                            }
+                            if (File.Exists(subDirExecutablePath)) candidates.Add(subDirExecutablePath);
                         }
-                    }
                 }
                 catch (UnauthorizedAccessException)
                 {
@@ -89,15 +82,30 @@ namespace Hackerzhuli.Code.Editor
                     // Skip directories that don't exist
                 }
             }
-            
+
             // Also check XDG desktop entries
             candidates.AddRange(GetXdgCandidates(executableName));
-            
+
             return candidates;
         }
 
         /// <summary>
-        /// Gets candidate executable paths from XDG data directories on Linux.
+        ///     Determines if the given path is a valid candidate executable for Linux.
+        /// </summary>
+        /// <param name="exePath">The path to check.</param>
+        /// <returns>True if the path is a valid candidate; otherwise, false.</returns>
+        public bool IsCandidate(string exePath)
+        {
+            if (string.IsNullOrEmpty(exePath) || !File.Exists(exePath))
+                return false;
+
+            // Check if the path ends with the expected executable name or .desktop file
+            return exePath.EndsWith(_executableInfo.LinuxExeName) ||
+                   exePath.EndsWith($"{_executableInfo.LinuxExeName}.desktop");
+        }
+
+        /// <summary>
+        ///     Gets candidate executable paths from XDG data directories on Linux.
         /// </summary>
         /// <param name="executableName">The name of the executable to search for.</param>
         /// <returns>A list of potential executable paths.</returns>
@@ -131,28 +139,10 @@ namespace Hackerzhuli.Code.Editor
                     // do not fail if we cannot read desktop file
                 }
 
-                if (match != null && match.Success)
-                {
-                    candidates.Add(match.Groups[1].Value);
-                }
+                if (match != null && match.Success) candidates.Add(match.Groups[1].Value);
             }
-            
+
             return candidates;
         }
-
-        /// <summary>
-		/// Determines if the given path is a valid candidate executable for Linux.
-		/// </summary>
-		/// <param name="exePath">The path to check.</param>
-		/// <returns>True if the path is a valid candidate; otherwise, false.</returns>
-		public bool IsCandidate(string exePath)
-		{
-			if (string.IsNullOrEmpty(exePath) || !File.Exists(exePath))
-				return false;
-
-			// Check if the path ends with the expected executable name or .desktop file
-			return exePath.EndsWith(_executableInfo.LinuxExeName) ||
-			       exePath.EndsWith($"{_executableInfo.LinuxExeName}.desktop");
-		}
-	}
+    }
 }

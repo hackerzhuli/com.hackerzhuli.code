@@ -5,6 +5,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Net;
@@ -14,12 +15,14 @@ using Hackerzhuli.Code.Editor.Testing;
 using UnityEditor;
 using UnityEditor.Compilation;
 using UnityEngine;
+using Debug = UnityEngine.Debug;
 using MessageType = Hackerzhuli.Code.Editor.Messaging.MessageType;
+using PackageInfo = UnityEditor.PackageManager.PackageInfo;
 
 namespace Hackerzhuli.Code.Editor
 {
     /// <summary>
-    /// Represents a connected IDE client with endpoint information and connection tracking.
+    ///     Represents a connected IDE client with endpoint information and connection tracking.
     /// </summary>
     [Serializable]
     public class CodeEditorClient : ISerializationCallbackReceiver
@@ -31,24 +34,21 @@ namespace Hackerzhuli.Code.Editor
         [NonSerialized] private IPEndPoint _endPoint;
 
         /// <summary>
-        /// The network endpoint of the connected IDE client.
+        ///     The network endpoint of the connected IDE client.
         /// </summary>
-        public IPEndPoint EndPoint 
-        { 
-            get => _endPoint; 
-            set 
-            { 
-                _endPoint = value;
-            } 
+        public IPEndPoint EndPoint
+        {
+            get => _endPoint;
+            set => _endPoint = value;
         }
 
         /// <summary>
-        /// The elapsed time since the last communication with this client.
+        ///     The elapsed time since the last communication with this client.
         /// </summary>
-        public double ElapsedTime 
-        { 
-            get => _elapsedTime; 
-            set => _elapsedTime = value; 
+        public double ElapsedTime
+        {
+            get => _elapsedTime;
+            set => _elapsedTime = value;
         }
 
         public void OnBeforeSerialize()
@@ -65,7 +65,6 @@ namespace Hackerzhuli.Code.Editor
         {
             // Reconstruct IPEndPoint from serialized fields after deserialization
             if (!string.IsNullOrEmpty(_address))
-            {
                 try
                 {
                     _endPoint = new IPEndPoint(IPAddress.Parse(_address), _port);
@@ -74,81 +73,62 @@ namespace Hackerzhuli.Code.Editor
                 {
                     Debug.LogWarning($"Failed to deserialize client endpoint {_address}:{_port}: {ex.Message}");
                 }
-            }
         }
     }
 
     /// <summary>
-    /// Core implementation of Visual Studio integration functionality.
-    /// 
-    /// This class inherits from ScriptableObject instead of being a static class to leverage Unity's
-    /// built-in lifecycle management system. Key advantages:
-    /// 
-    /// 1. **Unity Lifecycle Integration**: OnEnable/OnDisable are called automatically during
-    ///    domain reloads, providing reliable initialization and cleanup,
-    ///    without relying on events (like AppDomain.DomainUnload) that can trigger not from the main thread,
-    ///    which could make it really complex to get right
-    /// 
-    /// 2. **State Preservation**: ScriptableObject provides built-in serialization for
-    ///    persistent state across domain reloads(after compilation or before enter play mode)
-    ///    allowing us to keep the clients and other state preserved.
+    ///     Core implementation of Visual Studio integration functionality.
+    ///     This class inherits from ScriptableObject instead of being a static class to leverage Unity's
+    ///     built-in lifecycle management system. Key advantages:
+    ///     1. **Unity Lifecycle Integration**: OnEnable/OnDisable are called automatically during
+    ///     domain reloads, providing reliable initialization and cleanup,
+    ///     without relying on events (like AppDomain.DomainUnload) that can trigger not from the main thread,
+    ///     which could make it really complex to get right
+    ///     2. **State Preservation**: ScriptableObject provides built-in serialization for
+    ///     persistent state across domain reloads(after compilation or before enter play mode)
+    ///     allowing us to keep the clients and other state preserved.
     /// </summary>
     /// <remarks>
-    /// **Behavior During Unity Main Thread Blocking:**
-    /// 
-    /// When Unity's main thread is blocked for extended periods (compilation, asset data refresh, importing assets, updating packages, etc.),
-    /// this system handles messages and client connections as follows:
-    /// 
-    /// **Message Handling:**
-    /// - Incoming messages are queued by the underlying messaging system during blocking periods
-    /// - When Update() resumes, all queued messages are processed in sequence via TryDequeueMessage()
-    /// - No messages are lost during blocking periods, ensuring reliable communication
-    /// 
-    /// **Client Connection Management:**
-    /// - Client timeout tracking is paused during blocking periods (deltaTime is clamped to 0.1s max)
-    /// - Prevents false client disconnections due to long blocking periods
-    /// - Client state is preserved across domain reloads through ScriptableObject serialization
-    /// 
-    /// **Post-Blocking Recovery:**
-    /// - All pending messages are processed immediately when Update() resumes
-    /// - Client connections remain stable and responsive after blocking periods
-    /// - No manual reconnection required from IDE clients
+    ///     **Behavior During Unity Main Thread Blocking:**
+    ///     When Unity's main thread is blocked for extended periods (compilation, asset data refresh, importing assets,
+    ///     updating packages, etc.),
+    ///     this system handles messages and client connections as follows:
+    ///     **Message Handling:**
+    ///     - Incoming messages are queued by the underlying messaging system during blocking periods
+    ///     - When Update() resumes, all queued messages are processed in sequence via TryDequeueMessage()
+    ///     - No messages are lost during blocking periods, ensuring reliable communication
+    ///     **Client Connection Management:**
+    ///     - Client timeout tracking is paused during blocking periods (deltaTime is clamped to 0.1s max)
+    ///     - Prevents false client disconnections due to long blocking periods
+    ///     - Client state is preserved across domain reloads through ScriptableObject serialization
+    ///     **Post-Blocking Recovery:**
+    ///     - All pending messages are processed immediately when Update() resumes
+    ///     - Client connections remain stable and responsive after blocking periods
+    ///     - No manual reconnection required from IDE clients
     /// </remarks>
     [CreateAssetMenu(fileName = "VisualStudioIntegrationCore", menuName = "Visual Studio/Integration Core")]
     internal class CodeEditorIntegrationCore : ScriptableObject
     {
-        [SerializeField] private double _lastUpdateTime = 0;
-        [SerializeField] private bool _refreshRequested = false;
+        [SerializeField] private double _lastUpdateTime;
+        [SerializeField] private bool _refreshRequested;
         [SerializeField] private List<CodeEditorClient> _clients = new();
 
-        [System.NonSerialized] private Messenger _messenger;
-        [System.NonSerialized] private bool _needsOnlineNotification = false;
+        [NonSerialized] private Messenger _messenger;
+        [NonSerialized] private bool _needsOnlineNotification;
 
         private void OnEnable()
         {
             //Debug.Log("OnEnable");
             CheckLegacyAssemblies();
-            
+
             // Subscribe to Unity events
             EditorApplication.update += Update;
             EditorApplication.playModeStateChanged += OnPlayModeStateChanged;
             CompilationPipeline.compilationFinished += OnCompilationFinished;
             Application.logMessageReceived += OnLogMessageReceived;
-            
+
             // Flag that we need to notify clients that we're online
             _needsOnlineNotification = true;
-        }
-
-        private void OnPlayModeStateChanged(PlayModeStateChange change)
-        {
-            switch (change){
-                case PlayModeStateChange.EnteredPlayMode:
-                    BroadcastMessage(MessageType.IsPlaying, "true");
-                    break;
-                case PlayModeStateChange.ExitingPlayMode:
-                    BroadcastMessage(MessageType.IsPlaying, "false");
-                    break;
-            }
         }
 
         private void OnDisable()
@@ -159,22 +139,35 @@ namespace Hackerzhuli.Code.Editor
             EditorApplication.playModeStateChanged -= OnPlayModeStateChanged;
             CompilationPipeline.compilationFinished -= OnCompilationFinished;
             Application.logMessageReceived -= OnLogMessageReceived;
-            
+
             // Notify clients that Unity is going offline before disposing the messenger
             if (_messenger != null)
             {
                 // Send offline notification with blocking method
-                BroadcastMessageBlocking(MessageType.Offline, "", timeoutMs: 500);
+                BroadcastMessageBlocking(MessageType.Offline, "", 500);
                 //Debug.Log("disposing messenger and release socket resources");
                 _messenger.Dispose();
                 _messenger = null;
             }
         }
 
+        private void OnPlayModeStateChanged(PlayModeStateChange change)
+        {
+            switch (change)
+            {
+                case PlayModeStateChange.EnteredPlayMode:
+                    BroadcastMessage(MessageType.IsPlaying, "true");
+                    break;
+                case PlayModeStateChange.ExitingPlayMode:
+                    BroadcastMessage(MessageType.IsPlaying, "false");
+                    break;
+            }
+        }
+
         /// <summary>
-        /// Updates the integration core by processing incoming messages and managing client timeouts.
-        /// This method should be called regularly from Unity's update loop to maintain communication
-        /// with connected IDE clients and handle message processing.
+        ///     Updates the integration core by processing incoming messages and managing client timeouts.
+        ///     This method should be called regularly from Unity's update loop to maintain communication
+        ///     with connected IDE clients and handle message processing.
         /// </summary>
         public void Update()
         {
@@ -190,19 +183,15 @@ namespace Hackerzhuli.Code.Editor
 
             // Process messages from the queue on the main thread
             if (_messenger != null)
-            {
                 while (_messenger.TryDequeueMessage(out var message))
-                {
                     ProcessIncoming(message);
-                }
-            }
 
             var currentTime = EditorApplication.timeSinceStartup;
-            double deltaTime = currentTime - _lastUpdateTime;
+            var deltaTime = currentTime - _lastUpdateTime;
 
             var clampedDeltaTime = Math.Min(deltaTime, 0.1);
             _lastUpdateTime = currentTime;
-            for (int i = _clients.Count - 1; i >= 0; i--)
+            for (var i = _clients.Count - 1; i >= 0; i--)
             {
                 var client = _clients[i];
                 client.ElapsedTime += clampedDeltaTime;
@@ -228,32 +217,29 @@ namespace Hackerzhuli.Code.Editor
 
         private string GetPackageVersion()
         {
-            var package = UnityEditor.PackageManager.PackageInfo.FindForAssembly(typeof(CodeEditorIntegration).Assembly);
+            var package = PackageInfo.FindForAssembly(typeof(CodeEditorIntegration).Assembly);
             return package.version;
         }
 
         private string GetPackageName()
         {
-            var package = UnityEditor.PackageManager.PackageInfo.FindForAssembly(typeof(CodeEditorIntegration).Assembly);
+            var package = PackageInfo.FindForAssembly(typeof(CodeEditorIntegration).Assembly);
             return package.name;
         }
 
         /// <summary>
-        /// Broadcasts a message of the specified type and value to all connected IDE clients.
+        ///     Broadcasts a message of the specified type and value to all connected IDE clients.
         /// </summary>
         /// <param name="type">The type of message to broadcast.</param>
         /// <param name="value">The message content to send to all clients.</param>
         public void BroadcastMessage(MessageType type, string value)
         {
-            foreach (var client in _clients)
-            {
-                Answer(client.EndPoint, type, value);
-            }
+            foreach (var client in _clients) Answer(client.EndPoint, type, value);
         }
 
         /// <summary>
-        /// Broadcasts a message with blocking UDP send and timeout to all connected IDE clients.
-        /// Used for critical notifications like offline status before messenger disposal.
+        ///     Broadcasts a message with blocking UDP send and timeout to all connected IDE clients.
+        ///     Used for critical notifications like offline status before messenger disposal.
         /// </summary>
         /// <param name="type">The type of message to broadcast.</param>
         /// <param name="value">The message content to send to all clients.</param>
@@ -263,15 +249,13 @@ namespace Hackerzhuli.Code.Editor
             if (_messenger == null)
                 return;
 
-            foreach (var client in _clients)
-            {
-                _messenger.SendMessageBlocking(client.EndPoint, type, value, timeoutMs);
-            }
+            foreach (var client in _clients) _messenger.SendMessageBlocking(client.EndPoint, type, value, timeoutMs);
         }
 
         private void CheckLegacyAssemblies()
         {
-            var checkList = new HashSet<string>(new[] { KnownAssemblies.UnityVS, KnownAssemblies.Messaging, KnownAssemblies.Bridge });
+            var checkList = new HashSet<string>(new[]
+                { KnownAssemblies.UnityVS, KnownAssemblies.Messaging, KnownAssemblies.Bridge });
 
             try
             {
@@ -287,7 +271,8 @@ namespace Hackerzhuli.Code.Editor
                     if (relativePath == null)
                         continue;
 
-                    Debug.LogWarning($"Project contains legacy assembly that could interfere with the Visual Studio Package. You should delete {relativePath}");
+                    Debug.LogWarning(
+                        $"Project contains legacy assembly that could interfere with the Visual Studio Package. You should delete {relativePath}");
                 }
             }
             catch (Exception)
@@ -298,7 +283,7 @@ namespace Hackerzhuli.Code.Editor
 
         private int MessagingPort()
         {
-            return 58000 + (System.Diagnostics.Process.GetCurrentProcess().Id % 1000);
+            return 58000 + Process.GetCurrentProcess().Id % 1000;
         }
 
         private void RefreshAssetDatabase()
@@ -308,16 +293,10 @@ namespace Hackerzhuli.Code.Editor
 
             // If auto-refresh is disabled (0), do not try to force refresh the Asset database
             if (autoRefreshMode != 0)
-            {
                 // If auto-refresh is set to "enabled outside play mode" (2) and we're in play mode, skip refresh
                 if (!(autoRefreshMode == 2 && EditorApplication.isPlaying))
-                {
                     if (!UnityInstallation.IsInSafeMode)
-                    {
                         AssetDatabase.Refresh();
-                    }
-                }
-            }
         }
 
         private void ProcessIncoming(Message message)
@@ -348,11 +327,12 @@ namespace Hackerzhuli.Code.Editor
                     Answer(message, MessageType.Version, GetPackageVersion());
                     break;
                 case MessageType.ProjectPath:
-                    Answer(message, MessageType.ProjectPath, Path.GetFullPath(Path.Combine(Application.dataPath, "..")));
+                    Answer(message, MessageType.ProjectPath,
+                        Path.GetFullPath(Path.Combine(Application.dataPath, "..")));
                     break;
                 case MessageType.ExecuteTests:
                     TestRunnerApiListener.ExecuteTests(message.Value);
-                    Answer(message, MessageType.ExecuteTests, "");
+                    Answer(message, MessageType.ExecuteTests);
                     break;
                 case MessageType.RetrieveTestList:
                     TestRunnerApiListener.RetrieveTestList(message.Value);
@@ -380,7 +360,7 @@ namespace Hackerzhuli.Code.Editor
                 };
 
                 _clients.Add(client);
-                
+
                 // Send current play mode state to new client
                 Answer(endPoint, MessageType.IsPlaying, EditorApplication.isPlaying ? "true" : "false");
             }
@@ -406,7 +386,7 @@ namespace Hackerzhuli.Code.Editor
         }
 
         /// <summary>
-        /// Handles Unity log messages and broadcasts them to all connected IDE clients.
+        ///     Handles Unity log messages and broadcasts them to all connected IDE clients.
         /// </summary>
         /// <param name="logString">The log message content.</param>
         /// <param name="stackTrace">The stack trace associated with the log message.</param>
@@ -417,13 +397,13 @@ namespace Hackerzhuli.Code.Editor
             {
                 LogType.Error or LogType.Exception or LogType.Assert => MessageType.Error,
                 LogType.Warning => MessageType.Warning,
-                _ => MessageType.Info,
+                _ => MessageType.Info
             };
 
             // Create a formatted message that includes both the log content and stack trace if available
 
             var message = string.IsNullOrEmpty(stackTrace) ? logString : $"{logString}\n{stackTrace}";
-            
+
             BroadcastMessage(messageType, message);
         }
 
@@ -439,7 +419,8 @@ namespace Hackerzhuli.Code.Editor
             }
             catch (SocketException)
             {
-                Debug.LogWarning($"Unable to use UDP port {messagingPort} for VS/Unity messaging. You should check if another process is already bound to this port or if your firewall settings are compatible.");
+                Debug.LogWarning(
+                    $"Unable to use UDP port {messagingPort} for VS/Unity messaging. You should check if another process is already bound to this port or if your firewall settings are compatible.");
             }
         }
     }

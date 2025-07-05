@@ -11,115 +11,134 @@ using UnityEngine;
 
 namespace Hackerzhuli.Code.Editor.ProjectGeneration
 {
-	internal class SdkStyleProjectGeneration : ProjectGeneration
-	{
-		internal override GeneratorStyle Style => GeneratorStyle.SDK;
+    internal class SdkStyleProjectGeneration : ProjectGeneration
+    {
+        internal static readonly string[] SupportedCapabilities =
+        {
+            "Unity"
+        };
 
-		internal class SdkStyleAssemblyNameProvider : AssemblyNameProvider
-		{
-			// disable PlayerGeneration with SdkStyle projects
-			internal override ProjectGenerationFlag ProjectGenerationFlagImpl => base.ProjectGenerationFlagImpl & ~ProjectGenerationFlag.PlayerAssemblies;
-		}
+        internal static readonly string[] UnsupportedCapabilities =
+        {
+            "LaunchProfiles",
+            "SharedProjectReferences",
+            "ReferenceManagerSharedProjects",
+            "ReferenceManagerProjects",
+            "COMReferences",
+            "ReferenceManagerCOM",
+            "AssemblyReferences",
+            "ReferenceManagerAssemblies"
+        };
 
-		public SdkStyleProjectGeneration() : base(
-			Directory.GetParent(Application.dataPath)?.FullName,
-			new SdkStyleAssemblyNameProvider(),
-			new FileIOProvider(),
-			new GUIDProvider())
-		{
-		}
+        public SdkStyleProjectGeneration() : base(
+            Directory.GetParent(Application.dataPath)?.FullName,
+            new SdkStyleAssemblyNameProvider(),
+            new FileIOProvider(),
+            new GUIDProvider())
+        {
+        }
 
-		internal static readonly string[] SupportedCapabilities = new string[]
-		{
-			"Unity",
-		};
+        internal override GeneratorStyle Style => GeneratorStyle.SDK;
 
-		internal static readonly string[] UnsupportedCapabilities = new string[]
-		{
-			"LaunchProfiles",
-			"SharedProjectReferences",
-			"ReferenceManagerSharedProjects",
-			"ReferenceManagerProjects",
-			"COMReferences",
-			"ReferenceManagerCOM",
-			"AssemblyReferences",
-			"ReferenceManagerAssemblies",
-		};
+        internal override void GetProjectHeader(ProjectProperties properties, out StringBuilder headerBuilder)
+        {
+            headerBuilder = new StringBuilder();
 
-		internal override void GetProjectHeader(ProjectProperties properties, out StringBuilder headerBuilder)
-		{
-			headerBuilder = new StringBuilder();
+            headerBuilder.Append(@"<Project>").Append(k_WindowsNewline);
+            headerBuilder
+                .Append(
+                    @"  <!-- Generated file, do not modify, your changes will be overwritten (use AssetPostprocessor.OnGeneratedCSProject) -->")
+                .Append(k_WindowsNewline);
 
-			headerBuilder.Append(@"<Project>").Append(k_WindowsNewline);
-			headerBuilder.Append(@"  <!-- Generated file, do not modify, your changes will be overwritten (use AssetPostprocessor.OnGeneratedCSProject) -->").Append(k_WindowsNewline);
+            // Prevent circular dependency issues see https://github.com/microsoft/vscode-dotnettools/issues/401
+            // We need a dedicated subfolder for each project in obj, otherwise depending on the build order, nuget cache files could be overwritten
+            // We need to do this before common.props, otherwise we'll have a MSB3539 The value of the property "BaseIntermediateOutputPath" was modified after it was used by MSBuild
+            headerBuilder.Append(@"  <PropertyGroup>").Append(k_WindowsNewline);
+            headerBuilder
+                .Append(
+                    $"    <BaseIntermediateOutputPath>{@"Temp\obj\$(MSBuildProjectName)".NormalizePathSeparators()}</BaseIntermediateOutputPath>")
+                .Append(k_WindowsNewline);
+            headerBuilder.Append(@"    <IntermediateOutputPath>$(BaseIntermediateOutputPath)</IntermediateOutputPath>")
+                .Append(k_WindowsNewline);
+            headerBuilder.Append(@"    <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>")
+                .Append(k_WindowsNewline);
+            headerBuilder.Append(@"    <UseCommonOutputDirectory>true</UseCommonOutputDirectory>")
+                .Append(k_WindowsNewline);
+            headerBuilder.Append("    <OutputPath>").Append(properties.OutputPath.NormalizePathSeparators())
+                .Append(@"</OutputPath>").Append(k_WindowsNewline);
+            headerBuilder.Append(@"  </PropertyGroup>").Append(k_WindowsNewline);
 
-			// Prevent circular dependency issues see https://github.com/microsoft/vscode-dotnettools/issues/401
-			// We need a dedicated subfolder for each project in obj, otherwise depending on the build order, nuget cache files could be overwritten
-			// We need to do this before common.props, otherwise we'll have a MSB3539 The value of the property "BaseIntermediateOutputPath" was modified after it was used by MSBuild
-			headerBuilder.Append(@"  <PropertyGroup>").Append(k_WindowsNewline);
-			headerBuilder.Append($"    <BaseIntermediateOutputPath>{@"Temp\obj\$(MSBuildProjectName)".NormalizePathSeparators()}</BaseIntermediateOutputPath>").Append(k_WindowsNewline);
-			headerBuilder.Append(@"    <IntermediateOutputPath>$(BaseIntermediateOutputPath)</IntermediateOutputPath>").Append(k_WindowsNewline);
-			headerBuilder.Append(@"    <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>").Append(k_WindowsNewline);
-			headerBuilder.Append(@"    <UseCommonOutputDirectory>true</UseCommonOutputDirectory>").Append(k_WindowsNewline);
-			headerBuilder.Append($"    <OutputPath>").Append(properties.OutputPath.NormalizePathSeparators()).Append(@"</OutputPath>").Append(k_WindowsNewline);
-			headerBuilder.Append(@"  </PropertyGroup>").Append(k_WindowsNewline);
+            // Supported capabilities
+            GetCapabilityBlock(headerBuilder, "Sdk.props", "Include", SupportedCapabilities);
 
-			// Supported capabilities
-			GetCapabilityBlock(headerBuilder, "Sdk.props", "Include", SupportedCapabilities);
-		
-			headerBuilder.Append(@"  <PropertyGroup>").Append(k_WindowsNewline);
-			headerBuilder.Append(@"    <GenerateAssemblyInfo>false</GenerateAssemblyInfo>").Append(k_WindowsNewline);
-			headerBuilder.Append(@"    <EnableDefaultItems>false</EnableDefaultItems>").Append(k_WindowsNewline);
-			headerBuilder.Append(@"    <LangVersion>").Append(properties.LangVersion).Append(@"</LangVersion>").Append(k_WindowsNewline);
-			headerBuilder.Append(@"    <RootNamespace>").Append(properties.RootNamespace).Append(@"</RootNamespace>").Append(k_WindowsNewline);
-			headerBuilder.Append(@"    <OutputType>Library</OutputType>").Append(k_WindowsNewline);
-			headerBuilder.Append(@"    <AssemblyName>").Append(properties.AssemblyName).Append(@"</AssemblyName>").Append(k_WindowsNewline);
-			// In the end, given we use NoConfig/NoStdLib (see below), hardcoding the target framework version will have no impact, even when targeting netstandard/net48 from Unity.
-			// But with SDK style we use netstandard2.1 (net471 for legacy), so 3rd party tools will not fail to work when .NETFW reference assemblies are not installed.
-			// Unity already selected proper API surface through referenced DLLs for us.
-			headerBuilder.Append(@"    <TargetFramework>netstandard2.1</TargetFramework>").Append(k_WindowsNewline);
-			headerBuilder.Append(@"    <BaseDirectory>.</BaseDirectory>").Append(k_WindowsNewline);
-			headerBuilder.Append(@"  </PropertyGroup>").Append(k_WindowsNewline);
+            headerBuilder.Append(@"  <PropertyGroup>").Append(k_WindowsNewline);
+            headerBuilder.Append(@"    <GenerateAssemblyInfo>false</GenerateAssemblyInfo>").Append(k_WindowsNewline);
+            headerBuilder.Append(@"    <EnableDefaultItems>false</EnableDefaultItems>").Append(k_WindowsNewline);
+            headerBuilder.Append(@"    <LangVersion>").Append(properties.LangVersion).Append(@"</LangVersion>")
+                .Append(k_WindowsNewline);
+            headerBuilder.Append(@"    <RootNamespace>").Append(properties.RootNamespace).Append(@"</RootNamespace>")
+                .Append(k_WindowsNewline);
+            headerBuilder.Append(@"    <OutputType>Library</OutputType>").Append(k_WindowsNewline);
+            headerBuilder.Append(@"    <AssemblyName>").Append(properties.AssemblyName).Append(@"</AssemblyName>")
+                .Append(k_WindowsNewline);
+            // In the end, given we use NoConfig/NoStdLib (see below), hardcoding the target framework version will have no impact, even when targeting netstandard/net48 from Unity.
+            // But with SDK style we use netstandard2.1 (net471 for legacy), so 3rd party tools will not fail to work when .NETFW reference assemblies are not installed.
+            // Unity already selected proper API surface through referenced DLLs for us.
+            headerBuilder.Append(@"    <TargetFramework>netstandard2.1</TargetFramework>").Append(k_WindowsNewline);
+            headerBuilder.Append(@"    <BaseDirectory>.</BaseDirectory>").Append(k_WindowsNewline);
+            headerBuilder.Append(@"  </PropertyGroup>").Append(k_WindowsNewline);
 
-			GetProjectHeaderProperties(properties, headerBuilder);
+            GetProjectHeaderProperties(properties, headerBuilder);
 
-			// Explicit references
-			headerBuilder.Append(@"  <PropertyGroup>").Append(k_WindowsNewline);
-			headerBuilder.Append(@"    <NoStandardLibraries>true</NoStandardLibraries>").Append(k_WindowsNewline);
-			headerBuilder.Append(@"    <NoStdLib>true</NoStdLib>").Append(k_WindowsNewline);
-			headerBuilder.Append(@"    <NoConfig>true</NoConfig>").Append(k_WindowsNewline);
-			headerBuilder.Append(@"    <DisableImplicitFrameworkReferences>true</DisableImplicitFrameworkReferences>").Append(k_WindowsNewline);
-			headerBuilder.Append(@"    <MSBuildWarningsAsMessages>MSB3277</MSBuildWarningsAsMessages>").Append(k_WindowsNewline);
-			headerBuilder.Append(@"  </PropertyGroup>").Append(k_WindowsNewline);
+            // Explicit references
+            headerBuilder.Append(@"  <PropertyGroup>").Append(k_WindowsNewline);
+            headerBuilder.Append(@"    <NoStandardLibraries>true</NoStandardLibraries>").Append(k_WindowsNewline);
+            headerBuilder.Append(@"    <NoStdLib>true</NoStdLib>").Append(k_WindowsNewline);
+            headerBuilder.Append(@"    <NoConfig>true</NoConfig>").Append(k_WindowsNewline);
+            headerBuilder.Append(@"    <DisableImplicitFrameworkReferences>true</DisableImplicitFrameworkReferences>")
+                .Append(k_WindowsNewline);
+            headerBuilder.Append(@"    <MSBuildWarningsAsMessages>MSB3277</MSBuildWarningsAsMessages>")
+                .Append(k_WindowsNewline);
+            headerBuilder.Append(@"  </PropertyGroup>").Append(k_WindowsNewline);
 
-			GetProjectHeaderVstuFlavoring(properties, headerBuilder, false);
-			GetProjectHeaderAnalyzers(properties, headerBuilder);
-		}
+            GetProjectHeaderVstuFlavoring(properties, headerBuilder, false);
+            GetProjectHeaderAnalyzers(properties, headerBuilder);
+        }
 
-		internal override void AppendProjectReference(Assembly assembly, Assembly reference, StringBuilder projectBuilder)
-		{
-			// If the current assembly is a Player project, we want to project-reference the corresponding Player project
-			var referenceName = m_AssemblyNameProvider.GetAssemblyName(assembly.outputPath, reference.name);
-			projectBuilder.Append(@"    <ProjectReference Include=""").Append(referenceName).Append(GetProjectExtension()).Append(@""" />").Append(k_WindowsNewline);
-		}
+        internal override void AppendProjectReference(Assembly assembly, Assembly reference,
+            StringBuilder projectBuilder)
+        {
+            // If the current assembly is a Player project, we want to project-reference the corresponding Player project
+            var referenceName = m_AssemblyNameProvider.GetAssemblyName(assembly.outputPath, reference.name);
+            projectBuilder.Append(@"    <ProjectReference Include=""").Append(referenceName)
+                .Append(GetProjectExtension()).Append(@""" />").Append(k_WindowsNewline);
+        }
 
-		internal override void GetProjectFooter(StringBuilder footerBuilder)
-		{
-			// Unsupported capabilities
-			GetCapabilityBlock(footerBuilder, "Sdk.targets", "Remove", UnsupportedCapabilities);
+        internal override void GetProjectFooter(StringBuilder footerBuilder)
+        {
+            // Unsupported capabilities
+            GetCapabilityBlock(footerBuilder, "Sdk.targets", "Remove", UnsupportedCapabilities);
 
-			footerBuilder.Append("</Project>").Append(k_WindowsNewline);
-		}
+            footerBuilder.Append("</Project>").Append(k_WindowsNewline);
+        }
 
-		internal static void GetCapabilityBlock(StringBuilder footerBuilder, string import, string attribute, string[] capabilities)
-		{
-			footerBuilder.Append($@"  <Import Project=""{import}"" Sdk=""Microsoft.NET.Sdk"" />").Append(k_WindowsNewline);
-			footerBuilder.Append(@"  <ItemGroup>").Append(k_WindowsNewline);
-			foreach (var capability in capabilities)
-			{
-				footerBuilder.Append($@"    <ProjectCapability {attribute}=""{capability}"" />").Append(k_WindowsNewline);
-			}
-			footerBuilder.Append(@"  </ItemGroup>").Append(k_WindowsNewline);
-		}
-	}
+        internal static void GetCapabilityBlock(StringBuilder footerBuilder, string import, string attribute,
+            string[] capabilities)
+        {
+            footerBuilder.Append($@"  <Import Project=""{import}"" Sdk=""Microsoft.NET.Sdk"" />")
+                .Append(k_WindowsNewline);
+            footerBuilder.Append(@"  <ItemGroup>").Append(k_WindowsNewline);
+            foreach (var capability in capabilities)
+                footerBuilder.Append($@"    <ProjectCapability {attribute}=""{capability}"" />")
+                    .Append(k_WindowsNewline);
+            footerBuilder.Append(@"  </ItemGroup>").Append(k_WindowsNewline);
+        }
+
+        internal class SdkStyleAssemblyNameProvider : AssemblyNameProvider
+        {
+            // disable PlayerGeneration with SdkStyle projects
+            internal override ProjectGenerationFlag ProjectGenerationFlagImpl =>
+                base.ProjectGenerationFlagImpl & ~ProjectGenerationFlag.PlayerAssemblies;
+        }
+    }
 }

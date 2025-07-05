@@ -11,11 +11,11 @@ namespace Hackerzhuli.Code.Editor.Hash
         private static readonly ulong XXH_PRIME64_3 = 1609587929392839161UL;
         private static readonly ulong XXH_PRIME64_4 = 9650029242287828579UL;
         private static readonly ulong XXH_PRIME64_5 = 2870177450012600261UL;
-    
+
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private static ulong XXH_rotl64(ulong x, int r)
         {
             return (x << r) | (x >> (64 - r));
         }
-    }    
+    }
 }

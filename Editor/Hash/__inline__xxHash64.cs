@@ -1,8 +1,8 @@
 /*
-* This is the auto generated code.
-* All function calls are inlined in XXH64
-* Please don't try to analyze it.
-*/
+ * This is the auto generated code.
+ * All function calls are inlined in XXH64
+ * Please don't try to analyze it.
+ */
 
 using System.Runtime.CompilerServices;
 
@@ -17,20 +17,20 @@ namespace Hackerzhuli.Code.Editor.Hash
 
             if (len >= 32)
             {
-                byte* end = input + len;
-                byte* limit = end - 31;
+                var end = input + len;
+                var limit = end - 31;
 
-                ulong v1 = seed + XXH_PRIME64_1 + XXH_PRIME64_2;
-                ulong v2 = seed + XXH_PRIME64_2;
-                ulong v3 = seed + 0;
-                ulong v4 = seed - XXH_PRIME64_1;
+                var v1 = seed + XXH_PRIME64_1 + XXH_PRIME64_2;
+                var v2 = seed + XXH_PRIME64_2;
+                var v3 = seed + 0;
+                var v4 = seed - XXH_PRIME64_1;
 
                 do
                 {
-                    var reg1 = *((ulong*)(input + 0));
-                    var reg2 = *((ulong*)(input + 8));
-                    var reg3 = *((ulong*)(input + 16));
-                    var reg4 = *((ulong*)(input + 24));
+                    var reg1 = *(ulong*)(input + 0);
+                    var reg2 = *(ulong*)(input + 8);
+                    var reg3 = *(ulong*)(input + 16);
+                    var reg4 = *(ulong*)(input + 24);
 
                     // XXH64_round
                     v1 += reg1 * XXH_PRIME64_2;
@@ -92,25 +92,30 @@ namespace Hackerzhuli.Code.Editor.Hash
                 h64 = seed + XXH_PRIME64_5;
             }
 
-            h64 += (ulong) len;
+            h64 += (ulong)len;
 
             // XXH64_finalize
             len &= 31;
-            while (len >= 8) {
-                ulong k1 = XXH64_round(0, *(ulong*)input);
+            while (len >= 8)
+            {
+                var k1 = XXH64_round(0, *(ulong*)input);
                 input += 8;
                 h64 ^= k1;
-                h64  = XXH_rotl64(h64,27) * XXH_PRIME64_1 + XXH_PRIME64_4;
+                h64 = XXH_rotl64(h64, 27) * XXH_PRIME64_1 + XXH_PRIME64_4;
                 len -= 8;
             }
-            if (len >= 4) {
+
+            if (len >= 4)
+            {
                 h64 ^= *(uint*)input * XXH_PRIME64_1;
                 input += 4;
                 h64 = XXH_rotl64(h64, 23) * XXH_PRIME64_2 + XXH_PRIME64_3;
                 len -= 4;
             }
-            while (len > 0) {
-                h64 ^= (*input++) * XXH_PRIME64_5;
+
+            while (len > 0)
+            {
+                h64 ^= *input++ * XXH_PRIME64_5;
                 h64 = XXH_rotl64(h64, 11) * XXH_PRIME64_1;
                 --len;
             }
@@ -126,20 +131,21 @@ namespace Hackerzhuli.Code.Editor.Hash
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private static unsafe void __inline__XXH64_stream_process(byte[] input, int len, ref ulong v1, ref ulong v2, ref ulong v3,
+        private static unsafe void __inline__XXH64_stream_process(byte[] input, int len, ref ulong v1, ref ulong v2,
+            ref ulong v3,
             ref ulong v4)
         {
             fixed (byte* pData = &input[0])
             {
-                byte* ptr = pData;
-                byte* limit = ptr + len;
+                var ptr = pData;
+                var limit = ptr + len;
 
                 do
                 {
-                    var reg1 = *((ulong*)(ptr + 0));
-                    var reg2 = *((ulong*)(ptr + 8));
-                    var reg3 = *((ulong*)(ptr + 16));
-                    var reg4 = *((ulong*)(ptr + 24));
+                    var reg1 = *(ulong*)(ptr + 0);
+                    var reg2 = *(ulong*)(ptr + 8);
+                    var reg3 = *(ulong*)(ptr + 16);
+                    var reg4 = *(ulong*)(ptr + 24);
 
                     // XXH64_round
                     v1 += reg1 * XXH_PRIME64_2;
@@ -166,13 +172,14 @@ namespace Hackerzhuli.Code.Editor.Hash
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private static unsafe ulong __inline__XXH64_stream_finalize(byte[] input, int len, ref ulong v1, ref ulong v2, ref ulong v3,
+        private static unsafe ulong __inline__XXH64_stream_finalize(byte[] input, int len, ref ulong v1, ref ulong v2,
+            ref ulong v3,
             ref ulong v4, long length, ulong seed)
         {
             fixed (byte* pData = &input[0])
             {
-                byte* ptr = pData;
-                byte* end = pData + len;
+                var ptr = pData;
+                var end = pData + len;
                 ulong h64;
 
                 if (length >= 32)
@@ -215,25 +222,30 @@ namespace Hackerzhuli.Code.Editor.Hash
                     h64 = seed + XXH_PRIME64_5;
                 }
 
-                h64 += (ulong) length;
+                h64 += (ulong)length;
 
                 // XXH64_finalize
                 len &= 31;
-                while (len >= 8) {
-                    ulong k1 = XXH64_round(0, *(ulong*)ptr);
+                while (len >= 8)
+                {
+                    var k1 = XXH64_round(0, *(ulong*)ptr);
                     ptr += 8;
                     h64 ^= k1;
-                    h64  = XXH_rotl64(h64,27) * XXH_PRIME64_1 + XXH_PRIME64_4;
+                    h64 = XXH_rotl64(h64, 27) * XXH_PRIME64_1 + XXH_PRIME64_4;
                     len -= 8;
                 }
-                if (len >= 4) {
+
+                if (len >= 4)
+                {
                     h64 ^= *(uint*)ptr * XXH_PRIME64_1;
                     ptr += 4;
                     h64 = XXH_rotl64(h64, 23) * XXH_PRIME64_2 + XXH_PRIME64_3;
                     len -= 4;
                 }
-                while (len > 0) {
-                    h64 ^= (*ptr++) * XXH_PRIME64_5;
+
+                while (len > 0)
+                {
+                    h64 ^= *ptr++ * XXH_PRIME64_5;
                     h64 = XXH_rotl64(h64, 11) * XXH_PRIME64_1;
                     --len;
                 }

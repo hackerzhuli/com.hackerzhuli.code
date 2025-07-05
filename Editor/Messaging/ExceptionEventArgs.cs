@@ -7,13 +7,13 @@ using System;
 
 namespace Hackerzhuli.Code.Editor.Messaging
 {
-	internal class ExceptionEventArgs
-	{
-		public Exception Exception { get; }
+    internal class ExceptionEventArgs
+    {
+        public ExceptionEventArgs(Exception exception)
+        {
+            Exception = exception;
+        }
 
-		public ExceptionEventArgs(Exception exception)
-		{
-			Exception = exception;
-		}
-	}
+        public Exception Exception { get; }
+    }
 }

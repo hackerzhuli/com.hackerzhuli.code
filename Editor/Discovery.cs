@@ -10,32 +10,32 @@ using Hackerzhuli.Code.Editor.Code;
 
 namespace Hackerzhuli.Code.Editor
 {
-	internal static class Discovery
-	{
-		public static IEnumerable<ICodeEditorInstallation> GetVisualStudioInstallations()
-		{
-			foreach (var installation in CodeInstallation.GetInstallations())
-				yield return installation;
-		}
+    internal static class Discovery
+    {
+        public static IEnumerable<ICodeEditorInstallation> GetVisualStudioInstallations()
+        {
+            foreach (var installation in CodeInstallation.GetInstallations())
+                yield return installation;
+        }
 
-		public static bool TryDiscoverInstallation(string editorPath, out ICodeEditorInstallation installation)
-		{
-			try
-			{
-				if (CodeInstallation.TryDiscoverInstallation(editorPath, out installation))
-					return true;
-			}
-			catch (IOException)
-			{
-				installation = null;
-			}
+        public static bool TryDiscoverInstallation(string editorPath, out ICodeEditorInstallation installation)
+        {
+            try
+            {
+                if (CodeInstallation.TryDiscoverInstallation(editorPath, out installation))
+                    return true;
+            }
+            catch (IOException)
+            {
+                installation = null;
+            }
 
-			return false;
-		}
+            return false;
+        }
 
-		public static void Initialize()
-		{
-			CodeInstallation.Initialize();
-		}
-	}
+        public static void Initialize()
+        {
+            CodeInstallation.Initialize();
+        }
+    }
 }

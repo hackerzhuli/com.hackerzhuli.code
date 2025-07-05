@@ -9,29 +9,29 @@ using System.Text;
 
 namespace Hackerzhuli.Code.Editor.ProjectGeneration
 {
-	public interface IFileIO
-	{
-		bool Exists(string fileName);
+    public interface IFileIO
+    {
+        bool Exists(string fileName);
 
-		string ReadAllText(string fileName);
-		void WriteAllText(string fileName, string content);
-	}
+        string ReadAllText(string fileName);
+        void WriteAllText(string fileName, string content);
+    }
 
-	class FileIOProvider : IFileIO
-	{
-		public bool Exists(string fileName)
-		{
-			return File.Exists(fileName);
-		}
+    internal class FileIOProvider : IFileIO
+    {
+        public bool Exists(string fileName)
+        {
+            return File.Exists(fileName);
+        }
 
-		public string ReadAllText(string fileName)
-		{
-			return File.ReadAllText(fileName);
-		}
+        public string ReadAllText(string fileName)
+        {
+            return File.ReadAllText(fileName);
+        }
 
-		public void WriteAllText(string fileName, string content)
-		{
-			File.WriteAllText(fileName, content, Encoding.UTF8);
-		}
-	}
+        public void WriteAllText(string fileName, string content)
+        {
+            File.WriteAllText(fileName, content, Encoding.UTF8);
+        }
+    }
 }
