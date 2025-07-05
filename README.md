@@ -38,7 +38,7 @@ For pull requests:
 - Please make sure you test the changes before you submit (only on the platform for which you have changed the code)
 
 ## Installation
-This package can be installed alongside the official Visual Studio Editor package without conflicts. Simply install this package through the Package Manager by git url.
+This package can be installed alongside the official Visual Studio Editor package without conflicts. Simply install this package through the Package Manager by git url or through open upm.
 
 ## Screenshots
 VS Code and its popular forks detected by Unity Editor:
