@@ -1,10 +1,10 @@
 fileFormatVersion: 2
-guid: fbabe5bfd47844b46a7be9de13c49ca6
+guid: 08350023322d17f4eba7d181d47e35f1
 TextureImporter:
   internalIDToNameTable:
   - first:
-      213: -7391398213068566309
-    second: Debug in Trae With Dot Rush_0
+      213: -1682458126742349762
+    second: Run Unity Tests In Trae_0
   externalObjects: {}
   serializedVersion: 13
   mipmaps:
@@ -100,13 +100,13 @@ TextureImporter:
     serializedVersion: 2
     sprites:
     - serializedVersion: 2
-      name: Debug in Trae With Dot Rush_0
+      name: Run Unity Tests In Trae_0
       rect:
         serializedVersion: 2
         x: 0
         y: 0
-        width: 1554
-        height: 962
+        width: 1295
+        height: 1076
       alignment: 0
       pivot: {x: 0, y: 0}
       border: {x: 0, y: 0, z: 0, w: 0}
@@ -115,8 +115,8 @@ TextureImporter:
       physicsShape: []
       tessellationDetail: -1
       bones: []
-      spriteID: bd0579c8c7a7c6990800000000000000
-      internalID: -7391398213068566309
+      spriteID: e389d0e6f35b6a8e0800000000000000
+      internalID: -1682458126742349762
       vertices: []
       indices: 
       edges: []
@@ -135,7 +135,7 @@ TextureImporter:
     spriteCustomMetadata:
       entries: []
     nameFileIdTable:
-      Debug in Trae With Dot Rush_0: -7391398213068566309
+      Run Unity Tests In Trae_0: -1682458126742349762
   mipmapLimitGroupName: 
   pSDRemoveMatte: 0
   userData: 

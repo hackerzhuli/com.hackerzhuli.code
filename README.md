@@ -41,8 +41,11 @@ For pull requests:
 This package can be installed alongside the official Visual Studio Editor package without conflicts. Simply install this package through the Package Manager by git url.
 
 ## Screenshots
-Check out this awesome screenshot, every popular C# code editor detected by Unity Editor on Windows:
-![image](Images/Unity%20Editor%20External%20Script%20Editor%20Detection.png)
+VS Code and its popular forks detected by Unity Editor:
+![image](./Images/Discover%20VS%20Code%20and%20forks.png)
 
-Happy debugging your Unity game with Dot Rush in your favorite VS Code fork:
-![image](Images/Debug%20in%20Trae%20With%20Dot%20Rush.png)
+Testing with Unity Code in Trae:
+![image](./Images/Run%20Unity%20Tests%20In%20Trae.png)
+
+Debugging with Unity Code in Trae:
+![image](./Images/Debug%20in%20Trae.png)

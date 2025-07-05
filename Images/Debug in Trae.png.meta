@@ -1,10 +1,10 @@
 fileFormatVersion: 2
-guid: d124c3e0087d88f43abe31673380c8ae
+guid: c4340c2ee803c26499d49dcb9c3c79ff
 TextureImporter:
   internalIDToNameTable:
   - first:
-      213: -8075679145593713602
-    second: Unity Editor External Script Editor Detection_0
+      213: 8325879638159007696
+    second: Debug in Trae_0
   externalObjects: {}
   serializedVersion: 13
   mipmaps:
@@ -100,13 +100,13 @@ TextureImporter:
     serializedVersion: 2
     sprites:
     - serializedVersion: 2
-      name: Unity Editor External Script Editor Detection_0
+      name: Debug in Trae_0
       rect:
         serializedVersion: 2
         x: 0
         y: 0
-        width: 1052
-        height: 555
+        width: 955
+        height: 882
       alignment: 0
       pivot: {x: 0, y: 0}
       border: {x: 0, y: 0, z: 0, w: 0}
@@ -115,8 +115,8 @@ TextureImporter:
       physicsShape: []
       tessellationDetail: -1
       bones: []
-      spriteID: e3c4bd69a9c6def80800000000000000
-      internalID: -8075679145593713602
+      spriteID: 0df10232b677b8370800000000000000
+      internalID: 8325879638159007696
       vertices: []
       indices: 
       edges: []
@@ -135,7 +135,7 @@ TextureImporter:
     spriteCustomMetadata:
       entries: []
     nameFileIdTable:
-      Unity Editor External Script Editor Detection_0: -8075679145593713602
+      Debug in Trae_0: 8325879638159007696
   mipmapLimitGroupName: 
   pSDRemoveMatte: 0
   userData: 
