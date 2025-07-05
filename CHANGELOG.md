@@ -1,5 +1,18 @@
 # Code Editor Package for Visual Studio
 
+## [1.0.1] - 2025-07-05
+
+Documentation:
+- Updated package description for clarity
+
+Build:
+- Updated dependencies to latest versions
+
+Code Improvement:
+- Removed unneeded copyright headers from files written from scratch
+- Improved analyzer discovery from extensions in CodeInstallation
+- Restructured GetAnalyzers method to support multiple extensions and avoid duplicate analyzer DLLs
+
 ## [1.0.0] - 2025-7-3
 
 **Note:** This version represents a restart of the package versioning as this is now released as a new package `com.hackerzhuli.code` (previously `com.unity.ide.visualstudio`).
