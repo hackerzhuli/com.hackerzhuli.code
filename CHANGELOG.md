@@ -1,5 +1,9 @@
 # Code Editor Package for Visual Studio
 
+## [1.0.2] - 2025-07-05
+Fix:
+- Changed extesion id to `hackerzhuli.unity-code-pro` to match the new id on the marketplace.
+
 ## [1.0.1] - 2025-07-05
 
 Documentation:

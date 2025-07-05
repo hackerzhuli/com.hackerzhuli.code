@@ -81,7 +81,7 @@ namespace Hackerzhuli.Code.Editor.Code
 	    /// <summary>
 	    ///     The identifier for the Unity Code extension for VS Code.
 	    /// </summary>
-	    public const string UnityCodeExtensionId = "hackerzhuli.unity-code";
+	    public const string UnityCodeExtensionId = "hackerzhuli.unity-code-pro";
 
 	    /// <summary>
 	    ///     Initializes a new instance of the CodeExtensionManager class.
