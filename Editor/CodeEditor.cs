@@ -46,27 +46,6 @@ namespace Hackerzhuli.Code.Editor
 			_discoverInstallations = AsyncOperation<Dictionary<string, ICodeEditorInstallation>>.Run(DiscoverInstallations);
 		}
 
-#if UNITY_2019_4_OR_NEWER && !UNITY_2020
-		[InitializeOnLoadMethod]
-		static void LegacyVisualStudioCodePackageDisabler()
-		{
-			// disable legacy Visual Studio Code packages
-			var editor = Unity.CodeEditor.CodeEditor.Editor.GetCodeEditorForPath("code.cmd");
-			if (editor == null)
-				return;
-
-			if (editor is CodeEditor)
-				return;
-
-			// only disable the com.unity.ide.vscode package
-			var assembly = editor.GetType().Assembly;
-			var assemblyName = assembly.GetName().Name;
-			if (assemblyName != "Unity.VSCode.Editor")
-				return;
-
-            Unity.CodeEditor.CodeEditor.Unregister(editor);
-		}
-#endif
 
 		private static Dictionary<string, ICodeEditorInstallation> DiscoverInstallations()
 		{

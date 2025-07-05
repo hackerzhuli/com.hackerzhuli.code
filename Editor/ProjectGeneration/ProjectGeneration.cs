@@ -655,24 +655,11 @@ namespace Hackerzhuli.Code.Editor.ProjectGeneration
 			var analyzerConfigPath = string.Empty;
 			var compilerOptions = assembly.compilerOptions;
 
-#if UNITY_2020_2_OR_NEWER
 			// Analyzers + ruleset provided by Unity
 			analyzers.AddRange(compilerOptions.RoslynAnalyzerDllPaths);
 			rulesetPath = compilerOptions.RoslynAnalyzerRulesetPath;
-#endif
-
-			// We have support in 2021.3, 2022.2 but without a backport in 2022.1
-#if UNITY_2021_3
-			// Unfortunately those properties were introduced in a patch release of 2021.3, so not found in 2021.3.2f1 for example
-			var scoType = compilerOptions.GetType();
-			var afpProperty = scoType.GetProperty("RoslynAdditionalFilePaths");
-			var acpProperty = scoType.GetProperty("AnalyzerConfigPath");
-			additionalFilePaths.AddRange(afpProperty?.GetValue(compilerOptions) as string[] ?? Array.Empty<string>());
-			analyzerConfigPath = acpProperty?.GetValue(compilerOptions) as string ?? analyzerConfigPath;
-#elif UNITY_2022_2_OR_NEWER
 			additionalFilePaths.AddRange(compilerOptions.RoslynAdditionalFilePaths);
 			analyzerConfigPath = compilerOptions.AnalyzerConfigPath;
-#endif
 
 			// Analyzers and additional files provided by csc.rsp
 			analyzers.AddRange(GetOtherArguments(responseFilesData, new HashSet<string>(new[] { "analyzer", "a" })));
@@ -1020,11 +1007,7 @@ namespace Hackerzhuli.Code.Editor.ProjectGeneration
 
 		private static string GetRootNamespace(Assembly assembly)
 		{
-#if UNITY_2020_2_OR_NEWER
 			return assembly.rootNamespace;
-#else
-			return EditorSettings.projectGenerationRootNamespace;
-#endif
 		}
 	}
 
