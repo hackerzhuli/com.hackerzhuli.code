@@ -5,7 +5,7 @@
   "version": "1.0.3",
   "unity": "6000.0",
   "dependencies": {
-    "com.unity.test-framework": "1.5.1",
+    "com.unity.test-framework": "1.4.6",
     "com.unity.nuget.newtonsoft-json": "3.2.1",
     "com.unity.nuget.mono-cecil": "1.11.4"
   },
