@@ -1,5 +1,9 @@
 # Code Editor Package for Visual Studio
 
+## [1.0.4] - 2025-07-08
+Fix:
+- Changed `com.unity.test-framework` package to version `1.4.6` because some people may be using older versions of test framework, the new version `1.5.1` may not appear existing for some people, that can be a Unity version problem.
+
 ## [1.0.2] - 2025-07-05
 Fix:
 - Changed extesion id to `hackerzhuli.unity-code-pro` to match the new id on the marketplace.
