@@ -324,14 +324,15 @@ namespace Hackerzhuli.Code.Editor.Code
             };
 
             // Handle .uxml and .uss associations based on installed extensions
-            // If Unity extension is not installed, add .uxml to xml and .uss to css associations
+            // If Unity extension is not installed, add .uxml to xml association
+            // USS files are no longer associated with CSS to allow for custom language server
             // If Unity extension is installed but DotRush is not, remove those associations
             // If both Unity and DotRush are installed, keep the associations as they are
             if (!ExtensionManager.UnityToolsExtensionState.IsInstalled)
             {
                 // Unity extension not installed, add associations
                 defaultAssociations["*.uxml"] = "xml";
-                defaultAssociations["*.uss"] = "css";
+                // USS files are no longer associated with CSS - removed for custom language server support
             }
             else if (ExtensionManager.UnityToolsExtensionState.IsInstalled &&
                      !ExtensionManager.DotRushExtensionState.IsInstalled)
