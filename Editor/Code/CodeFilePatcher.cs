@@ -14,45 +14,45 @@ using Debug = UnityEngine.Debug;
 
 namespace Hackerzhuli.Code.Editor.Code
 {
-	/// <summary>
-	///     Handles file patching for VS Code installations.
-	///     Provides functionality for creating and patching VS Code configuration files based on installed extensions.
-	/// </summary>
-	internal class CodeFilePatcher
+    /// <summary>
+    ///     Handles file patching for VS Code installations.
+    ///     Provides functionality for creating and patching VS Code configuration files based on installed extensions.
+    /// </summary>
+    internal class CodeFilePatcher
     {
-	    /// <summary>
-	    ///     The generator instance used for creating project files.
-	    /// </summary>
-	    private static readonly IGenerator _generator = GeneratorFactory.GetInstance(GeneratorStyle.SDK);
+        /// <summary>
+        ///     The generator instance used for creating project files.
+        /// </summary>
+        private static readonly IGenerator _generator = GeneratorFactory.GetInstance(GeneratorStyle.SDK);
 
-	    /// <summary>
-	    ///     Initializes a new instance of the CodeFilePatcher class.
-	    /// </summary>
-	    /// <param name="extensionManager">The extension manager instance for handling VS Code extension discovery.</param>
-	    public CodeFilePatcher(CodeExtensionManager extensionManager)
+        /// <summary>
+        ///     Initializes a new instance of the CodeFilePatcher class.
+        /// </summary>
+        /// <param name="extensionManager">The extension manager instance for handling VS Code extension discovery.</param>
+        public CodeFilePatcher(CodeExtensionManager extensionManager)
         {
             ExtensionManager = extensionManager ?? throw new ArgumentNullException(nameof(extensionManager));
         }
 
-	    /// <summary>
-	    ///     The extension manager instance for handling VS Code extension discovery.
-	    /// </summary>
-	    private CodeExtensionManager ExtensionManager { get; }
+        /// <summary>
+        ///     The extension manager instance for handling VS Code extension discovery.
+        /// </summary>
+        private CodeExtensionManager ExtensionManager { get; }
 
-	    /// <summary>
-	    ///     Updates extension states by reloading from the extensions.json file.
-	    ///     This should be called before any file operations to ensure we have the latest extension information.
-	    /// </summary>
-	    public void UpdateExtensionStates()
+        /// <summary>
+        ///     Updates extension states by reloading from the extensions.json file.
+        ///     This should be called before any file operations to ensure we have the latest extension information.
+        /// </summary>
+        public void UpdateExtensionStates()
         {
             ExtensionManager.UpdateExtensionStates();
         }
 
-	    /// <summary>
-	    ///     Creates additional configuration files for VS Code in the project directory.
-	    /// </summary>
-	    /// <param name="projectDirectory">The Unity project directory where the files should be created.</param>
-	    public void CreateOrPatchFiles(string projectDirectory)
+        /// <summary>
+        ///     Creates additional configuration files for VS Code in the project directory.
+        /// </summary>
+        /// <param name="projectDirectory">The Unity project directory where the files should be created.</param>
+        public void CreateOrPatchFiles(string projectDirectory)
         {
             try
             {
@@ -67,17 +67,18 @@ namespace Hackerzhuli.Code.Editor.Code
                 CreateRecommendedExtensionsFile(vscodeDirectory, enablePatch);
                 CreateSettingsFile(vscodeDirectory, enablePatch);
                 CreateLaunchFile(vscodeDirectory, enablePatch);
+                CreateUxmlSchemaCatalog(projectDirectory);
             }
             catch (IOException)
             {
             }
         }
 
-	    /// <summary>
-	    ///     Creates a default launch.json content with an empty configurations array.
-	    /// </summary>
-	    /// <returns>A JSON string containing the empty launch configuration.</returns>
-	    private static string CreateEmptyLaunchContent()
+        /// <summary>
+        ///     Creates a default launch.json content with an empty configurations array.
+        /// </summary>
+        /// <returns>A JSON string containing the empty launch configuration.</returns>
+        private static string CreateEmptyLaunchContent()
         {
             return @"{
     ""version"": ""0.2.0"",
@@ -85,12 +86,12 @@ namespace Hackerzhuli.Code.Editor.Code
 }";
         }
 
-	    /// <summary>
-	    ///     Adds extension-specific launch configurations to the provided JSON object based on installed extensions.
-	    /// </summary>
-	    /// <param name="launchJson">The JSON object representing the launch.json file.</param>
-	    /// <returns>True if any changes were made to the JSON object; otherwise, false.</returns>
-	    private bool PatchLaunchFileImpl(JSONNode launchJson)
+        /// <summary>
+        ///     Adds extension-specific launch configurations to the provided JSON object based on installed extensions.
+        /// </summary>
+        /// <param name="launchJson">The JSON object representing the launch.json file.</param>
+        /// <returns>True if any changes were made to the JSON object; otherwise, false.</returns>
+        private bool PatchLaunchFileImpl(JSONNode launchJson)
         {
             const string configurationsKey = "configurations";
             const string typeKey = "type";
@@ -135,11 +136,11 @@ namespace Hackerzhuli.Code.Editor.Code
             return patched;
         }
 
-	    /// <summary>
-	    ///     Generates the launch.json content based on installed extensions.
-	    /// </summary>
-	    /// <returns>A JSON string containing the appropriate launch configurations.</returns>
-	    private string GenerateLaunchFileContent()
+        /// <summary>
+        ///     Generates the launch.json content based on installed extensions.
+        /// </summary>
+        /// <returns>A JSON string containing the appropriate launch configurations.</returns>
+        private string GenerateLaunchFileContent()
         {
             try
             {
@@ -158,12 +159,12 @@ namespace Hackerzhuli.Code.Editor.Code
             }
         }
 
-	    /// <summary>
-	    ///     Creates or patches the launch.json file in the VS Code directory.
-	    /// </summary>
-	    /// <param name="vscodeDirectory">The .vscode directory path.</param>
-	    /// <param name="enablePatch">Whether to enable patching of existing files.</param>
-	    private void CreateLaunchFile(string vscodeDirectory, bool enablePatch)
+        /// <summary>
+        ///     Creates or patches the launch.json file in the VS Code directory.
+        /// </summary>
+        /// <param name="vscodeDirectory">The .vscode directory path.</param>
+        /// <param name="enablePatch">Whether to enable patching of existing files.</param>
+        private void CreateLaunchFile(string vscodeDirectory, bool enablePatch)
         {
             var launchFile = IOPath.Combine(vscodeDirectory, "launch.json");
             if (File.Exists(launchFile))
@@ -179,11 +180,11 @@ namespace Hackerzhuli.Code.Editor.Code
             File.WriteAllText(launchFile, content);
         }
 
-	    /// <summary>
-	    ///     Patches an existing launch.json file to include Unity debugging configuration.
-	    /// </summary>
-	    /// <param name="launchFile">The path to the launch.json file.</param>
-	    private void PatchLaunchFile(string launchFile)
+        /// <summary>
+        ///     Patches an existing launch.json file to include Unity debugging configuration.
+        /// </summary>
+        /// <param name="launchFile">The path to the launch.json file.</param>
+        private void PatchLaunchFile(string launchFile)
         {
             try
             {
@@ -205,21 +206,21 @@ namespace Hackerzhuli.Code.Editor.Code
             }
         }
 
-	    /// <summary>
-	    ///     Creates an empty settings.json content with minimal structure.
-	    /// </summary>
-	    /// <returns>A JSON string containing the empty settings structure.</returns>
-	    private static string CreateEmptySettingsContent()
+        /// <summary>
+        ///     Creates an empty settings.json content with minimal structure.
+        /// </summary>
+        /// <returns>A JSON string containing the empty settings structure.</returns>
+        private static string CreateEmptySettingsContent()
         {
             return @"{
 }";
         }
 
-	    /// <summary>
-	    ///     Generates the settings.json content based on project settings.
-	    /// </summary>
-	    /// <returns>A JSON string containing the appropriate settings.</returns>
-	    private string GenerateSettingsFileContent()
+        /// <summary>
+        ///     Generates the settings.json content based on project settings.
+        /// </summary>
+        /// <returns>A JSON string containing the appropriate settings.</returns>
+        private string GenerateSettingsFileContent()
         {
             try
             {
@@ -239,12 +240,12 @@ namespace Hackerzhuli.Code.Editor.Code
             }
         }
 
-	    /// <summary>
-	    ///     Creates or patches the settings.json file in the VS Code directory.
-	    /// </summary>
-	    /// <param name="vscodeDirectory">The .vscode directory path.</param>
-	    /// <param name="enablePatch">Whether to enable patching of existing files.</param>
-	    private void CreateSettingsFile(string vscodeDirectory, bool enablePatch)
+        /// <summary>
+        ///     Creates or patches the settings.json file in the VS Code directory.
+        /// </summary>
+        /// <param name="vscodeDirectory">The .vscode directory path.</param>
+        /// <param name="enablePatch">Whether to enable patching of existing files.</param>
+        private void CreateSettingsFile(string vscodeDirectory, bool enablePatch)
         {
             var settingsFile = IOPath.Combine(vscodeDirectory, "settings.json");
             if (File.Exists(settingsFile))
@@ -260,12 +261,12 @@ namespace Hackerzhuli.Code.Editor.Code
             File.WriteAllText(settingsFile, content);
         }
 
-	    /// <summary>
-	    ///     Applies patches to a settings.json file represented as a JSONNode.
-	    /// </summary>
-	    /// <param name="settings">The JSON node representing the settings.json content.</param>
-	    /// <returns>True if any changes were made to the JSON, false otherwise.</returns>
-	    private bool PatchSettingsFileImpl(JSONNode settings)
+        /// <summary>
+        ///     Applies patches to a settings.json file represented as a JSONNode.
+        /// </summary>
+        /// <param name="settings">The JSON node representing the settings.json content.</param>
+        /// <returns>True if any changes were made to the JSON, false otherwise.</returns>
+        private bool PatchSettingsFileImpl(JSONNode settings)
         {
             const string excludesKey = "files.exclude";
             const string associationsKey = "files.associations";
@@ -436,14 +437,50 @@ namespace Hackerzhuli.Code.Editor.Code
                 }
             }
 
+            // Add xml.catalogs setting if Red Hat XML extension is installed
+            if (ExtensionManager.XmlExtensionState.IsInstalled)
+            {
+                const string xmlCatalogsKey = "xml.catalogs";
+                var catalogPath = "UIElementsSchema/catalog.xml";
+
+                if (File.Exists(catalogPath))
+                {
+                    var xmlCatalogs = settings[xmlCatalogsKey] as JSONArray;
+
+                    if (xmlCatalogs == null)
+                    {
+                        xmlCatalogs = new JSONArray();
+                        settings[xmlCatalogsKey] = xmlCatalogs;
+                        patched = true;
+                    }
+
+                    // Check if catalog path already exists in the array
+                    var catalogExists = false;
+                    foreach (var catalog in xmlCatalogs.Linq)
+                    {
+                        if (catalog.Value.Value == catalogPath)
+                        {
+                            catalogExists = true;
+                            break;
+                        }
+                    }
+
+                    if (!catalogExists)
+                    {
+                        xmlCatalogs.Add(catalogPath);
+                        patched = true;
+                    }
+                }
+            }
+
             return patched;
         }
 
-	    /// <summary>
-	    ///     Patches an existing settings.json file to update Unity-specific settings.
-	    /// </summary>
-	    /// <param name="settingsFile">The path to the settings.json file.</param>
-	    private void PatchSettingsFile(string settingsFile)
+        /// <summary>
+        ///     Patches an existing settings.json file to update Unity-specific settings.
+        /// </summary>
+        /// <param name="settingsFile">The path to the settings.json file.</param>
+        private void PatchSettingsFile(string settingsFile)
         {
             try
             {
@@ -461,21 +498,21 @@ namespace Hackerzhuli.Code.Editor.Code
             }
         }
 
-	    /// <summary>
-	    ///     Creates an empty extensions.json content with minimal structure.
-	    /// </summary>
-	    /// <returns>A JSON string containing the empty extensions structure.</returns>
-	    private static string CreateEmptyExtensionsContent()
+        /// <summary>
+        ///     Creates an empty extensions.json content with minimal structure.
+        /// </summary>
+        /// <returns>A JSON string containing the empty extensions structure.</returns>
+        private static string CreateEmptyExtensionsContent()
         {
             return @"{
 }";
         }
 
-	    /// <summary>
-	    ///     Generates the extensions.json content based on installed extensions.
-	    /// </summary>
-	    /// <returns>A JSON string containing the appropriate extension recommendations.</returns>
-	    private static string GenerateRecommendedExtensionsContent()
+        /// <summary>
+        ///     Generates the extensions.json content based on installed extensions.
+        /// </summary>
+        /// <returns>A JSON string containing the appropriate extension recommendations.</returns>
+        private static string GenerateRecommendedExtensionsContent()
         {
             try
             {
@@ -494,12 +531,12 @@ namespace Hackerzhuli.Code.Editor.Code
             }
         }
 
-	    /// <summary>
-	    ///     Creates or patches the extensions.json file in the VS Code directory.
-	    /// </summary>
-	    /// <param name="vscodeDirectory">The .vscode directory path.</param>
-	    /// <param name="enablePatch">Whether to enable patching of existing files.</param>
-	    private static void CreateRecommendedExtensionsFile(string vscodeDirectory, bool enablePatch)
+        /// <summary>
+        ///     Creates or patches the extensions.json file in the VS Code directory.
+        /// </summary>
+        /// <param name="vscodeDirectory">The .vscode directory path.</param>
+        /// <param name="enablePatch">Whether to enable patching of existing files.</param>
+        private static void CreateRecommendedExtensionsFile(string vscodeDirectory, bool enablePatch)
         {
             // see https://tattoocoder.com/recommending-vscode-extensions-within-your-open-source-projects/
             var extensionFile = IOPath.Combine(vscodeDirectory, "extensions.json");
@@ -515,11 +552,11 @@ namespace Hackerzhuli.Code.Editor.Code
             File.WriteAllText(extensionFile, GenerateRecommendedExtensionsContent());
         }
 
-	    /// <summary>
-	    ///     Patches an existing extensions.json file to include the Visual Studio Tools for Unity extension.
-	    /// </summary>
-	    /// <param name="extensionFile">The path to the extensions.json file.</param>
-	    private static void PatchRecommendedExtensionsFile(string extensionFile)
+        /// <summary>
+        ///     Patches an existing extensions.json file to include the Visual Studio Tools for Unity extension.
+        /// </summary>
+        /// <param name="extensionFile">The path to the extensions.json file.</param>
+        private static void PatchRecommendedExtensionsFile(string extensionFile)
         {
             try
             {
@@ -541,12 +578,12 @@ namespace Hackerzhuli.Code.Editor.Code
             }
         }
 
-	    /// <summary>
-	    ///     Applies patches to an extensions.json file represented as a JSONNode.
-	    /// </summary>
-	    /// <param name="extensions">The JSON node representing the extensions.json content.</param>
-	    /// <returns>True if any changes were made to the JSON, false otherwise.</returns>
-	    private static bool PatchRecommendedExtensionsFileImpl(JSONNode extensions)
+        /// <summary>
+        ///     Applies patches to an extensions.json file represented as a JSONNode.
+        /// </summary>
+        /// <param name="extensions">The JSON node representing the extensions.json content.</param>
+        /// <returns>True if any changes were made to the JSON, false otherwise.</returns>
+        private static bool PatchRecommendedExtensionsFileImpl(JSONNode extensions)
         {
             const string recommendationsKey = "recommendations";
 
@@ -578,17 +615,76 @@ namespace Hackerzhuli.Code.Editor.Code
             return patched;
         }
 
-	    /// <summary>
-	    ///     Writes a JSON node to a file with proper formatting.
-	    /// </summary>
-	    /// <param name="file">The path to the file to write.</param>
-	    /// <param name="node">The JSON node to write.</param>
-	    private static void WriteAllTextFromJObject(string file, JSONNode node)
+        /// <summary>
+        ///     Writes a JSON node to a file with proper formatting.
+        /// </summary>
+        /// <param name="file">The path to the file to write.</param>
+        /// <param name="node">The JSON node to write.</param>
+        private static void WriteAllTextFromJObject(string file, JSONNode node)
         {
             using var fs = File.Open(file, FileMode.Create);
             using var sw = new StreamWriter(fs);
             // Keep formatting/indent in sync with default contents
             sw.Write(node.ToString(4));
+        }
+
+        /// <summary>
+        ///     Creates the UXML schema catalog for XML validation and auto-completion.
+        ///     Only creates the catalog if the Red Hat XML extension is installed and UIElementsSchema directory exists.
+        /// </summary>
+        /// <param name="projectDirectory">The Unity project directory.</param>
+        private void CreateUxmlSchemaCatalog(string projectDirectory)
+        {
+            // Only create catalog if Red Hat XML extension is installed
+            if (!ExtensionManager.XmlExtensionState.IsInstalled)
+                return;
+
+            var schemaDirectory = IOPath.Combine(projectDirectory, "UIElementsSchema");
+            if (!Directory.Exists(schemaDirectory))
+                return;
+
+            try
+            {
+                var catalogFile = IOPath.Combine(schemaDirectory, "catalog.xml");
+                var catalogContent = GenerateCatalogContent(schemaDirectory);
+
+                // Always create/update the catalog file when the extension is installed
+                File.WriteAllText(catalogFile, catalogContent);
+            }
+            catch (Exception ex)
+            {
+                Debug.LogError($"Error creating UXML schema catalog: {ex.Message}");
+            }
+        }
+
+        /// <summary>
+        ///     Generates the content for the XML catalog file based on XSD files in the schema directory.
+        /// </summary>
+        /// <param name="schemaDirectory">The directory containing XSD schema files.</param>
+        /// <returns>The XML catalog content as a string.</returns>
+        private static string GenerateCatalogContent(string schemaDirectory)
+        {
+            var catalogContent = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n";
+            catalogContent += "<catalog xmlns=\"urn:oasis:names:tc:entity:xmlns:xml:catalog\">\n";
+
+            // Find all XSD files except GlobalNamespace.xsd
+            var xsdFiles = Directory.GetFiles(schemaDirectory, "*.xsd")
+                .Where(file => !IOPath.GetFileName(file).Equals("GlobalNamespace.xsd", StringComparison.OrdinalIgnoreCase))
+                .OrderBy(file => IOPath.GetFileName(file));
+
+            foreach (var xsdFile in xsdFiles)
+            {
+                var fileName = IOPath.GetFileName(xsdFile);
+                var nameWithoutExtension = IOPath.GetFileNameWithoutExtension(fileName);
+
+                catalogContent += $"    <uri\n";
+                catalogContent += $"        name=\"{nameWithoutExtension}\"\n";
+                catalogContent += $"        uri=\"./{fileName}\"/>\n";
+            }
+
+            catalogContent += "</catalog>\n";
+
+            return catalogContent;
         }
     }
 }
