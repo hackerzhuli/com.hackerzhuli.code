@@ -84,6 +84,11 @@ namespace Hackerzhuli.Code.Editor.Code
 	    public const string UnityCodeExtensionId = "hackerzhuli.unity-code-pro";
 
 	    /// <summary>
+	    ///     The identifier for the XML extension for VS Code.
+	    /// </summary>
+	    public const string XmlExtensionId = "redhat.vscode-xml";
+
+	    /// <summary>
 	    ///     Initializes a new instance of the CodeExtensionManager class.
 	    /// </summary>
 	    /// <param name="extensionsDirectory">The path to the VS Code extensions directory.</param>

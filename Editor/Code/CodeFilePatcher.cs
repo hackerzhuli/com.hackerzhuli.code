@@ -323,7 +323,7 @@ namespace Hackerzhuli.Code.Editor.Code
                 { "*.unity", "yaml" }
             };
 
-            // Handle .uxml and .uss associations based on installed extensions
+            // Handle .uxml associations based on installed extensions
             // If Unity extension is not installed, add .uxml to xml association
             // USS files are no longer associated with CSS to allow for custom language server
             // If Unity extension is installed but DotRush is not, remove those associations
@@ -561,10 +561,17 @@ namespace Hackerzhuli.Code.Editor.Code
                 patched = true;
             }
 
-            // Add Microsoft Unity extension if not already present
-            if (!recommendations.Linq.Any(entry => entry.Value.Value == CodeExtensionManager.UnityExtensionId))
+            // Add Unity Code extension if not already present
+            if (!recommendations.Linq.Any(entry => entry.Value.Value == CodeExtensionManager.UnityCodeExtensionId))
             {
-                recommendations.Add(CodeExtensionManager.UnityExtensionId);
+                recommendations.Add(CodeExtensionManager.UnityCodeExtensionId);
+                patched = true;
+            }
+
+            // Add RedHat XML extension if not already present(for uxml)
+            if (!recommendations.Linq.Any(entry => entry.Value.Value == CodeExtensionManager.XmlExtensionId))
+            {
+                recommendations.Add(CodeExtensionManager.XmlExtensionId);
                 patched = true;
             }
 
