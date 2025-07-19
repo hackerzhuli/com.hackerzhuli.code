@@ -1,5 +1,9 @@
 # Code Editor Package for Visual Studio
 
+## [1.0.5] - 2025-07-19
+Feature:
+- Added UXML validation and auto-completion support for Red Hat XML extension. Automatically generates XML catalog files and configures VS Code settings when the Red Hat XML extension is installed and UIElementsSchema directory exists.
+
 ## [1.0.4] - 2025-07-08
 Fix:
 - Changed `com.unity.test-framework` package to version `1.4.6` because some people may be using older versions of test framework, the new version `1.5.1` may not appear existing for some people, that can be a Unity version problem.
