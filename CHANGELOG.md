@@ -1,8 +1,11 @@
 # Code Editor Package for Visual Studio
 
-## [1.0.5] - 2025-07-19
+## [1.0.5] - 2025-07-21
 Feature:
 - Added UXML validation and auto-completion support for Red Hat XML extension. Automatically generates XML catalog files and configures VS Code settings when the Red Hat XML extension is installed and UIElementsSchema directory exists.
+
+Changed:
+- USS files are no longer automatically associated with CSS to allow for our native USS language server support. 
 
 ## [1.0.4] - 2025-07-08
 Fix:
