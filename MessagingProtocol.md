@@ -54,7 +54,7 @@ All available message types:
 | `Pause` | 5 | Pause play mode | Empty string |
 | `Unpause` | 6 | Unpause play mode | Empty string |
 | ~~`Build`~~ | 7 | ~~Build project~~ (Obsolete) | - |
-| `Refresh` | 8 | Refresh asset database | Empty String |
+| `Refresh` | 8 | Refresh asset database | Empty string (request) / Empty string (response) |
 | `Info` | 9 | Info message from Unity logs | Log message content with optional stack trace |
 | `Error` | 10 | Error message from Unity logs | Error message content with stack trace |
 | `Warning` | 11 | Warning message from Unity logs | Warning message content with optional stack trace |
@@ -104,6 +104,19 @@ Detailed value formats for some of the types:
 - **Tcp**: Internal format `"<port>:<length>"` (eg. "1234:1024") where port is the TCP listener port and length is the expected message size
 
 - **Test Messages**: Value format depends on Unity's test runner implementation and may contain JSON or structured data
+
+#### Refresh (Value: 8)
+- **Format**: 
+  - Request: Empty string
+  - Response: Empty string
+- **Description**: Requests Unity to refresh the asset database. Unity will respond with an empty Refresh message to the original client when the refresh operation is complete.
+- **Important Notes**:
+  - **Refresh vs Compilation**: A refresh finished notification does NOT mean compilation has finished. These are separate operations:
+    - If compilation is needed after refresh, the refresh will finish BEFORE compilation starts
+    - If no compilation is needed, the refresh will finish after all asset database operations are complete (including importing assets, etc.)
+  - This behavior follows Unity Editor's standard asset refresh workflow
+  - For compilation completion notifications, use the `CompilationFinished` message type (Value: 100)
+- **Usage**: Clients can use this to trigger asset database refresh and get notified when the refresh operation specifically is complete, allowing them to proceed with operations that depend on the asset database being up-to-date.
 
 #### RetrieveTestList (Value: 23)
 - **Format**: Test mode string ("EditMode" or "PlayMode")

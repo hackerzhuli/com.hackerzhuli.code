@@ -110,8 +110,9 @@ namespace Hackerzhuli.Code.Editor
     internal class CodeEditorIntegrationCore : ScriptableObject
     {
         [SerializeField] private double _lastUpdateTime;
-        [SerializeField] private bool _refreshRequested;
         [SerializeField] private List<CodeEditorClient> _clients = new();
+        
+        [NonSerialized] private List<IPEndPoint> _refreshRequesters = new();
 
         [NonSerialized] private Messenger _messenger;
         [NonSerialized] private bool _needsOnlineNotification;
@@ -200,10 +201,19 @@ namespace Hackerzhuli.Code.Editor
             }
 
             // Handle refresh (blocking) at the end of update to allow other messages to be processed first
-            if (_refreshRequested)
+            if (_refreshRequesters.Count > 0)
             {
-                _refreshRequested = false;
+                // Copy requesters to array and clear the list before refresh to prevent duplicate refreshes
+                var requestersToNotify = _refreshRequesters.ToArray();
+                _refreshRequesters.Clear();
+                
                 RefreshAssetDatabase();
+                
+                // Notify all clients that requested the refresh that it's finished
+                foreach (var requester in requestersToNotify)
+                {
+                    Answer(requester, MessageType.Refresh, "");
+                }
             }
         }
 
@@ -321,7 +331,8 @@ namespace Hackerzhuli.Code.Editor
                     EditorApplication.isPaused = false;
                     break;
                 case MessageType.Refresh:
-                    _refreshRequested = true;
+                    if (!_refreshRequesters.Contains(message.Origin))
+                        _refreshRequesters.Add(message.Origin);
                     break;
                 case MessageType.Version:
                     Answer(message, MessageType.Version, GetPackageVersion());
