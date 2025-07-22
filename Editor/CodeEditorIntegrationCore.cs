@@ -306,14 +306,13 @@ namespace Hackerzhuli.Code.Editor
         private void RefreshAssetDatabase()
         {
             // Handle auto-refresh based on kAutoRefreshMode: 0=disabled, 1=enabled, 2=enabled outside play mode
-            var autoRefreshMode = EditorPrefs.GetInt("kAutoRefreshMode", 1);
+            // var autoRefreshMode = EditorPrefs.GetInt("kAutoRefreshMode", 1);
 
-            // If auto-refresh is disabled (0), do not try to force refresh the Asset database
-            if (autoRefreshMode != 0)
-                // If auto-refresh is set to "enabled outside play mode" (2) and we're in play mode, skip refresh
-                if (!(autoRefreshMode == 2 && EditorApplication.isPlaying))
-                    if (!UnityInstallation.IsInSafeMode)
-                        AssetDatabase.Refresh();
+            // if we are playing, we don't force a refresh
+            // We will ignore the setting `autoRefreshMode` because this is not auto refresh, this is refresh requested explicitly
+            if (!EditorApplication.isPlaying)
+                if (!UnityInstallation.IsInSafeMode)
+                    AssetDatabase.Refresh();
         }
 
         private void ProcessIncoming(Message message)
