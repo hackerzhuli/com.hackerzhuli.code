@@ -77,6 +77,7 @@ All available message types:
 | `Online` | 102 | Notifies clients that this package is online and ready to receive messages | Empty string |
 | `Offline` | 103 | Notifies clients that this package is offline and can not receive messages | Empty string |
 | `IsPlaying` | 104 | Notification of current play mode state | "true" (in play mode) / "false" (in edit mode) |
+| `CompilationStarted` | 105 | Notification that compilation has started | Empty string |
 
 Note:
 - Message value greater than or equal to 100 means it does not exist in the official package but was added in this package.
@@ -117,6 +118,13 @@ Detailed value formats for some of the types:
   - This behavior follows Unity Editor's standard asset refresh workflow
   - For compilation completion notifications, use the `CompilationFinished` message type (Value: 100)
 - **Usage**: Clients can use this to trigger asset database refresh and get notified when the refresh operation specifically is complete, allowing them to proceed with operations that depend on the asset database being up-to-date.
+
+#### CompilationStarted (Value: 105)
+- **Format**: Empty string
+- **Description**: Notification sent when Unity's compilation pipeline starts compiling assemblies. This message is broadcast to all connected clients when the compilation process begins.
+- **Important Notes**:
+  - **Compilation Lifecycle**: This message is sent at the beginning of the compilation process, before any assembly compilation starts
+  - **Relationship to CompilationFinished**: This message pairs with `CompilationFinished` (Value: 100) to provide complete compilation lifecycle notifications
 
 #### RetrieveTestList (Value: 23)
 - **Format**: Test mode string ("EditMode" or "PlayMode")

@@ -125,6 +125,7 @@ namespace Hackerzhuli.Code.Editor
             // Subscribe to Unity events
             EditorApplication.update += Update;
             EditorApplication.playModeStateChanged += OnPlayModeStateChanged;
+            CompilationPipeline.compilationStarted += OnCompilationStarted;
             CompilationPipeline.compilationFinished += OnCompilationFinished;
             Application.logMessageReceived += OnLogMessageReceived;
 
@@ -138,6 +139,7 @@ namespace Hackerzhuli.Code.Editor
             // Unsubscribe from Unity events
             EditorApplication.update -= Update;
             EditorApplication.playModeStateChanged -= OnPlayModeStateChanged;
+            CompilationPipeline.compilationStarted -= OnCompilationStarted;
             CompilationPipeline.compilationFinished -= OnCompilationFinished;
             Application.logMessageReceived -= OnLogMessageReceived;
 
@@ -215,6 +217,11 @@ namespace Hackerzhuli.Code.Editor
                     Answer(requester, MessageType.Refresh, "");
                 }
             }
+        }
+
+        private void OnCompilationStarted(object obj)
+        {
+            BroadcastMessage(MessageType.CompilationStarted, "");
         }
 
         private void OnCompilationFinished(object obj)
