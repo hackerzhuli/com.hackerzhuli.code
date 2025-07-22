@@ -209,12 +209,12 @@ namespace Hackerzhuli.Code.Editor
                 var requestersToNotify = _refreshRequesters.ToArray();
                 _refreshRequesters.Clear();
                 
-                RefreshAssetDatabase();
+                var refreshResult = RefreshAssetDatabase();
                 
-                // Notify all clients that requested the refresh that it's finished
+                // Notify all clients that requested the refresh with the result
                 foreach (var requester in requestersToNotify)
                 {
-                    Answer(requester, MessageType.Refresh, "");
+                    Answer(requester, MessageType.Refresh, refreshResult);
                 }
             }
         }
@@ -303,16 +303,27 @@ namespace Hackerzhuli.Code.Editor
             return 58000 + Process.GetCurrentProcess().Id % 1000;
         }
 
-        private void RefreshAssetDatabase()
+        /// <summary>
+        ///     Refresh the asset database.
+        /// </summary>
+        /// <returns>
+        ///     An error message if refresh didn't start, otherwise an empty string.
+        /// </returns>
+        private string RefreshAssetDatabase()
         {
             // Handle auto-refresh based on kAutoRefreshMode: 0=disabled, 1=enabled, 2=enabled outside play mode
             // var autoRefreshMode = EditorPrefs.GetInt("kAutoRefreshMode", 1);
 
             // if we are playing, we don't force a refresh
             // We will ignore the setting `autoRefreshMode` because this is not auto refresh, this is refresh requested explicitly
-            if (!EditorApplication.isPlaying)
-                if (!UnityInstallation.IsInSafeMode)
-                    AssetDatabase.Refresh();
+            if (EditorApplication.isPlaying)
+                return "Refresh not started: Unity is in play mode";
+            
+            if (UnityInstallation.IsInSafeMode)
+                return "Refresh not started: Unity is in safe mode";
+            
+            AssetDatabase.Refresh();
+            return ""; // Empty string indicates successful refresh
         }
 
         private void ProcessIncoming(Message message)
