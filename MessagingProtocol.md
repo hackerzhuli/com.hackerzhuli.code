@@ -211,6 +211,11 @@ internal class TestAdaptor
   /// Number of leaf tests in this test node and its children
   /// </summary>
   public int TestCount;
+
+  /// <summary>
+  /// True if this test node has any child test nodes.
+  /// </summary>
+  public bool HasChildren;
 }
 ```
 

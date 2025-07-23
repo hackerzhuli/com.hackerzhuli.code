@@ -81,6 +81,11 @@ namespace Hackerzhuli.Code.Editor.Testing
 	    public int TestCount;
 
 	    /// <summary>
+	    ///     True if this test node has any child test nodes.
+	    /// </summary>
+	    public bool HasChildren;
+
+	    /// <summary>
 	    ///     Initializes a new instance of the <see cref="TestAdaptor" /> class from Unity's <see cref="ITestAdaptor" />.
 	    /// </summary>
 	    /// <param name="testAdaptor">The Unity test adaptor to convert from.</param>
@@ -94,6 +99,7 @@ namespace Hackerzhuli.Code.Editor.Testing
             Type = testAdaptor.GetNodeType();
             Parent = parent;
             TestCount = testAdaptor.TestCaseCount;
+            HasChildren = testAdaptor.HasChildren;
 
             // Populate source location for methods
             if (cecilHelper != null && Type == TestNodeType.Method)
