@@ -4,6 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
@@ -113,6 +114,8 @@ namespace Hackerzhuli.Code.Editor
         [SerializeField] private List<CodeEditorClient> _clients = new();
         
         [NonSerialized] private List<IPEndPoint> _refreshRequesters = new();
+        [NonSerialized] private List<Log> _compileErrors = new();
+        [NonSerialized] private double _compilationFinishedTime;
 
         [NonSerialized] private Messenger _messenger;
         [NonSerialized] private bool _needsOnlineNotification;
@@ -221,6 +224,8 @@ namespace Hackerzhuli.Code.Editor
 
         private void OnCompilationStarted(object obj)
         {
+            // Clear any existing compile errors when compilation starts
+            _compileErrors.Clear();
             BroadcastMessage(MessageType.CompilationStarted, "");
         }
 
@@ -230,6 +235,7 @@ namespace Hackerzhuli.Code.Editor
             // need to ensure messenger is initialized, because assembly reload event can happen before first Update
             EnsureMessengerInitialized();
             BroadcastMessage(MessageType.CompilationFinished, "");
+            _compilationFinishedTime = EditorApplication.timeSinceStartup;
         }
 
         private string GetPackageVersion()
@@ -242,6 +248,23 @@ namespace Hackerzhuli.Code.Editor
         {
             var package = PackageInfo.FindForAssembly(typeof(CodeEditorIntegration).Assembly);
             return package.name;
+        }
+
+        /// <summary>
+        ///     Gets the collected compile errors as a JSON string.
+        /// </summary>
+        /// <returns>JSON serialized array of Log objects.</returns>
+        private string GetCompileErrorsJson()
+        {
+            try
+            {
+                return JsonUtility.ToJson(new LogContainer { Logs = _compileErrors.ToArray() });
+            }
+            catch (Exception ex)
+            {
+                Debug.LogWarning($"Failed to serialize compile errors: {ex.Message}");
+                return "{\"Logs\":[]}";
+            }
         }
 
         /// <summary>
@@ -371,6 +394,9 @@ namespace Hackerzhuli.Code.Editor
                 case MessageType.PackageName:
                     Answer(message, MessageType.PackageName, GetPackageName());
                     break;
+                case MessageType.GetCompileErrors:
+                    Answer(message, MessageType.GetCompileErrors, GetCompileErrorsJson());
+                    break;
             }
         }
 
@@ -421,6 +447,14 @@ namespace Hackerzhuli.Code.Editor
         /// <param name="type">The type of log message (Log, Warning, Error, etc.).</param>
         private void OnLogMessageReceived(string logString, string stackTrace, LogType type)
         {
+            // Collect compile errors during the collection window
+            if (EditorApplication.timeSinceStartup - _compilationFinishedTime < 1.0 && type == LogType.Error && logString.Contains("error CS"))
+            {
+                var unixTimestamp = ((DateTimeOffset)DateTime.Now).ToUnixTimeMilliseconds();
+                var compileError = new Log(logString, stackTrace, unixTimestamp);
+                _compileErrors.Add(compileError);
+            }
+
             var messageType = type switch
             {
                 LogType.Error or LogType.Exception or LogType.Assert => MessageType.Error,

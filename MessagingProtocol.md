@@ -78,6 +78,7 @@ All available message types:
 | `Offline` | 103 | Notifies clients that this package is offline and can not receive messages | Empty string |
 | `IsPlaying` | 104 | Notification of current play mode state | "true" (in play mode) / "false" (in edit mode) |
 | `CompilationStarted` | 105 | Notification that compilation has started | Empty string |
+| `GetCompileErrors` | 106 | Request/response for compile error information | Empty string (request) / JSON serialized LogContainer (response) |
 
 Note:
 - Message value greater than or equal to 100 means it does not exist in the official package but was added in this package.
@@ -128,6 +129,51 @@ Detailed value formats for some of the types:
 - **Important Notes**:
   - **Compilation Lifecycle**: This message is sent at the beginning of the compilation process, before any assembly compilation starts
   - **Relationship to CompilationFinished**: This message pairs with `CompilationFinished` (Value: 100) to provide complete compilation lifecycle notifications
+
+#### GetCompileErrors (Value: 106)
+- **Format**: 
+  - Request: Empty string
+  - Response: JSON serialized LogContainer object
+- **Description**: Requests the collected compile errors that occurred during Unity's compilation process. Unity collects compile errors within a 1-second window after compilation finishes.
+
+- **C# Structure**:
+
+```csharp
+[Serializable]
+public class LogContainer
+{
+    /// <summary>
+    /// Array of log entries.
+    /// </summary>
+    public Log[] Logs { get; set; }
+}
+
+[Serializable]
+public class Log
+{
+    /// <summary>
+    /// The complete log message as logged by Unity.
+    /// </summary>
+    public string Message;
+    
+    /// <summary>
+    /// The stack trace associated with the log entry, if available.
+    /// </summary>
+    public string StackTrace;
+    
+    /// <summary>
+    /// The timestamp when the log entry was captured as Unix timestamp (milliseconds since epoch).
+    /// </summary>
+    public long Timestamp;
+}
+```
+
+- **Behavior**:
+  - **Collection Window**: Compile errors are collected for 1 second after compilation finishes
+  - **Error Filtering**: Only log messages containing "error CS" are collected
+  - **Automatic Clearing**: Previous compile errors are cleared when compilation starts
+  - **Response Format**: Returns JSON with LogContainer containing array of Log objects
+- **Usage**: Clients can request this to get structured compile error information for IDE integration, error highlighting, and debugging assistance.
 
 #### RetrieveTestList (Value: 23)
 - **Format**: Test mode string ("EditMode" or "PlayMode")

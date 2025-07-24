@@ -192,6 +192,11 @@ namespace Hackerzhuli.Code.Editor.Messaging
         /// <summary>
         ///     This is a message sent when the compilation is started<br />
         /// </summary>
-        CompilationStarted = 105
+        CompilationStarted = 105,
+
+        /// <summary>
+        ///     Request for compile error information.
+        /// </summary>
+        GetCompileErrors = 106
     }
 }
