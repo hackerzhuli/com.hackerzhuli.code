@@ -60,6 +60,6 @@ namespace Hackerzhuli.Code.Editor.Messaging
         /// <summary>
         ///     Array of log entries.
         /// </summary>
-        public Log[] Logs { get; set; }
+        public Log[] Logs;
     }
 }
