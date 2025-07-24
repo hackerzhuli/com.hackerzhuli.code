@@ -1,5 +1,12 @@
 # Code Editor Package for Visual Studio
 
+## [1.0.7] - 2025-01-15
+Feature:
+- Added CompileErrors message type (106) for collecting and retrieving Unity compilation errors
+- Added Log class for JSON serialization of compile error information with Unix timestamp support
+- Implemented automatic compile error collection within 1-second window after compilation finishes
+- Added filtering for "error CS" messages to capture C# compilation errors specifically
+
 ## [1.0.6] - 2025-07-22
 Feature:
 - Added HasChildren property to TestAdaptor for better test hierarchy information
