@@ -1,6 +1,12 @@
 # Code Editor Package for Visual Studio
 
-## [1.0.7] - 2025-01-15
+## [1.0.8] - 2025-7-25
+Removed:
+- Removed UXML schema catalog generation and XML validation features due to compatibility issues with the Red Hat XML extension for UXML files
+- Removed CreateUxmlSchemaCatalog method and related XML catalog configuration
+- Removed Red Hat XML extension recommendation from VS Code extensions
+
+## [1.0.7] - 2025-7-25
 Feature:
 - Added CompileErrors message type (106) for collecting and retrieving Unity compilation errors
 - Added Log class for JSON serialization of compile error information with Unix timestamp support

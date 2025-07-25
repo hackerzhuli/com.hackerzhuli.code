@@ -67,7 +67,6 @@ namespace Hackerzhuli.Code.Editor.Code
                 CreateRecommendedExtensionsFile(vscodeDirectory, enablePatch);
                 CreateSettingsFile(vscodeDirectory, enablePatch);
                 CreateLaunchFile(vscodeDirectory, enablePatch);
-                CreateUxmlSchemaCatalog(projectDirectory);
             }
             catch (IOException)
             {
@@ -437,42 +436,6 @@ namespace Hackerzhuli.Code.Editor.Code
                 }
             }
 
-            // Add xml.catalogs setting if Red Hat XML extension is installed
-            if (ExtensionManager.XmlExtensionState.IsInstalled)
-            {
-                const string xmlCatalogsKey = "xml.catalogs";
-                var catalogPath = "UIElementsSchema/catalog.xml";
-
-                if (File.Exists(catalogPath))
-                {
-                    var xmlCatalogs = settings[xmlCatalogsKey] as JSONArray;
-
-                    if (xmlCatalogs == null)
-                    {
-                        xmlCatalogs = new JSONArray();
-                        settings[xmlCatalogsKey] = xmlCatalogs;
-                        patched = true;
-                    }
-
-                    // Check if catalog path already exists in the array
-                    var catalogExists = false;
-                    foreach (var catalog in xmlCatalogs.Linq)
-                    {
-                        if (catalog.Value.Value == catalogPath)
-                        {
-                            catalogExists = true;
-                            break;
-                        }
-                    }
-
-                    if (!catalogExists)
-                    {
-                        xmlCatalogs.Add(catalogPath);
-                        patched = true;
-                    }
-                }
-            }
-
             return patched;
         }
 
@@ -605,13 +568,6 @@ namespace Hackerzhuli.Code.Editor.Code
                 patched = true;
             }
 
-            // Add RedHat XML extension if not already present(for uxml)
-            if (!recommendations.Linq.Any(entry => entry.Value.Value == CodeExtensionManager.XmlExtensionId))
-            {
-                recommendations.Add(CodeExtensionManager.XmlExtensionId);
-                patched = true;
-            }
-
             return patched;
         }
 
@@ -626,65 +582,6 @@ namespace Hackerzhuli.Code.Editor.Code
             using var sw = new StreamWriter(fs);
             // Keep formatting/indent in sync with default contents
             sw.Write(node.ToString(4));
-        }
-
-        /// <summary>
-        ///     Creates the UXML schema catalog for XML validation and auto-completion.
-        ///     Only creates the catalog if the Red Hat XML extension is installed and UIElementsSchema directory exists.
-        /// </summary>
-        /// <param name="projectDirectory">The Unity project directory.</param>
-        private void CreateUxmlSchemaCatalog(string projectDirectory)
-        {
-            // Only create catalog if Red Hat XML extension is installed
-            if (!ExtensionManager.XmlExtensionState.IsInstalled)
-                return;
-
-            var schemaDirectory = IOPath.Combine(projectDirectory, "UIElementsSchema");
-            if (!Directory.Exists(schemaDirectory))
-                return;
-
-            try
-            {
-                var catalogFile = IOPath.Combine(schemaDirectory, "catalog.xml");
-                var catalogContent = GenerateCatalogContent(schemaDirectory);
-
-                // Always create/update the catalog file when the extension is installed
-                File.WriteAllText(catalogFile, catalogContent);
-            }
-            catch (Exception ex)
-            {
-                Debug.LogError($"Error creating UXML schema catalog: {ex.Message}");
-            }
-        }
-
-        /// <summary>
-        ///     Generates the content for the XML catalog file based on XSD files in the schema directory.
-        /// </summary>
-        /// <param name="schemaDirectory">The directory containing XSD schema files.</param>
-        /// <returns>The XML catalog content as a string.</returns>
-        private static string GenerateCatalogContent(string schemaDirectory)
-        {
-            var catalogContent = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n";
-            catalogContent += "<catalog xmlns=\"urn:oasis:names:tc:entity:xmlns:xml:catalog\">\n";
-
-            // Find all XSD files except GlobalNamespace.xsd
-            var xsdFiles = Directory.GetFiles(schemaDirectory, "*.xsd")
-                .Where(file => !IOPath.GetFileName(file).Equals("GlobalNamespace.xsd", StringComparison.OrdinalIgnoreCase))
-                .OrderBy(file => IOPath.GetFileName(file));
-
-            foreach (var xsdFile in xsdFiles)
-            {
-                var fileName = IOPath.GetFileName(xsdFile);
-                var nameWithoutExtension = IOPath.GetFileNameWithoutExtension(fileName);
-
-                catalogContent += $"    <uri\n";
-                catalogContent += $"        name=\"{nameWithoutExtension}\"\n";
-                catalogContent += $"        uri=\"./{fileName}\"/>\n";
-            }
-
-            catalogContent += "</catalog>\n";
-
-            return catalogContent;
         }
     }
 }
