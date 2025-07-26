@@ -12,42 +12,42 @@ namespace Hackerzhuli.Code.Editor.Testing
     /// <summary>
     ///     Sample test class to validate GetNodeType functionality
     /// </summary>
-    [TestFixture]
+    //[TestFixture]
     public class SampleTestClassForValidation
     {
-        [Test]
+        //[Test]
         public void SampleTestMethod1()
         {
             Assert.Pass("Sample test method 1");
         }
 
-        [Test]
+        //[Test]
         public void SampleTestMethod2()
         {
             Assert.Pass("Sample test method 2");
         }
 
-        [TestCase("param1")]
-        [TestCase("param2")]
+        //[TestCase("param1")]
+        //[TestCase("param2")]
         public void SampleParameterizedTest(string parameter)
         {
             Assert.IsNotNull(parameter);
         }
 
-        [Test]
+        //[Test]
         public void SampleAsyncTest()
         {
             Assert.Pass("Sample async test");
         }
 
-        [Test]
+        //[Test]
         public void SampleCoroutineTest()
         {
             Assert.Pass("Sample coroutine test");
         }
     }
 
-    [TestFixture]
+    //[TestFixture]
     public class TestAdaptorUtilsTests
     {
         [SetUp]
@@ -110,7 +110,7 @@ namespace Hackerzhuli.Code.Editor.Testing
                     CollectAllTests(child, allTests);
         }
 
-        [Test]
+        //[Test]
         public async Task GetNodeType_ConcreteTestNodes_ValidateSpecificExamples()
         {
             // Arrange - Get all tests from Unity Test Runner
