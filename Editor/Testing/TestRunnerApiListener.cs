@@ -31,25 +31,6 @@ namespace Hackerzhuli.Code.Editor.Testing
             RetrieveTestList((TestMode)Enum.Parse(typeof(TestMode), mode), callback);
         }
 
-        private static void RetrieveTestList(TestMode mode)
-        {
-            // If we already have cached test list for this mode, use it directly
-            if (_testCache.ContainsKey(mode))
-            {
-                var rootTest = _testCache[mode];
-                return;
-            }
-            
-            // No cached data available, retrieve from API
-            if(_testRunnerApi != null){
-                _testRunnerApi.RetrieveTestList(mode, ta => 
-                {
-                    // Cache the test list for fuzzy matching
-                    _testCache[mode] = ta;
-                });
-            }
-        }
-
         private static void RetrieveTestList(TestMode mode, System.Action<TestMode, ITestAdaptor> callback)
         {
             // If we already have cached test list for this mode, use it directly
@@ -58,8 +39,11 @@ namespace Hackerzhuli.Code.Editor.Testing
                 // Use cached root test adaptor and respond directly to the specific client
                 var rootTest = _testCache[mode];
                 callback?.Invoke(mode, rootTest);
+                //Debug.Log($"Using cached test list for mode {mode}");
                 return;
             }
+
+            //Debug.Log($"Retrieving test list for mode {mode}");
             
             // No cached data available, retrieve from API
             if(_testRunnerApi != null){
