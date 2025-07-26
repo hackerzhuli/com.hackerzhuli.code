@@ -386,7 +386,10 @@ namespace Hackerzhuli.Code.Editor
                     Answer(message, MessageType.ExecuteTests);
                     break;
                 case MessageType.RetrieveTestList:
-                    TestRunnerApiListener.RetrieveTestList(message.Value);
+                    TestRunnerApiListener.RetrieveTestList(message.Value, (mode, testAdaptor) => 
+                    {
+                        Answer(message, MessageType.RetrieveTestList, TestRunnerCallbacks.SerializeTestListRetrievedValue(mode, testAdaptor));
+                    });
                     break;
                 case MessageType.ShowUsage:
                     UsageUtility.ShowUsage(message.Value);

@@ -30,7 +30,7 @@ namespace Hackerzhuli.Code.Editor.Testing
                 SerializeTopLevelOnlyWithNoSource(testAdaptor));
         }
 
-        private string Serialize<TContainer, TSource, TAdaptor>(
+        private static string Serialize<TContainer, TSource, TAdaptor>(
             TSource source,
             Func<TSource, int, TAdaptor> createAdaptor,
             Func<TSource, IEnumerable<TSource>> children,
@@ -51,7 +51,7 @@ namespace Hackerzhuli.Code.Editor.Testing
             return JsonUtility.ToJson(container(adaptors.ToArray()));
         }
 
-        private string Serialize(ITestAdaptor testAdaptor)
+        private static string Serialize(ITestAdaptor testAdaptor)
         {
             // Use a single MonoCecilHelper instance for all test adaptors and ensure proper disposal
             using var cecilHelper = new MonoCecilHelper();
@@ -79,13 +79,12 @@ namespace Hackerzhuli.Code.Editor.Testing
             return JsonUtility.ToJson(container);
         }
 
-        internal void TestListRetrieved(TestMode testMode, ITestAdaptor testAdaptor)
+        internal static string SerializeTestListRetrievedValue(TestMode testMode, ITestAdaptor testAdaptor)
         {
             // TestListRetrieved format:
             // TestMode:Json
 
-            var value = testMode.GetModeString() + ":" + Serialize(testAdaptor);
-            CodeEditorIntegration.BroadcastMessage(MessageType.TestListRetrieved, value);
+            return testMode.GetModeString() + ":" + Serialize(testAdaptor);
         }
     }
 }

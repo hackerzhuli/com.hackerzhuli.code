@@ -1,5 +1,7 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using UnityEditor;
 using UnityEditor.TestTools.TestRunner.Api;
 using UnityEngine;
@@ -11,6 +13,7 @@ namespace Hackerzhuli.Code.Editor.Testing
     {
         private static readonly TestRunnerApi _testRunnerApi;
         private static readonly TestRunnerCallbacks _testRunnerCallbacks;
+        private static readonly Dictionary<TestMode, ITestAdaptor> _testCache = new Dictionary<TestMode, ITestAdaptor>();
 
         static TestRunnerApiListener()
         {
@@ -23,14 +26,70 @@ namespace Hackerzhuli.Code.Editor.Testing
             _testRunnerApi.RegisterCallbacks(_testRunnerCallbacks);
         }
 
-        public static void RetrieveTestList(string mode)
+        public static void RetrieveTestList(string mode, Action<TestMode, ITestAdaptor> callback)
         {
-            RetrieveTestList((TestMode)Enum.Parse(typeof(TestMode), mode));
+            RetrieveTestList((TestMode)Enum.Parse(typeof(TestMode), mode), callback);
         }
 
         private static void RetrieveTestList(TestMode mode)
         {
-            _testRunnerApi?.RetrieveTestList(mode, ta => _testRunnerCallbacks.TestListRetrieved(mode, ta));
+            // If we already have cached test list for this mode, use it directly
+            if (_testCache.ContainsKey(mode))
+            {
+                var rootTest = _testCache[mode];
+                return;
+            }
+            
+            // No cached data available, retrieve from API
+            if(_testRunnerApi != null){
+                _testRunnerApi.RetrieveTestList(mode, ta => 
+                {
+                    // Cache the test list for fuzzy matching
+                    _testCache[mode] = ta;
+                });
+            }
+        }
+
+        private static void RetrieveTestList(TestMode mode, System.Action<TestMode, ITestAdaptor> callback)
+        {
+            // If we already have cached test list for this mode, use it directly
+            if (_testCache.ContainsKey(mode))
+            {
+                // Use cached root test adaptor and respond directly to the specific client
+                var rootTest = _testCache[mode];
+                callback?.Invoke(mode, rootTest);
+                return;
+            }
+            
+            // No cached data available, retrieve from API
+            if(_testRunnerApi != null){
+                _testRunnerApi.RetrieveTestList(mode, ta => 
+                {
+                    // Cache the test list for fuzzy matching
+                    _testCache[mode] = ta;
+                    callback?.Invoke(mode, ta);
+                });
+            }
+        }
+
+        private static void FindMatches(ITestAdaptor testAdaptor, string searchTerm, List<string> matches)
+        {
+            if (testAdaptor == null) return;
+            
+            // Check if this node matches (any node with FullName can be a match)
+            if (testAdaptor.FullName != null && testAdaptor.FullName.EndsWith(searchTerm, StringComparison.OrdinalIgnoreCase))
+            {
+                matches.Add(testAdaptor.FullName);
+            }
+            
+            // Recursively traverse children
+            if (testAdaptor.Children != null)
+            {
+                foreach (var child in testAdaptor.Children)
+                {
+                    FindMatches(child, searchTerm, matches);
+                }
+            }
         }
 
         public static void ExecuteTests(string command)
@@ -59,7 +118,7 @@ namespace Hackerzhuli.Code.Editor.Testing
 
             //Debug.Log($"Executing tests filter = {filter} in mode {testMode}, command is {command}");
 
-            Filter actualFilter;
+            Filter actualFilter = null;
 
             // if there is no filter, we just execute all tests
             if (string.IsNullOrEmpty(filter))
@@ -69,11 +128,37 @@ namespace Hackerzhuli.Code.Editor.Testing
                 // we need to remove the extension here
                 actualFilter = new Filter
                     { testMode = testMode, assemblyNames = new[] { Path.GetFileNameWithoutExtension(filter) } };
+            // if filter ends with ?, enable fuzzy matching
+            else if (filter.EndsWith("?"))
+            {
+                var searchTerm = filter[..^1];
+
+                RetrieveTestList(mode, (_, rootTest) =>
+                {
+                    var matchedTests = FindFuzzyMatches(rootTest, searchTerm);
+                    
+                    if (matchedTests.Length > 0)
+                    {
+                        actualFilter = new Filter { testMode = testMode, testNames = matchedTests };
+                        ExecuteTests(actualFilter);
+                    }
+                });
+            }
             // otherwise look for the individual test
             else
                 actualFilter = new Filter { testMode = testMode, testNames = new[] { filter } };
 
             if (actualFilter != null) ExecuteTests(actualFilter);
+        }
+
+        private static string[] FindFuzzyMatches(ITestAdaptor rootTest, string searchTerm)
+        {
+            var matches = new List<string>();
+
+            // Traverse the test tree directly without creating a flat list
+            FindMatches(rootTest, searchTerm, matches);
+            
+            return matches.Distinct().ToArray();
         }
 
         private static void ExecuteTests(Filter filter)
