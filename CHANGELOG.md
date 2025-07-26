@@ -1,5 +1,13 @@
 # Code Editor Package for Visual Studio
 
+## [1.0.9] - 2025-7-27
+Feature:
+- Added fuzzy test name matching support - append '?' to test filters to enable fuzzy matching using "ends with" comparison
+
+Improved:
+- Implemented test list caching per TestMode for improved performance and reduced API calls
+- Added callback-based test list retrieval to send responses only to requesting clients instead of broadcasting to all connected clients
+
 ## [1.0.8] - 2025-7-25
 Removed:
 - Removed UXML schema catalog generation and XML validation features due to compatibility issues with the Red Hat XML extension for UXML files

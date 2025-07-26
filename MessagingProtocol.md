@@ -185,11 +185,20 @@ public class Log
   - `TestMode` - Execute all tests in the specified mode
   - `TestMode:AssemblyName.dll` - Execute all tests in the specified assembly
   - `TestMode:FullTestName` - Execute a specific test by its full name
+  - `TestMode:PartialTestName?` - Execute tests using fuzzy matching (partial name matching), by ending with `?`
 - **Examples**: 
   - `"EditMode"` - Run all edit mode tests
   - `"PlayMode:MyTests.dll"` - Run all tests in MyTests assembly
   - `"EditMode:MyNamespace.MyTestClass"` - Run all tests in MyTestClass
-- **Description**: Executes tests based on the specified filter. The filter can target all tests in a mode, all tests in an assembly, or a specific test by name.
+  - `"EditMode:TestMethod?"` - Run all tests whose full name ends with "TestMethod"
+  - `"PlayMode:Utils?"` - Run all tests whose full name ends with "Utils"
+- **Description**: Executes tests based on the specified filter. The filter can target all tests in a mode, all tests in an assembly, or a specific test by name. When the filter doesn't match any exact test names, fuzzy matching is performed to find tests whose full names end with the specified search term.
+- **Fuzzy Matching Behavior**:
+  - If filter ends with `?`, the system performs fuzzy matching
+  - Fuzzy matching finds all tests (including non-leaf nodes) whose `FullName` ends with the search term
+  - Case-insensitive matching is used
+  - Both leaf tests and test containers (classes, namespaces) can be matched
+  - Multiple matches are supported - all matching tests will be executed
 
 Response:
 - A response that is empty is sent to the original client to confirm that the message is received and already processed.
