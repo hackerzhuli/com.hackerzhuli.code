@@ -76,6 +76,8 @@ namespace Hackerzhuli.Code.Editor.Testing
         {
             if (testAdaptor == null) return;
 
+            if (string.IsNullOrEmpty(searchTerm)) return;
+
             // if exact match is found we just end it here
             if (testAdaptor.FullName == searchTerm) {
                 matches.Add(testAdaptor.FullName);
