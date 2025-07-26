@@ -63,7 +63,7 @@ namespace Hackerzhuli.Code.Editor.Testing
             if (string.IsNullOrEmpty(searchTerm)) return;
 
             // if exact match is found we just end it here
-            if (testAdaptor.FullName == searchTerm) {
+            if (testAdaptor.FullName != null && string.Compare(testAdaptor.FullName, searchTerm, StringComparison.OrdinalIgnoreCase) == 0) {
                 matches.Add(testAdaptor.FullName);
                 return;
             }
@@ -71,7 +71,10 @@ namespace Hackerzhuli.Code.Editor.Testing
             // Check if this node matches (any node with FullName can be a match)
             if (testAdaptor.FullName != null && testAdaptor.FullName.EndsWith(searchTerm, StringComparison.OrdinalIgnoreCase))
             {
-                matches.Add(testAdaptor.FullName);
+                // must see the dot right before the search term, otherwise we may match too easy
+                if (testAdaptor.FullName.Length > searchTerm.Length && testAdaptor.FullName[testAdaptor.FullName.Length - searchTerm.Length - 1] == '.'){
+                    matches.Add(testAdaptor.FullName);
+                }
             }
             
             // Recursively traverse children
@@ -131,8 +134,14 @@ namespace Hackerzhuli.Code.Editor.Testing
                     
                     if (matchedTests.Length > 0)
                     {
-                        actualFilter = new Filter { testMode = testMode, testNames = matchedTests };
-                        ExecuteTests(actualFilter);
+                        // cannot assign to actualFilter, that will cause tests to run twice
+                        var filter = new Filter { testMode = testMode, testNames = matchedTests };
+                        ExecuteTests(filter);
+                    }else{
+                        // Run it as is, and let Unity Editor decide
+                        // Some clients may wait for a test run to start, so we run anyway
+                        var filter = new Filter { testMode = testMode, testNames = new[] { searchTerm } };
+                        ExecuteTests(filter);
                     }
                 });
             }
