@@ -75,6 +75,12 @@ namespace Hackerzhuli.Code.Editor.Testing
         private static void FindMatches(ITestAdaptor testAdaptor, string searchTerm, List<string> matches)
         {
             if (testAdaptor == null) return;
+
+            // if exact match is found we just end it here
+            if (testAdaptor.FullName == searchTerm) {
+                matches.Add(testAdaptor.FullName);
+                return;
+            }
             
             // Check if this node matches (any node with FullName can be a match)
             if (testAdaptor.FullName != null && testAdaptor.FullName.EndsWith(searchTerm, StringComparison.OrdinalIgnoreCase))
