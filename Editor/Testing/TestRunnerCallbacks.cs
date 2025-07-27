@@ -17,7 +17,7 @@ namespace Hackerzhuli.Code.Editor.Testing
         {
             CodeEditorIntegration.BroadcastMessage(MessageType.TestRunStarted,
                 SerializeTopLevelOnlyWithNoSource(testAdaptor));
-        }
+        }  
 
         public void TestFinished(ITestResultAdaptor testResultAdaptor)
         {

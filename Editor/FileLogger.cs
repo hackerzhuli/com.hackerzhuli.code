@@ -3,6 +3,8 @@ using System.IO;
 using System.Linq;
 using UnityEngine;
 using UnityEditor;
+using System.Diagnostics;
+using Debug = UnityEngine.Debug;
 
 namespace Hackerzhuli.Code.Editor
 {
@@ -11,13 +13,14 @@ namespace Hackerzhuli.Code.Editor
     /// Provides static methods similar to Unity's Debug.Log<br/>
     /// Mainly for debugging purposes, but users will not see our logs in Unity Console. <br/>
     /// Should only be used in the main thread. <br/>
+    /// It is low performance, so it is disabled when it's installed by a user.
     /// </summary>
     public class FileLogger : ScriptableObject
     {
         private static FileLogger _instance;
         private string _logDirectory;
         private string _logFilePath;
-        
+            
         /// <summary>
         /// Gets the singleton instance of the FileLogger.
         /// </summary>
@@ -31,6 +34,14 @@ namespace Hackerzhuli.Code.Editor
                 }
                 return _instance;
             }
+        }
+
+        private void OnEnable(){
+            Log("OnEnable");
+        }
+
+        private void OnDisable(){
+            Log("OnDisable");
         }
         
         /// <summary>
@@ -69,7 +80,7 @@ namespace Hackerzhuli.Code.Editor
             // Start with an empty file
             File.WriteAllText(_logFilePath, string.Empty);
         }
-        
+          
         /// <summary>
         /// Writes a log entry to the file.
         /// </summary>
@@ -91,6 +102,7 @@ namespace Hackerzhuli.Code.Editor
             catch
             {
                 // Silently ignore file logging failures
+                Debug.LogError("Failed to write log entry to file");
             }
         }
         
@@ -98,6 +110,7 @@ namespace Hackerzhuli.Code.Editor
         /// Logs an info message to the file.
         /// </summary>
         /// <param name="message">The message to log</param>
+        [Conditional("HACKERZHULI_CODE_DEBUG")]
         public static void Log(object message)
         {
             if (Instance == null)
@@ -106,11 +119,12 @@ namespace Hackerzhuli.Code.Editor
             }
             Instance.WriteLog("INFO", message);
         }
-        
+          
         /// <summary>
         /// Logs a warning message to the file.
         /// </summary>
         /// <param name="message">The warning message to log</param>
+        [Conditional("HACKERZHULI_CODE_DEBUG")]
         public static void LogWarning(object message)
         {
             if (Instance == null)
@@ -124,6 +138,7 @@ namespace Hackerzhuli.Code.Editor
         /// Logs an error message to the file.
         /// </summary>
         /// <param name="message">The error message to log</param>
+        [Conditional("HACKERZHULI_CODE_DEBUG")]
         public static void LogError(object message)
         {
             if (Instance == null)

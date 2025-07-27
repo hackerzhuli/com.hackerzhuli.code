@@ -219,14 +219,17 @@ namespace Hackerzhuli.Code.Editor
                 {
                     Answer(requester, MessageType.Refresh, refreshResult);
                 }
+
+                FileLogger.Log("RefreshAssetDatabase finished");
             }
         }
-
+  
         private void OnCompilationStarted(object obj)
         {
             // Clear any existing compile errors when compilation starts
             _compileErrors.Clear();
             BroadcastMessage(MessageType.CompilationStarted, "");
+            FileLogger.Log("Compilation started");
         }
 
         private void OnCompilationFinished(object obj)
@@ -236,6 +239,7 @@ namespace Hackerzhuli.Code.Editor
             EnsureMessengerInitialized();
             BroadcastMessage(MessageType.CompilationFinished, "");
             _compilationFinishedTime = EditorApplication.timeSinceStartup;
+            FileLogger.Log("Compilation finished");
         }
 
         private string GetPackageVersion()
@@ -471,8 +475,10 @@ namespace Hackerzhuli.Code.Editor
             var message = string.IsNullOrEmpty(stackTrace) ? logString : $"{logString}\n{stackTrace}";
 
             BroadcastMessage(messageType, message);
-        }
 
+            FileLogger.Log($"Log message received: [{type}] {message}");
+        }
+     
         private void EnsureMessengerInitialized()
         {
             if (_messenger != null || !CodeEditor.IsEnabled)
