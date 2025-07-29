@@ -1,6 +1,7 @@
 using System;
 using System.IO;
 using System.Linq;
+using System.Threading;
 using UnityEngine;
 using UnityEditor;
 using System.Diagnostics;
@@ -12,26 +13,34 @@ namespace Hackerzhuli.Code.Editor
     /// A file-based logger that writes to Library/UnityCode directory.<br/>
     /// Provides static methods similar to Unity's Debug.Log<br/>
     /// Mainly for debugging purposes, but users will not see our logs in Unity Console. <br/>
-    /// Should only be used in the main thread. <br/>
+    /// Thread-safe and can be used from any thread. <br/>
     /// It is low performance, so it is disabled when it's installed by a user.
     /// </summary>
+    [InitializeOnLoad]
     public class FileLogger : ScriptableObject
     {
         private static FileLogger _instance;
+        private static readonly object _instanceLock = new object();
+        private readonly object _fileLock = new object();
         private string _logDirectory;
         private string _logFilePath;
+        
+        /// <summary>
+        /// Static constructor to initialize the logger when Unity loads.
+        /// </summary>
+        static FileLogger()
+        {
+            Initialize();
+        }
             
         /// <summary>
         /// Gets the singleton instance of the FileLogger.
+        /// Must be explicitly initialized from the main thread first.
         /// </summary>
         private static FileLogger Instance
         {
             get
             {
-                if (_instance == null)
-                {
-                    _instance = GetOrCreateInstance();
-                }
                 return _instance;
             }
         }
@@ -45,28 +54,42 @@ namespace Hackerzhuli.Code.Editor
         }
         
         /// <summary>
-        /// Gets or creates the FileLogger instance, handling domain reloads.
+        /// Initializes the FileLogger instance. Must be called from the main thread.
+        /// This method handles domain reloads and should be called during Unity initialization.
         /// </summary>
-        private static FileLogger GetOrCreateInstance()
+        public static void Initialize()
         {
-            // Try to find existing instance first (handles domain reload)
-            var existingInstance = Resources.FindObjectsOfTypeAll<FileLogger>().FirstOrDefault();
-            if (existingInstance != null)
+            if (_instance != null)
             {
-                return existingInstance;
+                return; // Already initialized
             }
             
-            // Create new instance if none exists
-            var instance = CreateInstance<FileLogger>();
-            instance.hideFlags = HideFlags.HideAndDontSave; // Don't save to scene or show in inspector
-            instance.Initialize();
-            return instance;
+            lock (_instanceLock)
+            {
+                if (_instance != null)
+                {
+                    return; // Double-check after acquiring lock
+                }
+                
+                // Try to find existing instance first (handles domain reload)
+                var existingInstance = Resources.FindObjectsOfTypeAll<FileLogger>().FirstOrDefault();
+                if (existingInstance != null)
+                {
+                    _instance = existingInstance;
+                    return;
+                }
+                
+                // Create new instance if none exists
+                _instance = CreateInstance<FileLogger>();
+                _instance.hideFlags = HideFlags.HideAndDontSave; // Don't save to scene or show in inspector
+                _instance.InitializeInternal();
+            }
         }
         
         /// <summary>
         /// Initializes the logger and sets up the log directory.
         /// </summary>
-        private void Initialize()
+        private void InitializeInternal()
         {
             _logDirectory = Path.Combine(Application.dataPath, "..", "Library", "UnityCode");
             
@@ -82,7 +105,7 @@ namespace Hackerzhuli.Code.Editor
         }
           
         /// <summary>
-        /// Writes a log entry to the file.
+        /// Writes a log entry to the file in a thread-safe manner.
         /// </summary>
         /// <param name="level">The log level (Info, Warning, Error, etc.)</param>
         /// <param name="message">The log message</param>
@@ -91,18 +114,21 @@ namespace Hackerzhuli.Code.Editor
         {
             try
             {
-                var instance = Instance; // Ensure initialization
-                
                 string timestamp = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss.fff");
                 string contextInfo = context != null ? $" [{context.name}]" : "";
-                string logEntry = $"[{timestamp}] [{level}]{contextInfo}: {message}\n";
+                string threadInfo = $" [Thread:{Thread.CurrentThread.ManagedThreadId}]";
+                string logEntry = $"[{timestamp}] [{level}]{contextInfo}{threadInfo}: {message}\n";
                 
-                File.AppendAllText(_logFilePath, logEntry);
+                lock (_fileLock)
+                {
+                    File.AppendAllText(_logFilePath, logEntry);
+                }
             }
             catch
             {
                 // Silently ignore file logging failures
-                Debug.LogError("Failed to write log entry to file");
+                // note that our log methods can be called from a Unity log callback
+                // so we can't log to Unity console here, that can be recursive
             }
         }
         
