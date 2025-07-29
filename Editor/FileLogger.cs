@@ -24,6 +24,8 @@ namespace Hackerzhuli.Code.Editor
         private readonly object _fileLock = new object();
         private string _logDirectory;
         private string _logFilePath;
+        private FileStream _logFileStream;
+        private StreamWriter _logWriter;
             
         /// <summary>
         /// Gets the singleton instance of the FileLogger.
@@ -86,6 +88,56 @@ namespace Hackerzhuli.Code.Editor
             
             // Start with an empty file
             File.WriteAllText(_logFilePath, string.Empty);
+            
+            // Open the log file for writing
+            OpenLogFile();
+        }
+        
+        /// <summary>
+        /// Opens the log file for writing.
+        /// </summary>
+        private void OpenLogFile()
+        {
+            try
+            {
+                if (_logFileStream == null && !string.IsNullOrEmpty(_logFilePath))
+                {
+                    _logFileStream = new FileStream(_logFilePath, FileMode.Append, FileAccess.Write, FileShare.Read);
+                    _logWriter = new StreamWriter(_logFileStream) { AutoFlush = true };
+                }
+            }
+            catch
+            {
+                // Silently ignore file opening failures
+            }
+        }
+        
+        /// <summary>
+        /// Closes the log file.
+        /// </summary>
+        private void CloseLogFile()
+        {
+            try
+            {
+                _logWriter?.Dispose();
+                _logWriter = null;
+                _logFileStream?.Dispose();
+                _logFileStream = null;
+            }
+            catch
+            {
+                // Silently ignore file closing failures
+            }
+        }
+        
+        private void OnEnable()
+        {
+            OpenLogFile();
+        }
+
+        private void OnDisable()
+        {
+            CloseLogFile();
         }
           
         /// <summary>
@@ -101,11 +153,14 @@ namespace Hackerzhuli.Code.Editor
                 string timestamp = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss.fff");
                 string contextInfo = context != null ? $" [{context.name}]" : "";
                 string threadInfo = $" [Thread:{Thread.CurrentThread.ManagedThreadId}]";
-                string logEntry = $"[{timestamp}] [{level}]{contextInfo}{threadInfo}: {message}\n";
+                string logEntry = $"[{timestamp}] [{level}]{contextInfo}{threadInfo}: {message}";
                 
                 lock (_fileLock)
                 {
-                    File.AppendAllText(_logFilePath, logEntry);
+                    if (_logWriter != null)
+                    {
+                        _logWriter.WriteLine(logEntry);
+                    }
                 }
             }
             catch
