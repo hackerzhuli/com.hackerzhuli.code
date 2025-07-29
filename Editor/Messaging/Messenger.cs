@@ -8,6 +8,7 @@ using System.Collections.Concurrent;
 using System.Net;
 using System.Net.Sockets;
 using System.Runtime.InteropServices;
+using Hackerzhuli.Code.Editor;
 
 namespace Hackerzhuli.Code.Editor.Messaging
 {
@@ -65,6 +66,7 @@ namespace Hackerzhuli.Code.Editor.Messaging
             }
             catch (SocketException se)
             {
+                FileLogger.LogError($"Socket exception in BeginReceiveMessage: {se.Message} (ErrorCode: {se.ErrorCode})");
                 MessengerException?.Invoke(this, new ExceptionEventArgs(se));
 
                 BeginReceiveMessage();
@@ -111,6 +113,7 @@ namespace Hackerzhuli.Code.Editor.Messaging
             }
             catch (Exception e)
             {
+                FileLogger.LogError($"Exception in ReceiveMessageCallback: {e.Message}");
                 RaiseMessengerException(e);
             }
 
@@ -135,6 +138,7 @@ namespace Hackerzhuli.Code.Editor.Messaging
 
         private void RaiseMessengerException(Exception e)
         {
+            FileLogger.LogError($"Messenger exception raised: {e.Message}");
             MessengerException?.Invoke(this, new ExceptionEventArgs(e));
         }
 
@@ -165,6 +169,10 @@ namespace Hackerzhuli.Code.Editor.Messaging
                             message = MessageFor(MessageType.Tcp, string.Concat(port, ':', buffer.Length));
                             buffer = SerializeMessage(message);
                         }
+                        else
+                        {
+                            FileLogger.LogError($"Failed to queue large message ({buffer.Length} bytes) on TCP listener");
+                        }
                     }
 
                     _socket.BeginSendTo(buffer, 0, Math.Min(buffer.Length, UdpSocket.BufferSize), SocketFlags.None,
@@ -173,6 +181,7 @@ namespace Hackerzhuli.Code.Editor.Messaging
             }
             catch (SocketException se)
             {
+                FileLogger.LogError($"Socket exception in SendMessage to {target}: {se.Message} (ErrorCode: {se.ErrorCode})");
                 MessengerException?.Invoke(this, new ExceptionEventArgs(se));
             }
         }
@@ -191,6 +200,7 @@ namespace Hackerzhuli.Code.Editor.Messaging
             }
             catch (SocketException se)
             {
+                FileLogger.LogError($"Socket exception in SendMessageCallback: {se.Message} (ErrorCode: {se.ErrorCode})");
                 MessengerException?.Invoke(this, new ExceptionEventArgs(se));
             }
             catch (ObjectDisposedException)
@@ -215,7 +225,10 @@ namespace Hackerzhuli.Code.Editor.Messaging
 
             // Discard large messages to keep this method simple
             if (buffer.Length >= UdpSocket.BufferSize)
+            {
+                FileLogger.LogError($"SendMessageBlocking: Message too large ({buffer.Length} bytes), discarding (max: {UdpSocket.BufferSize} bytes)");
                 return false;
+            }
 
             try
             {
@@ -235,8 +248,9 @@ namespace Hackerzhuli.Code.Editor.Messaging
                     return bytesSent > 0;
                 }
             }
-            catch
+            catch (Exception ex)
             {
+                FileLogger.LogError($"SendMessageBlocking failed to {target}: {ex.Message}");
                 return false;
             }
         }

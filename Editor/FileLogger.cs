@@ -24,14 +24,6 @@ namespace Hackerzhuli.Code.Editor
         private readonly object _fileLock = new object();
         private string _logDirectory;
         private string _logFilePath;
-        
-        /// <summary>
-        /// Static constructor to initialize the logger when Unity loads.
-        /// </summary>
-        static FileLogger()
-        {
-            Initialize();
-        }
             
         /// <summary>
         /// Gets the singleton instance of the FileLogger.
@@ -45,14 +37,6 @@ namespace Hackerzhuli.Code.Editor
             }
         }
 
-        private void OnEnable(){
-            Log("OnEnable");
-        }
-
-        private void OnDisable(){
-            Log("OnDisable");
-        }
-        
         /// <summary>
         /// Initializes the FileLogger instance. Must be called from the main thread.
         /// This method handles domain reloads and should be called during Unity initialization.

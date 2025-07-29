@@ -131,20 +131,25 @@ namespace Hackerzhuli.Code.Editor
             CompilationPipeline.compilationStarted += OnCompilationStarted;
             CompilationPipeline.compilationFinished += OnCompilationFinished;
             Application.logMessageReceived += OnLogMessageReceived;
+            Application.logMessageReceivedThreaded += OnLogMessageReceivedThreaded;
 
             // Flag that we need to notify clients that we're online
             _needsOnlineNotification = true;
+            FileLogger.Initialize();
+            FileLogger.Log("OnEnable");
         }
 
         private void OnDisable()
         {
             //Debug.Log("OnDisable");
             // Unsubscribe from Unity events
+            FileLogger.Log("OnDisable");
             EditorApplication.update -= Update;
             EditorApplication.playModeStateChanged -= OnPlayModeStateChanged;
             CompilationPipeline.compilationStarted -= OnCompilationStarted;
             CompilationPipeline.compilationFinished -= OnCompilationFinished;
             Application.logMessageReceived -= OnLogMessageReceived;
+            Application.logMessageReceivedThreaded -= OnLogMessageReceivedThreaded;
 
             // Notify clients that Unity is going offline before disposing the messenger
             if (_messenger != null)
@@ -445,6 +450,10 @@ namespace Hackerzhuli.Code.Editor
         private void Answer(IPEndPoint targetEndPoint, MessageType answerType, string answerValue)
         {
             _messenger?.SendMessage(targetEndPoint, answerType, answerValue);
+        }
+
+        private void OnLogMessageReceivedThreaded(string logString, string stackTrace, LogType type){
+            FileLogger.Log($"Log message received threaded: [{type}] {logString}");
         }
 
         /// <summary>
