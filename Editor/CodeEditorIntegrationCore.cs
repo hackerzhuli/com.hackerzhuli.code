@@ -453,7 +453,7 @@ namespace Hackerzhuli.Code.Editor
         }
 
         private void OnLogMessageReceivedThreaded(string logString, string stackTrace, LogType type){
-            FileLogger.Log($"Log message received threaded: [{type}] {logString}");
+            //FileLogger.Log($"Log message received threaded: [{type}] {logString}");
         }
 
         /// <summary>
