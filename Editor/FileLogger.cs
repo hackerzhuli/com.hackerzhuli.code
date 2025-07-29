@@ -78,24 +78,25 @@ namespace Hackerzhuli.Code.Editor
         private void InitializeInternal()
         {
             _logDirectory = Path.Combine(Application.dataPath, "..", "Library", "UnityCode");
-            
+            _logFilePath = Path.Combine(_logDirectory, "code.log");
+
+            #if HACKERZHULI_CODE_DEBUG
             if (!Directory.Exists(_logDirectory))
             {
                 Directory.CreateDirectory(_logDirectory);
             }
-            
-            _logFilePath = Path.Combine(_logDirectory, "code.log");
-            
             // Start with an empty file
             File.WriteAllText(_logFilePath, string.Empty);
             
             // Open the log file for writing
             OpenLogFile();
+            #endif
         }
         
         /// <summary>
         /// Opens the log file for writing.
         /// </summary>
+        [Conditional("HACKERZHULI_CODE_DEBUG")]
         private void OpenLogFile()
         {
             try
@@ -115,6 +116,7 @@ namespace Hackerzhuli.Code.Editor
         /// <summary>
         /// Closes the log file.
         /// </summary>
+        [Conditional("HACKERZHULI_CODE_DEBUG")]
         private void CloseLogFile()
         {
             try
