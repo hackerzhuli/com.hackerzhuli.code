@@ -72,13 +72,13 @@ All available message types:
 | `RetrieveTestList` | 23 | Request to retrieve list of available tests | Test mode string ("EditMode" or "PlayMode") |
 | `ExecuteTests` | 24 | Request to execute specific tests | TestMode, TestMode:AssemblyName.dll, or TestMode:FullTestName / Response is empty string|
 | `ShowUsage` | 25 | Show usage information | JSON serialized FileUsage object |
-| `CompilationFinished` | 100 | Notification that compilation has finished | Empty string |
+| `CompilationFinished` | 100 | Notification that compilation has finished | Empty string (automatically followed by GetCompileErrors message) |
 | `PackageName` | 101 | Request/response for package name | Empty string (request) / Package name string (response) |
 | `Online` | 102 | Notifies clients that this package is online and ready to receive messages | Empty string |
 | `Offline` | 103 | Notifies clients that this package is offline and can not receive messages | Empty string |
 | `IsPlaying` | 104 | Notification of current play mode state | "true" (in play mode) / "false" (in edit mode) |
 | `CompilationStarted` | 105 | Notification that compilation has started | Empty string |
-| `GetCompileErrors` | 106 | Request/response for compile error information | Empty string (request) / JSON serialized LogContainer (response) |
+| `GetCompileErrors` | 106 | Auto-sent after CompilationFinished, or manual request/response for compile error information | Empty string (request) / JSON serialized LogContainer (response) |
 
 Note:
 - Message value greater than or equal to 100 means it does not exist in the official package but was added in this package.
@@ -130,11 +130,26 @@ Detailed value formats for some of the types:
   - **Compilation Lifecycle**: This message is sent at the beginning of the compilation process, before any assembly compilation starts
   - **Relationship to CompilationFinished**: This message pairs with `CompilationFinished` (Value: 100) to provide complete compilation lifecycle notifications
 
+#### CompilationFinished (Value: 100)
+- **Format**: Empty string
+- **Description**: Notification sent when Unity's compilation pipeline finishes compiling assemblies. This message is broadcast to all connected clients when the compilation process completes.
+- **Automatic Behavior**: 
+  - **GetCompileErrors Auto-Send**: Immediately after broadcasting this message, a `GetCompileErrors` message (Value: 106) is automatically sent to all connected clients with the collected compile errors from the compilation session
+  - **Error Collection**: Compile errors are collected during the compilation process and automatically provided without requiring a separate request
+  - **Manual Requests**: `GetCompileErrors` can still be requested manually
+- **Important Notes**:
+  - **Compilation Lifecycle**: This message is sent at the end of the compilation process, after all assembly compilation finishes
+  - **Relationship to CompilationStarted**: This message pairs with `CompilationStarted` (Value: 105) to provide complete compilation lifecycle notifications
+  - **Client Integration**: Clients can expect to receive compile error information automatically after each compilation without needing to explicitly request it
+
 #### GetCompileErrors (Value: 106)
 - **Format**: 
   - Request: Empty string
   - Response: JSON serialized LogContainer object
-- **Description**: Requests the collected compile errors that occurred during Unity's compilation process. Unity collects compile errors within a 1-second window after compilation finishes.
+- **Description**: Provides the collected compile errors that occurred during Unity's compilation process. This message is automatically sent to all connected clients immediately after each `CompilationFinished` message, but can also be requested manually.
+- **Automatic Behavior**: 
+  - **Auto-Send**: Automatically broadcast to all clients after every `CompilationFinished` message
+  - **Manual Request**: Can also be requested manually by sending an empty string request
 
 - **C# Structure**:
 
@@ -173,7 +188,7 @@ public class Log
   - **Error Filtering**: Only log messages containing "error CS" are collected
   - **Automatic Clearing**: Previous compile errors are cleared when compilation starts
   - **Response Format**: Returns JSON with LogContainer containing array of Log objects
-- **Usage**: Clients can request this to get structured compile error information for IDE integration, error highlighting, and debugging assistance.
+- **Usage**: Clients automatically receive structured compile error information after each compilation for IDE integration, error highlighting, and debugging assistance. Manual requests are also supported for on-demand error retrieval.
 
 #### RetrieveTestList (Value: 23)
 - **Format**: Test mode string ("EditMode" or "PlayMode")

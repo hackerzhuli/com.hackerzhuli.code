@@ -115,7 +115,6 @@ namespace Hackerzhuli.Code.Editor
         
         [NonSerialized] private List<IPEndPoint> _refreshRequesters = new();
         [NonSerialized] private List<Log> _compileErrors = new();
-        [NonSerialized] private double _compilationFinishedTime;
 
         [NonSerialized] private Messenger _messenger;
         [NonSerialized] private bool _needsOnlineNotification;
@@ -130,6 +129,7 @@ namespace Hackerzhuli.Code.Editor
             EditorApplication.playModeStateChanged += OnPlayModeStateChanged;
             CompilationPipeline.compilationStarted += OnCompilationStarted;
             CompilationPipeline.compilationFinished += OnCompilationFinished;
+            CompilationPipeline.assemblyCompilationFinished += OnAssemblyCompilationFinished;
             Application.logMessageReceived += OnLogMessageReceived;
             Application.logMessageReceivedThreaded += OnLogMessageReceivedThreaded;
 
@@ -137,6 +137,38 @@ namespace Hackerzhuli.Code.Editor
             _needsOnlineNotification = true;
             FileLogger.Initialize();
             FileLogger.Log("OnEnable");
+        }
+
+        private void OnAssemblyCompilationFinished(string assemblyName, CompilerMessage[] messages)
+        {
+            FileLogger.Log($"Assembly compilation finished: {assemblyName}");
+            
+            if (messages != null && messages.Length > 0)
+            {
+                FileLogger.Log($"Found {messages.Length} compiler messages for assembly: {assemblyName}");
+                
+                // Collect compile errors from compiler messages
+                for (int i = 0; i < messages.Length; i++)
+                {
+                    var msg = messages[i];
+                    
+                    // Only collect error messages
+                    if (msg.type == CompilerMessageType.Error)
+                    {
+                        var unixTimestamp = ((DateTimeOffset)DateTime.Now).ToUnixTimeMilliseconds();
+                        var compileError = new Log(msg.message, "", unixTimestamp);
+                        _compileErrors.Add(compileError);
+                    }
+                    
+                    if (msg.type == CompilerMessageType.Error){
+                       FileLogger.LogError($"compile error: {msg.message}");
+                    }
+                }
+            }
+            else
+            {
+                FileLogger.Log($"No compiler messages for assembly: {assemblyName}");
+            }
         }
 
         private void OnDisable()
@@ -148,6 +180,7 @@ namespace Hackerzhuli.Code.Editor
             EditorApplication.playModeStateChanged -= OnPlayModeStateChanged;
             CompilationPipeline.compilationStarted -= OnCompilationStarted;
             CompilationPipeline.compilationFinished -= OnCompilationFinished;
+            CompilationPipeline.assemblyCompilationFinished -= OnAssemblyCompilationFinished;
             Application.logMessageReceived -= OnLogMessageReceived;
             Application.logMessageReceivedThreaded -= OnLogMessageReceivedThreaded;
 
@@ -241,9 +274,9 @@ namespace Hackerzhuli.Code.Editor
         {
             //Debug.Log("OnAssemblyReload");
             // need to ensure messenger is initialized, because assembly reload event can happen before first Update
-            EnsureMessengerInitialized();
+            //EnsureMessengerInitialized();
             BroadcastMessage(MessageType.CompilationFinished, "");
-            _compilationFinishedTime = EditorApplication.timeSinceStartup;
+            BroadcastMessage(MessageType.GetCompileErrors, GetCompileErrorsJson());
             FileLogger.Log("Compilation finished");
         }
 
@@ -453,7 +486,9 @@ namespace Hackerzhuli.Code.Editor
         }
 
         private void OnLogMessageReceivedThreaded(string logString, string stackTrace, LogType type){
-            FileLogger.Log($"Log message received threaded: [{type}] {logString}");
+            if (type == LogType.Error){
+                FileLogger.Log($"Log message received threaded: [{type}] {logString}");
+            }
         }
 
         /// <summary>
@@ -464,14 +499,6 @@ namespace Hackerzhuli.Code.Editor
         /// <param name="type">The type of log message (Log, Warning, Error, etc.).</param>
         private void OnLogMessageReceived(string logString, string stackTrace, LogType type)
         {
-            // Collect compile errors during the collection window
-            if (EditorApplication.timeSinceStartup - _compilationFinishedTime < 1.0 && type == LogType.Error && logString.Contains("error CS"))
-            {
-                var unixTimestamp = ((DateTimeOffset)DateTime.Now).ToUnixTimeMilliseconds();
-                var compileError = new Log(logString, stackTrace, unixTimestamp);
-                _compileErrors.Add(compileError);
-            }
-
             var messageType = type switch
             {
                 LogType.Error or LogType.Exception or LogType.Assert => MessageType.Error,
@@ -480,7 +507,6 @@ namespace Hackerzhuli.Code.Editor
             };
 
             // Create a formatted message that includes both the log content and stack trace if available
-
             var message = string.IsNullOrEmpty(stackTrace) ? logString : $"{logString}\n{stackTrace}";
 
             BroadcastMessage(messageType, message);
