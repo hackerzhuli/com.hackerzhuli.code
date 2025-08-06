@@ -1,6 +1,10 @@
 ## Description
 This package is called Visual Studio Code Editor. It is designed to work with my [Unity Code Pro extension for VS Code](https://github.com/hackerzhuli/unity-code). Making the development experience for Unity games in Cursor, Windsurf and Trae much better.
 
+It also works with my [Unity Code MCP](https://github.com/hackerzhuli/unity_code_mcp), which is an MCP server that allows AI agents (in VS Code, Claude Code, etc.) to compile code and run tests in Unity Editor.
+
+This package is designed for general purpose communication with Unity Editor, focusing on coding workflows, you can use it to power your own coding focused VS Code extensions or MCP servers.
+
 ## Features
 
 ### Supported VS Code Forks
@@ -23,6 +27,9 @@ This package is designed to work with Unity Code Pro and Dot Rush extension for 
 
 #### Unity Code Pro
 [Unity Code Pro](https://github.com/hackerzhuli/unity-code) is a VS Code extension that supports Unity Tests, debugging with Unity Editor, a Unity Console to see Unity's logs, and other useful things for Unity projects. Think of it as a alternative to the Unity extension. It is Windows only, but you can build from source for other platforms.
+
+### Unity Code MCP
+[Unity Code MCP](https://github.com/hackerzhuli/unity_code_mcp) is a MCP server that enables AI agents to work on Unity project autonomously, by providing tools to compile code and run tests in Unity Editor.
 
 ## Unity Version
 This package requires Unity 6.0 or higher.
@@ -49,3 +56,6 @@ Testing with Unity Code Pro in Trae:
 
 Debugging with Unity Code Pro in Trae:
 ![image](./Images/Debug%20in%20Trae.png)
+
+Tell Kimi K2 to fix compile errors with Unity Code MCP server in Trae(this is only a test, in a real project, AI agents should compile code and fix compile errors after they finished editing scripts without user prompting):
+![image](./Images/mcp_fix_compile_errors.webp)
