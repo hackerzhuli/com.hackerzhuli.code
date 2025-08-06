@@ -333,6 +333,11 @@ namespace Hackerzhuli.Code.Editor.Code
                 // Unity extension not installed, add associations
                 defaultAssociations["*.uxml"] = "xml";
                 // USS files are no longer associated with CSS - removed for custom language server support
+                if (associations.HasKey("*.uss") && associations["*.uss"] == "css")
+                {
+                    associations.Remove("*.uss");
+                    patched = true;
+                }
             }
             else if (ExtensionManager.UnityToolsExtensionState.IsInstalled &&
                      !ExtensionManager.DotRushExtensionState.IsInstalled)
