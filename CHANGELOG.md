@@ -1,5 +1,11 @@
 # Code Editor Package for Visual Studio
 
+## [1.0.10] - 2025-08-07
+Feature:
+- Improved compile error handling and messaging, using compilation pipeline API instead of log message events to get compile errors, which is more reliable, and compile errors are sent immediately after compilation finishes
+- Automatically removes USS-CSS association in `settings.json` when `Unity Code Pro` extension is installed, since we have native USS language server support
+- Added file-based logger for debugging
+
 ## [1.0.9] - 2025-7-27
 Feature:
 - Added fuzzy test name matching support - append '?' to test filters to enable fuzzy matching using "ends with" comparison
