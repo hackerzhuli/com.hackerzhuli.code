@@ -384,7 +384,8 @@ namespace Microsoft.Unity.VisualStudio.Editor
         ""*.sln"": ""*.csproj"",
         ""*.slnx"": ""*.csproj""
     },
-    ""dotnet.defaultSolution"": """ + IOPath.GetFileName(ProjectGenerator.SolutionFile()) + @"""
+    ""dotnet.defaultSolution"": """ + IOPath.GetFileName(ProjectGenerator.SolutionFile()) + @""",
+    ""dotnet.enableWorkspaceBasedDevelopment"": false
 }";
 
 			File.WriteAllText(settingsFile, content);

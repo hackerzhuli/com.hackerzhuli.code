@@ -89,5 +89,18 @@ namespace Microsoft.Unity.VisualStudio.Editor
 				.Substring(basePath.Length)
 				.Trim(Path.DirectorySeparatorChar);
 		}
+
+		internal static void SafeDelete(string file)
+		{
+			try
+			{
+				if (File.Exists(file))
+					File.Delete(file);
+			}
+			catch (IOException)
+			{
+				// ignore
+			}
+		}
 	}
 }

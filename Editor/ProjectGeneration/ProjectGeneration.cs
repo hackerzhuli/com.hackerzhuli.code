@@ -368,7 +368,7 @@ namespace Microsoft.Unity.VisualStudio.Editor
 			if (Path.IsPathRooted(filename) && packageInfo != null)
 			{
 				// We are outside the Unity project and using a package context
-				var linkPath = SkipPathPrefix(asset.NormalizePathSeparators(), packageInfo.assetPath.NormalizePathSeparators());
+				var linkPath = XmlFilename(SkipPathPrefix(asset.NormalizePathSeparators(), packageInfo.assetPath.NormalizePathSeparators()));
 
 				builder.Append(@""">").Append(k_WindowsNewline);
 				builder.Append("      <Link>").Append(linkPath).Append("</Link>").Append(k_WindowsNewline);
@@ -831,7 +831,7 @@ namespace Microsoft.Unity.VisualStudio.Editor
 		{
 		}
 
-		private void SyncSolution(IEnumerable<Assembly> assemblies)
+		internal virtual void SyncSolution(IEnumerable<Assembly> assemblies)
 		{
 			if (InvalidCharactersRegexPattern.IsMatch(ProjectDirectory))
 				Debug.LogWarning("Project path contains special characters, which can be an issue when opening Visual Studio");

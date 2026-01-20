@@ -4,6 +4,7 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+using System.Collections.Generic;
 using System.Text;
 using UnityEditor.Compilation;
 
@@ -115,6 +116,14 @@ namespace Microsoft.Unity.VisualStudio.Editor
 				@"  -->",
 				@"</Project>",
 				@""));
+		}
+
+		internal override void SyncSolution(IEnumerable<Assembly> assemblies)
+		{
+			// make sure we can't have sln and slnx solutions at the same time.
+			FileUtility.SafeDelete(base.SolutionFileImpl() + 'x');
+
+			base.SyncSolution(assemblies);
 		}
 	}
 }

@@ -1,5 +1,17 @@
 # Code Editor Package for Visual Studio
 
+## [2.0.27] - 2026-01-20
+
+Integration:
+
+- Fix Visual Studio Integration to properly wait for the solution to be opened.
+
+Project generation:
+
+- Disable Workspace-based development feature in `settings.json`.
+- Ensure that we only have one `sln` or `slnx` file at a time.
+- Properly handle filenames with special characters in `link` tags.
+
 ## [2.0.26] - 2025-12-16
 
 Integration:

@@ -145,5 +145,13 @@ namespace Microsoft.Unity.VisualStudio.Editor
 
 			return content.ToString();
 		}
+
+		internal override void SyncSolution(IEnumerable<Assembly> assemblies)
+		{
+			// make sure we can't have sln and slnx solutions at the same time.
+			FileUtility.SafeDelete(base.SolutionFileImpl());
+
+			base.SyncSolution(assemblies);
+		}
 	}
 }
