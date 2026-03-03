@@ -1,5 +1,14 @@
 # Code Editor Package for Visual Studio
 
+## [1.0.11] - 2026-03-04
+Feature:
+- Added support for Google Antigravity IDE
+- Added VSCodium support
+- Added configurations for Trae CN and Lingma
+
+Fix:
+- Replaced `FileInfo.LinkTarget` with libc `realpath()` for .NET Standard 2.1 compatibility
+
 ## [1.0.10] - 2025-08-07
 Feature:
 - Improved compile error handling and messaging, using compilation pipeline API instead of log message events to get compile errors, which is more reliable, and compile errors are sent immediately after compilation finishes
