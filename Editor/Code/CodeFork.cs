@@ -90,6 +90,25 @@ namespace Hackerzhuli.Code.Editor.Code
                 MacAppName = "Lingma.app",
                 LinuxExeName = "Lingma",
                 UserDataDirName = ".lingma"
+            },
+            new()
+            {
+                Name = "Antigravity",
+                WindowsDefaultDirName = "Antigravity",
+                WindowsExeName = "Antigravity.exe",
+                MacAppName = "Antigravity.app",
+                LinuxExeName = "antigravity",
+                UserDataDirName = ".antigravity"
+            },
+			      new()
+            {
+                Name = "VSCodium",
+                WindowsDefaultDirName = "VSCodium",
+                WindowsExeName = "VSCodium.exe",
+                MacAppName = "VSCodium.app",
+                LinuxExeName = "codium",
+                UserDataDirName = ".vscodium",
+				        LatestLanguageVersion = new Version(13, 0)
             }
         };
 
