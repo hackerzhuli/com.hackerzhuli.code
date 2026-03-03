@@ -73,7 +73,16 @@ namespace Hackerzhuli.Code.Editor.Code
                 LinuxExeName = "trae",
                 UserDataDirName = ".trae"
             },
-			new()
+            new()
+            {
+                Name = "Antigravity",
+                WindowsDefaultDirName = "Antigravity",
+                WindowsExeName = "Antigravity.exe",
+                MacAppName = "Antigravity.app",
+                LinuxExeName = "antigravity",
+                UserDataDirName = ".antigravity"
+            },
+			      new()
             {
                 Name = "VSCodium",
                 WindowsDefaultDirName = "VSCodium",
@@ -81,7 +90,7 @@ namespace Hackerzhuli.Code.Editor.Code
                 MacAppName = "VSCodium.app",
                 LinuxExeName = "codium",
                 UserDataDirName = ".vscodium",
-				LatestLanguageVersion = new Version(13, 0)
+				        LatestLanguageVersion = new Version(13, 0)
             }
         };
 
