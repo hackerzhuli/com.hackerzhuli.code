@@ -1,3 +1,6 @@
+using System.IO;
+using System.Runtime.InteropServices;
+
 namespace Hackerzhuli.Code.Editor
 {
     /// <summary>
@@ -5,6 +8,10 @@ namespace Hackerzhuli.Code.Editor
     /// </summary>
     internal static class PlatformPathUtility
     {
+#if UNITY_EDITOR_OSX || UNITY_EDITOR_LINUX
+        [DllImport("libc", EntryPoint = "realpath", CharSet = CharSet.Ansi)]
+        static extern System.IntPtr unix_realpath(string path, System.IntPtr resolved);
+#endif
         /// <summary>
         ///     Gets the real path by resolving symbolic links or shortcuts.
         /// </summary>
@@ -18,13 +25,17 @@ namespace Hackerzhuli.Code.Editor
 #if UNITY_EDITOR_WIN
             return path;
 #elif UNITY_EDITOR_OSX || UNITY_EDITOR_LINUX
-            // On Unix-like systems, resolve symbolic links
+            // On Unix-like systems, resolve symbolic links via libc realpath().
+            // FileInfo.LinkTarget is .NET 6+ only; Unity uses .NET Standard 2.1.
             try
             {
-                var fileInfo = new FileInfo(path);
-                if (fileInfo.Exists && fileInfo.LinkTarget != null)
+                var ptr = unix_realpath(path, System.IntPtr.Zero);
+                if (ptr != System.IntPtr.Zero)
                 {
-                    return fileInfo.LinkTarget;
+                    var resolved = Marshal.PtrToStringAnsi(ptr);
+                    Marshal.FreeHGlobal(ptr);
+                    if (!string.IsNullOrEmpty(resolved))
+                        return resolved;
                 }
             }
             catch
