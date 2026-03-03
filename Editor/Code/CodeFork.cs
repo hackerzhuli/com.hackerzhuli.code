@@ -72,6 +72,16 @@ namespace Hackerzhuli.Code.Editor.Code
                 MacAppName = "Trae.app",
                 LinuxExeName = "trae",
                 UserDataDirName = ".trae"
+            },
+			new()
+            {
+                Name = "VSCodium",
+                WindowsDefaultDirName = "VSCodium",
+                WindowsExeName = "VSCodium.exe",
+                MacAppName = "VSCodium.app",
+                LinuxExeName = "codium",
+                UserDataDirName = ".vscodium",
+				LatestLanguageVersion = new Version(13, 0)
             }
         };
 
