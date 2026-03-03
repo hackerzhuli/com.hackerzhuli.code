@@ -75,6 +75,24 @@ namespace Hackerzhuli.Code.Editor.Code
             },
             new()
             {
+                Name = "Trae CN",
+                WindowsDefaultDirName = "Trae CN",
+                WindowsExeName = "Trae CN.exe",
+                MacAppName = "Trae CN.app",
+                LinuxExeName = "Trae CN",
+                UserDataDirName = ".trae-cn"
+            },
+            new()
+            {
+                Name = "Lingma",
+                WindowsDefaultDirName = "Lingma",
+                WindowsExeName = "Lingma.exe",
+                MacAppName = "Lingma.app",
+                LinuxExeName = "Lingma",
+                UserDataDirName = ".lingma"
+            },
+            new()
+            {
                 Name = "Antigravity",
                 WindowsDefaultDirName = "Antigravity",
                 WindowsExeName = "Antigravity.exe",
