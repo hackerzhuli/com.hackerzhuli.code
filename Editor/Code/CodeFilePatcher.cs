@@ -272,6 +272,7 @@ namespace Hackerzhuli.Code.Editor.Code
             const string nestingEnabledKey = "explorer.fileNesting.enabled";
             const string nestingPatternsKey = "explorer.fileNesting.patterns";
             const string solutionKey = "dotnet.defaultSolution";
+            const string enableWorkspaceBasedKey = "dotnet.enableWorkspaceBasedDevelopment";
 
             var patched = false;
 
@@ -384,6 +385,19 @@ namespace Hackerzhuli.Code.Editor.Code
             if (!nestingPatterns.HasKey("*.sln") || nestingPatterns["*.sln"] != "*.csproj")
             {
                 nestingPatterns["*.sln"] = "*.csproj";
+                patched = true;
+            }
+
+            if (!nestingPatterns.HasKey("*.slnx") || nestingPatterns["*.slnx"] != "*.csproj")
+            {
+                nestingPatterns["*.slnx"] = "*.csproj";
+                patched = true;
+            }
+
+            // Add explorer.fileNesting.enabled setting
+            if (!settings.HasKey(enableWorkspaceBasedKey) || settings[enableWorkspaceBasedKey].AsBool != false)
+            {
+                settings[enableWorkspaceBasedKey] = false;
                 patched = true;
             }
 

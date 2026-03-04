@@ -5,25 +5,19 @@
  *--------------------------------------------------------------------------------------------*/
 
 using System;
-using System.Collections.Generic;
 
 namespace Hackerzhuli.Code.Editor.ProjectGeneration
 {
     internal enum GeneratorStyle
     {
         SDK = 1,
-        Legacy = 2
+		Legacy = 2,
     }
 
     internal static class GeneratorFactory
     {
-        private static readonly Dictionary<GeneratorStyle, IGenerator> _generators = new();
-
-        static GeneratorFactory()
-        {
-            _generators.Add(GeneratorStyle.SDK, new SdkStyleProjectGeneration());
-            _generators.Add(GeneratorStyle.Legacy, new LegacyStyleProjectGeneration());
-        }
+		private static readonly SdkStyleProjectGeneration _sdkStyleProjectGeneration = new SdkStyleProjectGeneration();
+		private static readonly LegacyStyleProjectGeneration _legacyStyleProjectGeneration = new LegacyStyleProjectGeneration();
 
         public static IGenerator GetInstance(GeneratorStyle style)
         {
@@ -31,8 +25,10 @@ namespace Hackerzhuli.Code.Editor.ProjectGeneration
             if (forceStyleString != null && Enum.TryParse<GeneratorStyle>(forceStyleString, out var forceStyle))
                 style = forceStyle;
 
-            if (_generators.TryGetValue(style, out var result))
-                return result;
+			if (style == GeneratorStyle.SDK)
+				return _sdkStyleProjectGeneration;
+			if (style == GeneratorStyle.Legacy)
+				return _legacyStyleProjectGeneration;
 
             throw new ArgumentException("Unknown generator style");
         }
@@ -41,7 +37,7 @@ namespace Hackerzhuli.Code.Editor.ProjectGeneration
         {
             foreach (var method in TypeCacheHelper.GetPostProcessorCallbacks(nameof(OnSelectingCSProjectStyle)))
             {
-                var retValue = method.Invoke(null, Array.Empty<object>());
+				object retValue = method.Invoke(null, Array.Empty<object>());
                 if (method.ReturnType != typeof(string))
                     continue;
 

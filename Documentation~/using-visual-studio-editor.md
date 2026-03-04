@@ -2,7 +2,7 @@
 
 To use the package, go to **Edit** > **Preferences** > **External Tools** > **External Script Editor** and select the version of **Visual Studio** you have installed. When you select this option, the window reloads and displays settings that control production of .csproj files.
 
-![External Tools tab in the Preferences window](Images/external-tools-tab.png)
+![External Tools tab in the Preferences window](Images/vs-external-tools.png)
 
 ## Generate .csproj files
 

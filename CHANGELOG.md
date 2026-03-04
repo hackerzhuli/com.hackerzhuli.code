@@ -1,5 +1,26 @@
 # Code Editor Package for Visual Studio
 
+## [1.0.12] - 2026-03-04
+Merged the following changes from upstream:
+
+Internal:
+- Fixes for release validation and release process.
+
+Integration:
+- Fix Visual Studio Integration to properly wait for the solution to be opened.
+- Fix handling of asset-pipeline refresh-mode setting.
+- Remove support for `Visual Studio for Mac`. Please use `VS Code` going forward.
+- Performance optimizations.
+
+Project generation:
+- Disable Workspace-based development feature in `settings.json`.
+- Ensure that we only have one `sln` or `slnx` file at a time.
+- Properly handle filenames with special characters in `link` tags.
+- Add `EnableOnDemandExcludedFolderLoading` capability when generating SDK-Style project.
+- Allow customization of `langversion` when using a `rsp` file.
+- Move to `slnx` solution generation when using `SDK-Style` projects.
+- Both `VS Code` and `Visual Studio 2026` are now using `SDK-Style` projects by default.
+
 ## [1.0.11] - 2026-03-04
 Feature:
 - Added support for Google Antigravity IDE

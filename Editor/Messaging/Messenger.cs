@@ -14,7 +14,6 @@ namespace Hackerzhuli.Code.Editor.Messaging
 {
     internal class Messenger : IDisposable
     {
-        private readonly object _disposeLock = new();
         private readonly ConcurrentQueue<Message> _messageQueue = new();
 
         private readonly UdpSocket _socket;
@@ -39,11 +38,14 @@ namespace Hackerzhuli.Code.Editor.Messaging
 
         public void Dispose()
         {
-            lock (_disposeLock)
-            {
-                _disposed = true;
-                _socket.Close();
-            }
+			try
+			{
+				_disposed = true;
+				_socket.Close();
+			}
+			catch
+			{
+			}
         }
 
         public event EventHandler<ExceptionEventArgs> MessengerException;
@@ -55,14 +57,13 @@ namespace Hackerzhuli.Code.Editor.Messaging
 
             try
             {
-                lock (_disposeLock)
-                {
-                    if (_disposed)
-                        return;
+				beginReceive:
+				if (_disposed)
+					return;
 
-                    _socket.BeginReceiveFrom(buffer, 0, buffer.Length, SocketFlags.None, ref any,
-                        ReceiveMessageCallback, buffer);
-                }
+				var result = _socket.BeginReceiveFrom(buffer, 0, buffer.Length, SocketFlags.None, ref any, ReceiveMessageCallback, buffer);
+				if (result.CompletedSynchronously)
+					goto beginReceive;
             }
             catch (SocketException se)
             {
@@ -82,14 +83,11 @@ namespace Hackerzhuli.Code.Editor.Messaging
             {
                 var endPoint = UdpSocket.Any();
 
-                lock (_disposeLock)
-                {
-                    if (_disposed)
-                        return;
+                if (_disposed)
+                    return;
 
-                    _socket.EndReceiveFrom(result, ref endPoint);
-                }
-
+                _socket.EndReceiveFrom(result, ref endPoint);
+                
                 var message = DeserializeMessage(UdpSocket.BufferFor(result));
                 if (message != null)
                 {
@@ -117,7 +115,8 @@ namespace Hackerzhuli.Code.Editor.Messaging
                 RaiseMessengerException(e);
             }
 
-            BeginReceiveMessage();
+            if (!result.CompletedSynchronously)
+                BeginReceiveMessage();
         }
 
         private static bool IsValidTcpMessage(Message message, out int port, out int bufferSize)
@@ -154,49 +153,47 @@ namespace Hackerzhuli.Code.Editor.Messaging
 
             try
             {
-                lock (_disposeLock)
+                if (_disposed)
+                    return;
+
+                if (buffer.Length >= UdpSocket.BufferSize)
                 {
-                    if (_disposed)
-                        return;
-
-                    if (buffer.Length >= UdpSocket.BufferSize)
+                    // switch to TCP mode to handle big messages
+                    var port = TcpListener.Queue(buffer);
+                    if (port > 0)
                     {
-                        // switch to TCP mode to handle big messages
-                        var port = TcpListener.Queue(buffer);
-                        if (port > 0)
-                        {
-                            // success, replace original message with "switch to tcp" marker + port information + buffer length
-                            message = MessageFor(MessageType.Tcp, string.Concat(port, ':', buffer.Length));
-                            buffer = SerializeMessage(message);
-                        }
-                        else
-                        {
-                            FileLogger.LogError($"Failed to queue large message ({buffer.Length} bytes) on TCP listener");
-                        }
+                        // success, replace original message with "switch to tcp" marker + port information + buffer length
+                        message = MessageFor(MessageType.Tcp, string.Concat(port, ':', buffer.Length));
+                        buffer = SerializeMessage(message);
                     }
-
-                    _socket.BeginSendTo(buffer, 0, Math.Min(buffer.Length, UdpSocket.BufferSize), SocketFlags.None,
-                        target, SendMessageCallback, null);
+                    else
+                    {
+                        FileLogger.LogError($"Failed to queue large message ({buffer.Length} bytes) on TCP listener");
+                    }
                 }
+
+                _socket.BeginSendTo(buffer, 0, Math.Min(buffer.Length, UdpSocket.BufferSize), SocketFlags.None,
+                    target, SendMessageCallback, null);
+                
             }
             catch (SocketException se)
             {
                 FileLogger.LogError($"Socket exception in SendMessage to {target}: {se.Message} (ErrorCode: {se.ErrorCode})");
                 MessengerException?.Invoke(this, new ExceptionEventArgs(se));
             }
+            catch (ObjectDisposedException)
+			{
+			}
         }
 
         private void SendMessageCallback(IAsyncResult result)
         {
             try
             {
-                lock (_disposeLock)
-                {
-                    if (_disposed)
-                        return;
+                if (_disposed)
+                    return;
 
-                    _socket.EndSendTo(result);
-                }
+                _socket.EndSendTo(result);   
             }
             catch (SocketException se)
             {
@@ -232,21 +229,18 @@ namespace Hackerzhuli.Code.Editor.Messaging
 
             try
             {
-                lock (_disposeLock)
-                {
-                    if (_disposed)
-                        return false;
-                    // Get original timeout and set new one
-                    var originalTimeout =
-                        (int)_socket.GetSocketOption(SocketOptionLevel.Socket, SocketOptionName.SendTimeout);
-                    _socket.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.SendTimeout, timeoutMs);
-                    var timeoutChanged = true;
-                    var bytesSent = _socket.SendTo(buffer, 0, buffer.Length, SocketFlags.None, target);
-                    if (timeoutChanged)
-                        _socket.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.SendTimeout,
-                            originalTimeout);
-                    return bytesSent > 0;
-                }
+                if (_disposed)
+                    return false;
+                // Get original timeout and set new one
+                var originalTimeout =
+                    (int)_socket.GetSocketOption(SocketOptionLevel.Socket, SocketOptionName.SendTimeout);
+                _socket.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.SendTimeout, timeoutMs);
+                var timeoutChanged = true;
+                var bytesSent = _socket.SendTo(buffer, 0, buffer.Length, SocketFlags.None, target);
+                if (timeoutChanged)
+                    _socket.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.SendTimeout,
+                        originalTimeout);
+                return bytesSent > 0;
             }
             catch (Exception ex)
             {

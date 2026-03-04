@@ -3,7 +3,6 @@
  *  Copyright (c) Microsoft Corporation. All rights reserved.
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
-
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -13,11 +12,11 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.RegularExpressions;
 using Hackerzhuli.Code.Editor.Code;
+using Unity.CodeEditor;
 using Unity.Profiling;
 using UnityEditor;
 using UnityEditor.Compilation;
 using UnityEngine;
-using PackageInfo = UnityEditor.PackageManager.PackageInfo;
 
 namespace Hackerzhuli.Code.Editor.ProjectGeneration
 {
@@ -29,13 +28,13 @@ namespace Hackerzhuli.Code.Editor.ProjectGeneration
 
     public interface IGenerator
     {
-        string ProjectDirectory { get; }
-        IAssemblyNameProvider AssemblyNameProvider { get; }
         bool SyncIfNeeded(IEnumerable<string> affectedFiles, IEnumerable<string> reimportedFiles);
         void Sync();
         bool HasSolutionBeenGenerated();
         bool IsSupportedFile(string path);
         string SolutionFile();
+		string ProjectDirectory { get; }
+		IAssemblyNameProvider AssemblyNameProvider { get; }
     }
 
     public class ProjectGeneration : IGenerator
@@ -49,43 +48,27 @@ namespace Hackerzhuli.Code.Editor.ProjectGeneration
         // Use this to have the same newline ending on all platforms for consistency.
         internal const string k_WindowsNewline = "\r\n";
 
-        private const string m_SolutionProjectEntryTemplate =
-            @"Project(""{{{0}}}"") = ""{1}"", ""{2}"", ""{{{3}}}""{4}EndProject";
+		const string m_SolutionProjectEntryTemplate = @"Project(""{{{0}}}"") = ""{1}"", ""{2}"", ""{{{3}}}""{4}EndProject";
 
-        private readonly string m_SolutionProjectConfigurationTemplate = string.Join(k_WindowsNewline,
-            @"        {{{0}}}.Debug|Any CPU.ActiveCfg = Debug|Any CPU",
-            @"        {{{0}}}.Debug|Any CPU.Build.0 = Debug|Any CPU",
-            @"        {{{0}}}.Release|Any CPU.ActiveCfg = Release|Any CPU",
-            @"        {{{0}}}.Release|Any CPU.Build.0 = Release|Any CPU").Replace("    ", "\t");
+		HashSet<string> _supportedExtensions;
 
-        private static readonly string[] k_ReimportSyncExtensions = { ".dll", ".asmdef" };
-
-        private HashSet<string> m_ProjectSupportedExtensions = new();
-        private HashSet<string> m_BuiltinSupportedExtensions = new();
-
-        private readonly HashSet<string>
-            m_DefaultSupportedExtensions = new(new[] { "dll", "asmdef", "additionalfile" });
-
-        private readonly string m_ProjectName;
+		readonly string m_ProjectName;
         internal readonly IAssemblyNameProvider m_AssemblyNameProvider;
-        private readonly IFileIO m_FileIOProvider;
-        private readonly IGUIDGenerator m_GUIDGenerator;
-        private bool m_ShouldGenerateAll;
-        private ICodeEditorInstallation m_CurrentInstallation;
+		readonly IFileIO m_FileIOProvider;
+		readonly IGUIDGenerator m_GUIDGenerator;
+		ICodeEditorInstallation m_CurrentInstallation;
 
         public ProjectGeneration() : this(Directory.GetParent(Application.dataPath).FullName)
         {
         }
 
-        public ProjectGeneration(string tempDirectory) : this(tempDirectory, new AssemblyNameProvider(),
-            new FileIOProvider(), new GUIDProvider())
+		public ProjectGeneration(string tempDirectory) : this(tempDirectory, new AssemblyNameProvider(), new FileIOProvider(), new GUIDProvider())
         {
         }
 
-        public ProjectGeneration(string tempDirectory, IAssemblyNameProvider assemblyNameProvider,
-            IFileIO fileIoProvider, IGUIDGenerator guidGenerator)
+		public ProjectGeneration(string tempDirectory, IAssemblyNameProvider assemblyNameProvider, IFileIO fileIoProvider, IGUIDGenerator guidGenerator)
         {
-            ProjectDirectory = tempDirectory.NormalizeWindowsToUnix();
+			ProjectDirectory = FileUtility.NormalizeWindowsToUnix(tempDirectory);
             m_ProjectName = Path.GetFileName(ProjectDirectory);
             m_AssemblyNameProvider = assemblyNameProvider;
             m_FileIOProvider = fileIoProvider;
@@ -97,16 +80,16 @@ namespace Hackerzhuli.Code.Editor.ProjectGeneration
         internal virtual GeneratorStyle Style => GeneratorStyle.Legacy;
 
         /// <summary>
-        ///     Syncs the scripting solution if any affected files are relevant.
+		/// Syncs the scripting solution if any affected files are relevant.
         /// </summary>
         /// <returns>
-        ///     Whether the solution was synced.
+		/// Whether the solution was synced.
         /// </returns>
         /// <param name='affectedFiles'>
-        ///     A set of files whose status has changed
+		/// A set of files whose status has changed
         /// </param>
         /// <param name="reimportedFiles">
-        ///     A set of files that got reimported
+		/// A set of files that got reimported
         /// </param>
         public bool SyncIfNeeded(IEnumerable<string> affectedFiles, IEnumerable<string> reimportedFiles)
         {
@@ -122,7 +105,10 @@ namespace Hackerzhuli.Code.Editor.ProjectGeneration
                 // Don't sync if we haven't synced before
                 var affected = affectedFiles as ICollection<string> ?? affectedFiles.ToArray();
                 var reimported = reimportedFiles as ICollection<string> ?? reimportedFiles.ToArray();
-                if (!HasFilesBeenModified(affected, reimported)) return false;
+				if (!HasFilesBeenModified(affected, reimported))
+				{
+					return false;
+				}
 
                 var assemblies = m_AssemblyNameProvider.GetAssemblies(ShouldFileBePartOfSolution);
                 var allProjectAssemblies = RelevantAssembliesForMode(assemblies).ToList();
@@ -147,14 +133,14 @@ namespace Hackerzhuli.Code.Editor.ProjectGeneration
 
                     SyncProject(assembly,
                         allAssetProjectParts,
-                        ParseResponseFileData(assembly).ToArray());
+						ParseResponseFileData(assembly));
                 }
 
                 return true;
             }
         }
 
-        private void CreateExtraFiles(ICodeEditorInstallation installation)
+		private void CreateExtraFiles(ICodeEditorInstallation installation)
         {
             installation?.CreateExtraFiles(ProjectDirectory);
         }
@@ -166,17 +152,18 @@ namespace Hackerzhuli.Code.Editor.ProjectGeneration
 
         private static bool ShouldSyncOnReimportedAsset(string asset)
         {
-            return k_ReimportSyncExtensions.Contains(new FileInfo(asset).Extension);
+			// ".dll", ".asmdef"
+			var extension = Path.GetExtension(asset);
+			return extension == ".dll" || extension == ".asmdef";
         }
 
         private void RefreshCurrentInstallation()
         {
-            var editor = Unity.CodeEditor.CodeEditor.CurrentEditor as CodeEditor;
-            editor?.TryGetVisualStudioInstallationForPath(Unity.CodeEditor.CodeEditor.CurrentEditorInstallation, true,
-                out m_CurrentInstallation);
+			var editor = Unity.CodeEditor.CodeEditor.CurrentEditor as CodeEditor;
+			editor?.TryGetVisualStudioInstallationForPath(Unity.CodeEditor.CodeEditor.CurrentEditorInstallation, lookupDiscoveredInstallations: true, out m_CurrentInstallation);
         }
 
-        private static ProfilerMarker solutionSyncMarker = new("SolutionSynchronizerSync");
+		static ProfilerMarker solutionSyncMarker = new ProfilerMarker("SolutionSynchronizerSync");
 
         public void Sync()
         {
@@ -193,7 +180,10 @@ namespace Hackerzhuli.Code.Editor.ProjectGeneration
 
             var externalCodeAlreadyGeneratedProjects = OnPreGeneratingCSProjectFiles();
 
-            if (!externalCodeAlreadyGeneratedProjects) GenerateAndWriteSolutionAndProjects();
+			if (!externalCodeAlreadyGeneratedProjects)
+			{
+				GenerateAndWriteSolutionAndProjects();
+			}
 
             OnGeneratedCSProjectFiles();
         }
@@ -205,14 +195,31 @@ namespace Hackerzhuli.Code.Editor.ProjectGeneration
 
         private void SetupProjectSupportedExtensions()
         {
-            m_ProjectSupportedExtensions = new HashSet<string>(m_AssemblyNameProvider.ProjectSupportedExtensions);
-            m_BuiltinSupportedExtensions = new HashSet<string>(EditorSettings.projectGenerationBuiltinExtensions);
+			_supportedExtensions = new HashSet<string>
+			{
+				"dll",
+				"asmdef",
+				"additionalfile"
+			};
+
+			foreach (var extension in m_AssemblyNameProvider.ProjectSupportedExtensions)
+			{
+				_supportedExtensions.Add(extension);
+			}
+
+			foreach (var extension in EditorSettings.projectGenerationBuiltinExtensions)
+			{
+				_supportedExtensions.Add(extension);
+			}
         }
 
         private bool ShouldFileBePartOfSolution(string file)
         {
             // Exclude files coming from packages except if they are internalized.
-            if (m_AssemblyNameProvider.IsInternalizedPackagePath(file)) return false;
+			if (m_AssemblyNameProvider.IsInternalizedPackagePath(file))
+			{
+				return false;
+			}
 
             return IsSupportedFile(file);
         }
@@ -237,20 +244,9 @@ namespace Hackerzhuli.Code.Editor.ProjectGeneration
         private bool IsSupportedFile(string path, out string extensionWithoutDot)
         {
             extensionWithoutDot = GetExtensionWithoutDot(path);
-
-            // Dll's are not scripts but still need to be included
-            if (m_DefaultSupportedExtensions.Contains(extensionWithoutDot))
-                return true;
-
-            if (m_BuiltinSupportedExtensions.Contains(extensionWithoutDot))
-                return true;
-
-            if (m_ProjectSupportedExtensions.Contains(extensionWithoutDot))
-                return true;
-
-            return false;
+			// dlls and other configured files are not scripts but still need to be included
+			return _supportedExtensions.Contains(extensionWithoutDot);
         }
-
 
         private static ScriptingLanguage ScriptingLanguageFor(Assembly assembly)
         {
@@ -285,50 +281,59 @@ namespace Hackerzhuli.Code.Editor.ProjectGeneration
             var allProjectAssemblies = RelevantAssembliesForMode(assemblies);
 
             foreach (var assembly in allProjectAssemblies)
+			{
                 SyncProject(assembly,
                     allAssetProjectParts,
-                    ParseResponseFileData(assembly).ToArray());
+					ParseResponseFileData(assembly));
+			}
         }
 
-        private IEnumerable<ResponseFileData> ParseResponseFileData(Assembly assembly)
+		private ResponseFileData[] ParseResponseFileData(Assembly assembly)
         {
-            var systemReferenceDirectories =
-                CompilationPipeline.GetSystemAssemblyDirectories(assembly.compilerOptions.ApiCompatibilityLevel);
+			var systemReferenceDirectories = CompilationPipeline.GetSystemAssemblyDirectories(assembly.compilerOptions.ApiCompatibilityLevel);
 
-            var responseFilesData = assembly.compilerOptions.ResponseFiles.ToDictionary(x => x, x =>
-                m_AssemblyNameProvider.ParseResponseFile(
+			Dictionary<string, ResponseFileData> responseFilesData = assembly.compilerOptions.ResponseFiles.ToDictionary(x => x, x => m_AssemblyNameProvider.ParseResponseFile(
                     x,
                     ProjectDirectory,
                     systemReferenceDirectories
                 ));
 
-            var responseFilesWithErrors = responseFilesData.Where(x => x.Value.Errors.Any())
+			Dictionary<string, ResponseFileData> responseFilesWithErrors = responseFilesData.Where(x => x.Value.Errors.Any())
                 .ToDictionary(x => x.Key, x => x.Value);
 
             if (responseFilesWithErrors.Any())
+			{
                 foreach (var error in responseFilesWithErrors)
                 foreach (var valueError in error.Value.Errors)
+					{
                     Debug.LogError($"{error.Key} Parse Error : {valueError}");
+					}
+			}
 
-            return responseFilesData.Select(x => x.Value);
+			return responseFilesData.Select(x => x.Value).ToArray();
         }
 
         private Dictionary<string, string> GenerateAllAssetProjectParts()
         {
-            var stringBuilders = new Dictionary<string, StringBuilder>();
+			Dictionary<string, StringBuilder> stringBuilders = new Dictionary<string, StringBuilder>();
 
-            foreach (var asset in m_AssemblyNameProvider.GetAllAssetPaths())
+			foreach (string asset in m_AssemblyNameProvider.GetAllAssetPaths())
             {
                 // Exclude files coming from packages except if they are internalized.
-                if (m_AssemblyNameProvider.IsInternalizedPackagePath(asset)) continue;
+				if (m_AssemblyNameProvider.IsInternalizedPackagePath(asset))
+				{
+					continue;
+				}
 
-                if (IsSupportedFile(asset, out var extensionWithoutDot) &&
-                    ScriptingLanguage.None == ScriptingLanguageForExtension(extensionWithoutDot))
+				if (IsSupportedFile(asset, out var extensionWithoutDot) && ScriptingLanguage.None == ScriptingLanguageForExtension(extensionWithoutDot))
                 {
                     // Find assembly the asset belongs to by adding script extension and using compilation pipeline.
                     var assemblyName = m_AssemblyNameProvider.GetAssemblyNameFromScriptPath(asset);
 
-                    if (string.IsNullOrEmpty(assemblyName)) continue;
+					if (string.IsNullOrEmpty(assemblyName))
+					{
+						continue;
+					}
 
                     assemblyName = Path.GetFileNameWithoutExtension(assemblyName);
 
@@ -364,8 +369,7 @@ namespace Hackerzhuli.Code.Editor.ProjectGeneration
             if (Path.IsPathRooted(filename) && packageInfo != null)
             {
                 // We are outside the Unity project and using a package context
-                var linkPath = SkipPathPrefix(asset.NormalizePathSeparators(),
-                    packageInfo.assetPath.NormalizePathSeparators());
+				var linkPath = XmlFilename(SkipPathPrefix(asset.NormalizePathSeparators(), packageInfo.assetPath.NormalizePathSeparators()));
 
                 builder.Append(@""">").Append(k_WindowsNewline);
                 builder.Append("      <Link>").Append(linkPath).Append("</Link>").Append(k_WindowsNewline);
@@ -380,16 +384,19 @@ namespace Hackerzhuli.Code.Editor.ProjectGeneration
         private void SyncProject(
             Assembly assembly,
             Dictionary<string, string> allAssetsProjectParts,
-            ResponseFileData[] responseFilesData)
+			ResponseFileData[] responseFileData)
         {
             SyncProjectFileIfNotChanged(
                 ProjectFile(assembly),
-                ProjectText(assembly, allAssetsProjectParts, responseFilesData));
+				ProjectText(assembly, allAssetsProjectParts, responseFileData));
         }
 
         private void SyncProjectFileIfNotChanged(string path, string newContents)
         {
-            if (Path.GetExtension(path) == ".csproj") newContents = OnGeneratedCSProject(path, newContents);
+			if (Path.GetExtension(path) == ".csproj")
+			{
+				newContents = OnGeneratedCSProject(path, newContents);
+			}
 
             SyncFileIfNotChanged(path, newContents);
         }
@@ -401,20 +408,25 @@ namespace Hackerzhuli.Code.Editor.ProjectGeneration
             SyncFileIfNotChanged(path, newContents);
         }
 
-        private static void OnGeneratedCSProjectFiles()
+		static void OnGeneratedCSProjectFiles()
         {
             foreach (var method in TypeCacheHelper.GetPostProcessorCallbacks(nameof(OnGeneratedCSProjectFiles)))
+			{
                 method.Invoke(null, Array.Empty<object>());
+			}
         }
 
         private static bool OnPreGeneratingCSProjectFiles()
         {
-            var result = false;
+			bool result = false;
 
             foreach (var method in TypeCacheHelper.GetPostProcessorCallbacks(nameof(OnPreGeneratingCSProjectFiles)))
             {
                 var retValue = method.Invoke(null, Array.Empty<object>());
-                if (method.ReturnType == typeof(bool)) result |= (bool)retValue;
+				if (method.ReturnType == typeof(bool))
+				{
+					result |= (bool)retValue;
+				}
             }
 
             return result;
@@ -427,8 +439,10 @@ namespace Hackerzhuli.Code.Editor.ProjectGeneration
                 var args = new[] { path, content };
                 var returnValue = method.Invoke(null, args);
                 if (method.ReturnType == typeof(string))
+				{
                     // We want to chain content update between invocations
                     content = (string)returnValue;
+				}
             }
 
             return content;
@@ -448,7 +462,10 @@ namespace Hackerzhuli.Code.Editor.ProjectGeneration
         {
             try
             {
-                if (m_FileIOProvider.Exists(filename) && newContents == m_FileIOProvider.ReadAllText(filename)) return;
+				if (m_FileIOProvider.Exists(filename) && newContents == m_FileIOProvider.ReadAllText(filename))
+				{
+					return;
+				}
             }
             catch (Exception exception)
             {
@@ -460,14 +477,14 @@ namespace Hackerzhuli.Code.Editor.ProjectGeneration
 
         private string ProjectText(Assembly assembly,
             Dictionary<string, string> allAssetsProjectParts,
-            ResponseFileData[] responseFilesData)
+			ResponseFileData[] responseFileData)
         {
-            ProjectHeader(assembly, responseFilesData, out var projectBuilder);
+			ProjectHeader(assembly, responseFileData, out StringBuilder projectBuilder);
 
             var references = new List<string>();
 
             projectBuilder.Append(@"  <ItemGroup>").Append(k_WindowsNewline);
-            foreach (var file in assembly.sourceFiles)
+			foreach (string file in assembly.sourceFiles)
             {
                 if (!IsSupportedFile(file, out var extensionWithoutDot))
                     continue;
@@ -482,7 +499,6 @@ namespace Hackerzhuli.Code.Editor.ProjectGeneration
                     references.Add(fullFile);
                 }
             }
-
             projectBuilder.Append(@"  </ItemGroup>").Append(k_WindowsNewline);
 
             // Append additional non-script files that should be included in project generation.
@@ -493,11 +509,12 @@ namespace Hackerzhuli.Code.Editor.ProjectGeneration
                 projectBuilder.Append(additionalAssetsForProject);
 
                 projectBuilder.Append(@"  </ItemGroup>").Append(k_WindowsNewline);
+
             }
 
             projectBuilder.Append(@"  <ItemGroup>").Append(k_WindowsNewline);
 
-            var responseRefs = responseFilesData.SelectMany(x => x.FullPathReferences.Select(r => r));
+			var responseRefs = responseFileData.SelectMany(x => x.FullPathReferences.Select(r => r));
             var internalAssemblyReferences = assembly.assemblyReferences
                 .Where(i => !i.sourceFiles.Any(ShouldFileBePartOfSolution)).Select(i => i.outputPath);
             var allReferences =
@@ -508,8 +525,7 @@ namespace Hackerzhuli.Code.Editor.ProjectGeneration
 
             foreach (var reference in allReferences)
             {
-                var fullReference =
-                    Path.IsPathRooted(reference) ? reference : Path.Combine(ProjectDirectory, reference);
+				string fullReference = Path.IsPathRooted(reference) ? reference : Path.Combine(ProjectDirectory, reference);
                 AppendReference(fullReference, projectBuilder);
             }
 
@@ -518,9 +534,10 @@ namespace Hackerzhuli.Code.Editor.ProjectGeneration
             if (0 < assembly.assemblyReferences.Length)
             {
                 projectBuilder.Append("  <ItemGroup>").Append(k_WindowsNewline);
-                foreach (var reference in assembly.assemblyReferences.Where(i =>
-                             i.sourceFiles.Any(ShouldFileBePartOfSolution)))
+				foreach (var reference in assembly.assemblyReferences.Where(i => i.sourceFiles.Any(ShouldFileBePartOfSolution)))
+				{
                     AppendProjectReference(assembly, reference, projectBuilder);
+				}
 
                 projectBuilder.Append(@"  </ItemGroup>").Append(k_WindowsNewline);
             }
@@ -545,64 +562,62 @@ namespace Hackerzhuli.Code.Editor.ProjectGeneration
             return SecurityElement.Escape(s);
         }
 
-        internal virtual void AppendProjectReference(Assembly assembly, Assembly reference,
-            StringBuilder projectBuilder)
+		internal virtual void AppendProjectReference(Assembly assembly, Assembly reference, StringBuilder projectBuilder)
         {
         }
 
         private void AppendReference(string fullReference, StringBuilder projectBuilder)
         {
             var escapedFullPath = EscapedRelativePathFor(fullReference, out _);
-            projectBuilder.Append(@"    <Reference Include=""")
-                .Append(Path.GetFileNameWithoutExtension(escapedFullPath)).Append(@""">").Append(k_WindowsNewline);
-            projectBuilder.Append("      <HintPath>").Append(escapedFullPath).Append("</HintPath>")
-                .Append(k_WindowsNewline);
+			projectBuilder.Append(@"    <Reference Include=""").Append(Path.GetFileNameWithoutExtension(escapedFullPath)).Append(@""">").Append(k_WindowsNewline);
+			projectBuilder.Append("      <HintPath>").Append(escapedFullPath).Append("</HintPath>").Append(k_WindowsNewline);
             projectBuilder.Append("      <Private>False</Private>").Append(k_WindowsNewline);
             projectBuilder.Append("    </Reference>").Append(k_WindowsNewline);
         }
 
         public string ProjectFile(Assembly assembly)
         {
-            return Path.Combine(ProjectDirectory,
-                $"{m_AssemblyNameProvider.GetAssemblyName(assembly.outputPath, assembly.name)}.csproj");
+			return Path.Combine(ProjectDirectory, $"{m_AssemblyNameProvider.GetAssemblyName(assembly.outputPath, assembly.name)}.csproj");
         }
 
 #if UNITY_EDITOR_WIN
-        private static readonly Regex InvalidCharactersRegexPattern =
-            new(@"\?|&|\*|""|<|>|\||#|%|\^|;", RegexOptions.Compiled);
+		private static readonly Regex InvalidCharactersRegexPattern = new Regex(@"\?|&|\*|""|<|>|\||#|%|\^|;", RegexOptions.Compiled);
 #else
-		private static readonly Regex InvalidCharactersRegexPattern =
- new Regex(@"\?|&|\*|""|<|>|\||#|%|\^|;|:", RegexOptions.Compiled);
+		private static readonly Regex InvalidCharactersRegexPattern = new Regex(@"\?|&|\*|""|<|>|\||#|%|\^|;|:", RegexOptions.Compiled);
 #endif
 
         public string SolutionFile()
         {
-            return Path.Combine(ProjectDirectory.NormalizePathSeparators(),
-                $"{InvalidCharactersRegexPattern.Replace(m_ProjectName, "_")}.sln");
+			return SolutionFileImpl();
+		}
+
+		internal virtual string SolutionFileImpl()
+		{
+			return Path.Combine(ProjectDirectory.NormalizePathSeparators(), $"{InvalidCharactersRegexPattern.Replace(m_ProjectName, "_")}.sln");
         }
 
-        internal string GetLangVersion(Assembly assembly)
+		internal string GetLangVersion(Assembly assembly, ResponseFileData[] responseFileData)
         {
-            var targetLanguageVersion =
-                "latest"; // danger: latest is not the same absolute value depending on the VS version.
+			var langVersion = GetOtherArguments(responseFileData, "langversion").FirstOrDefault();
+			if (!string.IsNullOrEmpty(langVersion))
+				return langVersion;
+
+			var targetLanguageVersion = "latest"; // danger: latest is not the same absolute value depending on the VS version.
             if (m_CurrentInstallation != null)
             {
                 var vsLanguageSupport = m_CurrentInstallation.LatestLanguageVersionSupported;
                 var unityLanguageSupport = UnityInstallation.LatestLanguageVersionSupported(assembly);
 
                 // Use the minimal supported version between VS and Unity, so that compilation will work in both
-                targetLanguageVersion =
-                    (vsLanguageSupport <= unityLanguageSupport ? vsLanguageSupport : unityLanguageSupport)
-                    .ToString(2); // (major, minor) only
+				targetLanguageVersion = (vsLanguageSupport <= unityLanguageSupport ? vsLanguageSupport : unityLanguageSupport).ToString(2); // (major, minor) only
             }
 
             return targetLanguageVersion;
         }
 
-        private static IEnumerable<string> GetOtherArguments(ResponseFileData[] responseFilesData,
-            HashSet<string> names)
+		private static IEnumerable<string> GetOtherArguments(ResponseFileData[] responseFileData, string name)
         {
-            var lines = responseFilesData
+			var lines = responseFileData
                 .SelectMany(x => x.OtherArguments)
                 .Where(l => !string.IsNullOrEmpty(l))
                 .Select(l => l.Trim())
@@ -618,7 +633,7 @@ namespace Hackerzhuli.Code.Editor.ProjectGeneration
                     .Substring(1, index - 1)
                     .Trim();
 
-                if (!names.Contains(key))
+				if (name != key)
                     continue;
 
                 if (argument.Length <= index)
@@ -630,8 +645,7 @@ namespace Hackerzhuli.Code.Editor.ProjectGeneration
             }
         }
 
-        private void SetAnalyzerAndSourceGeneratorProperties(Assembly assembly, ResponseFileData[] responseFilesData,
-            ProjectProperties properties)
+		private void SetAnalyzerAndSourceGeneratorProperties(Assembly assembly, ResponseFileData[] responseFileData, ProjectProperties properties)
         {
             if (m_CurrentInstallation == null || !m_CurrentInstallation.SupportsAnalyzers)
                 return;
@@ -643,16 +657,29 @@ namespace Hackerzhuli.Code.Editor.ProjectGeneration
             var analyzerConfigPath = string.Empty;
             var compilerOptions = assembly.compilerOptions;
 
+#if UNITY_2020_2_OR_NEWER
             // Analyzers + ruleset provided by Unity
             analyzers.AddRange(compilerOptions.RoslynAnalyzerDllPaths);
             rulesetPath = compilerOptions.RoslynAnalyzerRulesetPath;
+#endif
+
+			// We have support in 2021.3, 2022.2 but without a backport in 2022.1
+#if UNITY_2021_3
+			// Unfortunately those properties were introduced in a patch release of 2021.3, so not found in 2021.3.2f1 for example
+			var scoType = compilerOptions.GetType();
+			var afpProperty = scoType.GetProperty("RoslynAdditionalFilePaths");
+			var acpProperty = scoType.GetProperty("AnalyzerConfigPath");
+			additionalFilePaths.AddRange(afpProperty?.GetValue(compilerOptions) as string[] ?? Array.Empty<string>());
+			analyzerConfigPath = acpProperty?.GetValue(compilerOptions) as string ?? analyzerConfigPath;
+#elif UNITY_2022_2_OR_NEWER
             additionalFilePaths.AddRange(compilerOptions.RoslynAdditionalFilePaths);
             analyzerConfigPath = compilerOptions.AnalyzerConfigPath;
+#endif
 
             // Analyzers and additional files provided by csc.rsp
-            analyzers.AddRange(GetOtherArguments(responseFilesData, new HashSet<string>(new[] { "analyzer", "a" })));
-            additionalFilePaths.AddRange(GetOtherArguments(responseFilesData,
-                new HashSet<string>(new[] { "additionalfile" })));
+			analyzers.AddRange(GetOtherArguments(responseFileData, "analyzer"));
+			analyzers.AddRange(GetOtherArguments(responseFileData, "a"));
+			additionalFilePaths.AddRange(GetOtherArguments(responseFileData, "additionalfile"));
 
             properties.RulesetPath = ToNormalizedPath(rulesetPath);
             properties.Analyzers = ToNormalizedPaths(analyzers);
@@ -678,7 +705,7 @@ namespace Hackerzhuli.Code.Editor.ProjectGeneration
 
         private void ProjectHeader(
             Assembly assembly,
-            ResponseFileData[] responseFilesData,
+			ResponseFileData[] responseFileData,
             out StringBuilder headerBuilder
         )
         {
@@ -687,22 +714,21 @@ namespace Hackerzhuli.Code.Editor.ProjectGeneration
             var projectProperties = new ProjectProperties
             {
                 ProjectGuid = ProjectGuid(assembly),
-                LangVersion = GetLangVersion(assembly),
+				LangVersion = GetLangVersion(assembly, responseFileData),
                 AssemblyName = assembly.name,
                 RootNamespace = GetRootNamespace(assembly),
                 OutputPath = assembly.outputPath,
                 // RSP alterable
-                Defines = assembly.defines.Concat(responseFilesData.SelectMany(x => x.Defines)).Distinct().ToArray(),
-                Unsafe = assembly.compilerOptions.AllowUnsafeCode | responseFilesData.Any(x => x.Unsafe),
+				Defines = assembly.defines.Concat(responseFileData.SelectMany(x => x.Defines)).Distinct().ToArray(),
+				Unsafe = assembly.compilerOptions.AllowUnsafeCode | responseFileData.Any(x => x.Unsafe),
                 // VSTU Flavoring
                 FlavoringProjectType = projectType + ":" + (int)projectType,
-                FlavoringBuildTarget = EditorUserBuildSettings.activeBuildTarget + ":" +
-                                       (int)EditorUserBuildSettings.activeBuildTarget,
+				FlavoringBuildTarget = EditorUserBuildSettings.activeBuildTarget + ":" + (int)EditorUserBuildSettings.activeBuildTarget,
                 FlavoringUnityVersion = Application.unityVersion,
-                FlavoringPackageVersion = CodeEditorIntegration.PackageVersion()
+				FlavoringPackageVersion = CodeEditorIntegration.PackageVersion(),
             };
 
-            SetAnalyzerAndSourceGeneratorProperties(assembly, responseFilesData, projectProperties);
+			SetAnalyzerAndSourceGeneratorProperties(assembly, responseFileData, projectProperties);
 
             GetProjectHeader(projectProperties, out headerBuilder);
         }
@@ -712,7 +738,7 @@ namespace Hackerzhuli.Code.Editor.ProjectGeneration
             GamePlugins = 3,
             Game = 1,
             EditorPlugins = 7,
-            Editor = 5
+			Editor = 5,
         }
 
         private static ProjectType ProjectTypeOf(string fileName)
@@ -741,10 +767,8 @@ namespace Hackerzhuli.Code.Editor.ProjectGeneration
 
             headerBuilder.Append(@"  <PropertyGroup>").Append(k_WindowsNewline);
             headerBuilder.Append(@"    <NoWarn>").Append(NoWarn).Append("</NoWarn>").Append(k_WindowsNewline);
-            headerBuilder.Append(@"    <DefineConstants>").Append(string.Join(";", properties.Defines))
-                .Append(@"</DefineConstants>").Append(k_WindowsNewline);
-            headerBuilder.Append(@"    <AllowUnsafeBlocks>").Append(properties.Unsafe).Append(@"</AllowUnsafeBlocks>")
-                .Append(k_WindowsNewline);
+			headerBuilder.Append(@"    <DefineConstants>").Append(string.Join(";", properties.Defines)).Append(@"</DefineConstants>").Append(k_WindowsNewline);
+			headerBuilder.Append(@"    <AllowUnsafeBlocks>").Append(properties.Unsafe).Append(@"</AllowUnsafeBlocks>").Append(k_WindowsNewline);
             headerBuilder.Append(@"  </PropertyGroup>").Append(k_WindowsNewline);
         }
 
@@ -753,8 +777,7 @@ namespace Hackerzhuli.Code.Editor.ProjectGeneration
             if (!string.IsNullOrEmpty(properties.RulesetPath))
             {
                 headerBuilder.Append(@"  <PropertyGroup>").Append(k_WindowsNewline);
-                headerBuilder.Append(@"    <CodeAnalysisRuleSet>").Append(properties.RulesetPath)
-                    .Append(@"</CodeAnalysisRuleSet>").Append(k_WindowsNewline);
+				headerBuilder.Append(@"    <CodeAnalysisRuleSet>").Append(properties.RulesetPath).Append(@"</CodeAnalysisRuleSet>").Append(k_WindowsNewline);
                 headerBuilder.Append(@"  </PropertyGroup>").Append(k_WindowsNewline);
             }
 
@@ -762,16 +785,16 @@ namespace Hackerzhuli.Code.Editor.ProjectGeneration
             {
                 headerBuilder.Append(@"  <ItemGroup>").Append(k_WindowsNewline);
                 foreach (var analyzer in properties.Analyzers)
-                    headerBuilder.Append(@"    <Analyzer Include=""").Append(analyzer).Append(@""" />")
-                        .Append(k_WindowsNewline);
+				{
+					headerBuilder.Append(@"    <Analyzer Include=""").Append(analyzer).Append(@""" />").Append(k_WindowsNewline);
+				}
                 headerBuilder.Append(@"  </ItemGroup>").Append(k_WindowsNewline);
             }
 
             if (!string.IsNullOrEmpty(properties.AnalyzerConfigPath))
             {
                 headerBuilder.Append(@"  <ItemGroup>").Append(k_WindowsNewline);
-                headerBuilder.Append(@"    <EditorConfigFiles Include=""").Append(properties.AnalyzerConfigPath)
-                    .Append(@""" />").Append(k_WindowsNewline);
+				headerBuilder.Append(@"    <EditorConfigFiles Include=""").Append(properties.AnalyzerConfigPath).Append(@""" />").Append(k_WindowsNewline);
                 headerBuilder.Append(@"  </ItemGroup>").Append(k_WindowsNewline);
             }
 
@@ -779,36 +802,29 @@ namespace Hackerzhuli.Code.Editor.ProjectGeneration
             {
                 headerBuilder.Append(@"  <ItemGroup>").Append(k_WindowsNewline);
                 foreach (var additionalFile in properties.AdditionalFilePaths)
-                    headerBuilder.Append(@"    <AdditionalFiles Include=""").Append(additionalFile).Append(@""" />")
-                        .Append(k_WindowsNewline);
+				{
+					headerBuilder.Append(@"    <AdditionalFiles Include=""").Append(additionalFile).Append(@""" />").Append(k_WindowsNewline);
+				}
                 headerBuilder.Append(@"  </ItemGroup>").Append(k_WindowsNewline);
             }
         }
 
-        internal void GetProjectHeaderVstuFlavoring(ProjectProperties properties, StringBuilder headerBuilder,
-            bool includeProjectTypeGuids = true)
+		internal void GetProjectHeaderVstuFlavoring(ProjectProperties properties, StringBuilder headerBuilder, bool includeProjectTypeGuids = true)
         {
             // Flavoring
             headerBuilder.Append(@"  <PropertyGroup>").Append(k_WindowsNewline);
 
             if (includeProjectTypeGuids)
-                headerBuilder
-                    .Append(
-                        @"    <ProjectTypeGuids>{E097FAD1-6243-4DAD-9C02-E9B9EFC3FFC1};{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}</ProjectTypeGuids>")
-                    .Append(k_WindowsNewline);
+			{
+				headerBuilder.Append(@"    <ProjectTypeGuids>{E097FAD1-6243-4DAD-9C02-E9B9EFC3FFC1};{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}</ProjectTypeGuids>").Append(k_WindowsNewline);
+			}
 
-            headerBuilder.Append(@"    <UnityProjectGenerator>Package</UnityProjectGenerator>")
-                .Append(k_WindowsNewline);
-            headerBuilder.Append(@"    <UnityProjectGeneratorVersion>").Append(properties.FlavoringPackageVersion)
-                .Append(@"</UnityProjectGeneratorVersion>").Append(k_WindowsNewline);
-            headerBuilder.Append(@"    <UnityProjectGeneratorStyle>").Append(Style)
-                .Append("</UnityProjectGeneratorStyle>").Append(k_WindowsNewline);
-            headerBuilder.Append(@"    <UnityProjectType>").Append(properties.FlavoringProjectType)
-                .Append(@"</UnityProjectType>").Append(k_WindowsNewline);
-            headerBuilder.Append(@"    <UnityBuildTarget>").Append(properties.FlavoringBuildTarget)
-                .Append(@"</UnityBuildTarget>").Append(k_WindowsNewline);
-            headerBuilder.Append(@"    <UnityVersion>").Append(properties.FlavoringUnityVersion)
-                .Append(@"</UnityVersion>").Append(k_WindowsNewline);
+			headerBuilder.Append(@"    <UnityProjectGenerator>Package</UnityProjectGenerator>").Append(k_WindowsNewline);
+			headerBuilder.Append(@"    <UnityProjectGeneratorVersion>").Append(properties.FlavoringPackageVersion).Append(@"</UnityProjectGeneratorVersion>").Append(k_WindowsNewline);
+			headerBuilder.Append(@"    <UnityProjectGeneratorStyle>").Append(Style).Append("</UnityProjectGeneratorStyle>").Append(k_WindowsNewline);
+			headerBuilder.Append(@"    <UnityProjectType>").Append(properties.FlavoringProjectType).Append(@"</UnityProjectType>").Append(k_WindowsNewline);
+			headerBuilder.Append(@"    <UnityBuildTarget>").Append(properties.FlavoringBuildTarget).Append(@"</UnityBuildTarget>").Append(k_WindowsNewline);
+			headerBuilder.Append(@"    <UnityVersion>").Append(properties.FlavoringUnityVersion).Append(@"</UnityVersion>").Append(k_WindowsNewline);
             headerBuilder.Append(@"  </PropertyGroup>").Append(k_WindowsNewline);
         }
 
@@ -816,48 +832,55 @@ namespace Hackerzhuli.Code.Editor.ProjectGeneration
         {
         }
 
-        private static string GetSolutionText()
-        {
-            return string.Join(k_WindowsNewline,
-                @"",
-                @"Microsoft Visual Studio Solution File, Format Version {0}",
-                @"# Visual Studio {1}",
-                @"{2}",
-                @"Global",
-                @"    GlobalSection(SolutionConfigurationPlatforms) = preSolution",
-                @"        Debug|Any CPU = Debug|Any CPU",
-                @"        Release|Any CPU = Release|Any CPU",
-                @"    EndGlobalSection",
-                @"    GlobalSection(ProjectConfigurationPlatforms) = postSolution",
-                @"{3}",
-                @"    EndGlobalSection",
-                @"{4}",
-                @"EndGlobal",
-                @"").Replace("    ", "\t");
-        }
-
-        private void SyncSolution(IEnumerable<Assembly> assemblies)
+		internal virtual void SyncSolution(IEnumerable<Assembly> assemblies)
         {
             if (InvalidCharactersRegexPattern.IsMatch(ProjectDirectory))
-                Debug.LogWarning(
-                    "Project path contains special characters, which can be an issue when opening Visual Studio");
+				Debug.LogWarning("Project path contains special characters, which can be an issue when opening Visual Studio");
 
             var solutionFile = SolutionFile();
-            var previousSolution = m_FileIOProvider.Exists(solutionFile)
-                ? SolutionParser.ParseSolutionFile(solutionFile, m_FileIOProvider)
-                : null;
+			var previousSolution = m_FileIOProvider.Exists(solutionFile) ? SolutionParser.ParseSolutionFile(solutionFile, m_FileIOProvider) : null;
             SyncSolutionFileIfNotChanged(solutionFile, SolutionText(assemblies, previousSolution));
         }
 
-        private string SolutionText(IEnumerable<Assembly> assemblies, Solution previousSolution = null)
+		internal virtual string SolutionText(IEnumerable<Assembly> assemblies, Solution previousSolution = null)
         {
             const string fileversion = "12.00";
             const string vsversion = "15";
 
+			var projects = GetSolutionProjects(assemblies, previousSolution);
+			var properties = previousSolution != null ? previousSolution.Properties : null;
+
+			string propertiesText = GetPropertiesText(properties);
+			string projectEntriesText = GetProjectEntriesText(projects);
+
+			// do not generate configurations for SolutionFolders
+			var configurableProjects = projects.Where(p => !p.IsSolutionFolderProjectFactory());
+			string projectConfigurationsText = string.Join(k_WindowsNewline, configurableProjects.Select(p => GetProjectActiveConfigurations(p.ProjectGuid)).ToArray());
+
+			const string solutionText =
+				"" + k_WindowsNewline
+				+ "Microsoft Visual Studio Solution File, Format Version {0}" + k_WindowsNewline
+				+ "# Visual Studio {1}" + k_WindowsNewline
+				+ "{2}" + k_WindowsNewline
+				+ "Global" + k_WindowsNewline
+				+ "\tGlobalSection(SolutionConfigurationPlatforms) = preSolution" + k_WindowsNewline
+				+ "\t\tDebug|Any CPU = Debug|Any CPU" + k_WindowsNewline
+				+ "\t\tRelease|Any CPU = Release|Any CPU" + k_WindowsNewline
+				+ "\tEndGlobalSection" + k_WindowsNewline
+				+ "\tGlobalSection(ProjectConfigurationPlatforms) = postSolution" + k_WindowsNewline
+				+ "{3}" + k_WindowsNewline
+				+ "\tEndGlobalSection" + k_WindowsNewline
+				+ "{4}" + k_WindowsNewline
+				+ "EndGlobal" + k_WindowsNewline
+				+ "";
+
+			return string.Format(solutionText, fileversion, vsversion, projectEntriesText, projectConfigurationsText, propertiesText);
+		}
+
+		internal List<SolutionProjectEntry> GetSolutionProjects(IEnumerable<Assembly> assemblies, Solution previousSolution = null)
+		{
             var relevantAssemblies = RelevantAssembliesForMode(assemblies);
             var generatedProjects = ToProjectEntries(relevantAssemblies).ToList();
-
-            SolutionProperties[] properties = null;
 
             // First, add all projects generated by Unity to the solution
             var projects = new List<SolutionProjectEntry>();
@@ -867,24 +890,13 @@ namespace Hackerzhuli.Code.Editor.ProjectGeneration
             {
                 // Add all projects that were previously in the solution and that are not generated by Unity, nor generated in the project root directory
                 var externalProjects = previousSolution.Projects
-                    .Where(p => p.IsSolutionFolderProjectFactory() ||
-                                !FileUtility.IsFileInProjectRootDirectory(p.FileName))
+					.Where(p => p.IsSolutionFolderProjectFactory() || !FileUtility.IsFileInProjectRootDirectory(p.FileName))
                     .Where(p => generatedProjects.All(gp => gp.FileName != p.FileName));
 
                 projects.AddRange(externalProjects);
-                properties = previousSolution.Properties;
-            }
+			}
 
-            var propertiesText = GetPropertiesText(properties);
-            var projectEntriesText = GetProjectEntriesText(projects);
-
-            // do not generate configurations for SolutionFolders
-            var configurableProjects = projects.Where(p => !p.IsSolutionFolderProjectFactory());
-            var projectConfigurationsText = string.Join(k_WindowsNewline,
-                configurableProjects.Select(p => GetProjectActiveConfigurations(p.ProjectGuid)).ToArray());
-
-            return string.Format(GetSolutionText(), fileversion, vsversion, projectEntriesText,
-                projectConfigurationsText, propertiesText);
+			return projects;
         }
 
         private static IEnumerable<Assembly> RelevantAssembliesForMode(IEnumerable<Assembly> assemblies)
@@ -895,16 +907,16 @@ namespace Hackerzhuli.Code.Editor.ProjectGeneration
         private static string GetPropertiesText(SolutionProperties[] array)
         {
             if (array == null || array.Length == 0)
-                // HideSolution by default
-                array = new[]
                 {
-                    new SolutionProperties
-                    {
+				// HideSolution by default
+				array = new[] {
+					new SolutionProperties() {
                         Name = "SolutionProperties",
                         Type = "preSolution",
-                        Entries = new List<KeyValuePair<string, string>> { new("HideSolutionNode", "FALSE") }
+						Entries = new List<KeyValuePair<string,string>>() { new KeyValuePair<string, string> ("HideSolutionNode", "FALSE") }
                     }
                 };
+			}
             var result = new StringBuilder();
 
             for (var i = 0; i < array.Length; i++)
@@ -930,8 +942,8 @@ namespace Hackerzhuli.Code.Editor.ProjectGeneration
         }
 
         /// <summary>
-        ///     Get a Project("{guid}") = "MyProject", "MyProject.unityproj", "{projectguid}"
-        ///     entry for each relevant language
+		/// Get a Project("{guid}") = "MyProject", "MyProject.unityproj", "{projectguid}"
+		/// entry for each relevant language
         /// </summary>
         private string GetProjectEntriesText(IEnumerable<SolutionProjectEntry> entries)
         {
@@ -946,7 +958,8 @@ namespace Hackerzhuli.Code.Editor.ProjectGeneration
         private IEnumerable<SolutionProjectEntry> ToProjectEntries(IEnumerable<Assembly> assemblies)
         {
             foreach (var assembly in assemblies)
-                yield return new SolutionProjectEntry
+			{
+				yield return new SolutionProjectEntry()
                 {
                     ProjectFactoryGuid = SolutionGuid(assembly),
                     Name = assembly.name,
@@ -954,19 +967,26 @@ namespace Hackerzhuli.Code.Editor.ProjectGeneration
                     ProjectGuid = ProjectGuid(assembly),
                     Metadata = k_WindowsNewline
                 };
+			}
         }
 
         /// <summary>
-        ///     Generate the active configuration string for a given project guid
+		/// Generate the active configuration string for a given project guid
         /// </summary>
         private string GetProjectActiveConfigurations(string projectGuid)
         {
+			const string solutionProjectConfigurationTemplate =
+				"\t\t{{{0}}}.Debug|Any CPU.ActiveCfg = Debug|Any CPU" + k_WindowsNewline
+				+ "\t\t{{{0}}}.Debug|Any CPU.Build.0 = Debug|Any CPU" + k_WindowsNewline
+				+ "\t\t{{{0}}}.Release|Any CPU.ActiveCfg = Release|Any CPU" + k_WindowsNewline
+				+ "\t\t{{{0}}}.Release|Any CPU.Build.0 = Release|Any CPU";
+
             return string.Format(
-                m_SolutionProjectConfigurationTemplate,
+				solutionProjectConfigurationTemplate,
                 projectGuid);
         }
 
-        internal string EscapedRelativePathFor(string file, out PackageInfo packageInfo)
+		internal string EscapedRelativePathFor(string file, out UnityEditor.PackageManager.PackageInfo packageInfo)
         {
             var projectDir = ProjectDirectory.NormalizePathSeparators();
             file = file.NormalizePathSeparators();
@@ -977,7 +997,7 @@ namespace Hackerzhuli.Code.Editor.ProjectGeneration
             {
                 // We have to normalize the path, because the PackageManagerRemapper assumes
                 // dir seperators will be os specific.
-                var absolutePath = Path.GetFullPath(path.NormalizePathSeparators());
+				var absolutePath = FileUtility.GetAbsolutePath(path.NormalizePathSeparators());
                 path = SkipPathPrefix(absolutePath, projectDir);
             }
 
@@ -986,7 +1006,7 @@ namespace Hackerzhuli.Code.Editor.ProjectGeneration
 
         internal static string SkipPathPrefix(string path, string prefix)
         {
-            if (path.StartsWith($"{prefix}{Path.DirectorySeparatorChar}") && path.Length > prefix.Length)
+			if (path.StartsWith($"{prefix}{Path.DirectorySeparatorChar}") && (path.Length > prefix.Length))
                 return path.Substring(prefix.Length + 1);
             return path;
         }
@@ -1013,7 +1033,11 @@ namespace Hackerzhuli.Code.Editor.ProjectGeneration
 
         private static string GetRootNamespace(Assembly assembly)
         {
+#if UNITY_2020_2_OR_NEWER
             return assembly.rootNamespace;
+#else
+			return EditorSettings.projectGenerationRootNamespace;
+#endif
         }
     }
 
@@ -1027,8 +1051,10 @@ namespace Hackerzhuli.Code.Editor.ProjectGeneration
         public static string GuidForSolution(string projectName, ScriptingLanguage language)
         {
             if (language == ScriptingLanguage.CSharp)
+			{
                 // GUID for a C# class library: http://www.codeproject.com/Reference/720512/List-of-Visual-Studio-Project-Type-GUIDs
                 return "FAE04EC0-301F-11D3-BF4B-00C04F79EFBC";
+			}
 
             return ComputeGuidHashFor(projectName);
         }
@@ -1041,15 +1067,14 @@ namespace Hackerzhuli.Code.Editor.ProjectGeneration
 
         private static string HashAsGuid(string hash)
         {
-            var guid = hash.Substring(0, 8) + "-" + hash.Substring(8, 4) + "-" + hash.Substring(12, 4) + "-" +
-                       hash.Substring(16, 4) + "-" + hash.Substring(20, 12);
+			var guid = hash.Substring(0, 8) + "-" + hash.Substring(8, 4) + "-" + hash.Substring(12, 4) + "-" + hash.Substring(16, 4) + "-" + hash.Substring(20, 12);
             return guid.ToUpper();
         }
 
         private static string HashToString(byte[] bs)
         {
             var sb = new StringBuilder();
-            foreach (var b in bs)
+			foreach (byte b in bs)
                 sb.Append(b.ToString("x2"));
             return sb.ToString();
         }

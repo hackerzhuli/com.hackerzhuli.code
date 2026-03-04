@@ -421,7 +421,7 @@ namespace Hackerzhuli.Code.Editor
                     break;
                 case MessageType.ProjectPath:
                     Answer(message, MessageType.ProjectPath,
-                        Path.GetFullPath(Path.Combine(Application.dataPath, "..")));
+                        FileUtility.GetAbsolutePath(Path.Combine(Application.dataPath, "..")));
                     break;
                 case MessageType.ExecuteTests:
                     TestRunnerApiListener.ExecuteTests(message.Value);

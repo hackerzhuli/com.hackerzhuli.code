@@ -129,7 +129,7 @@ namespace Hackerzhuli.Code.Editor.Code
                 var analyzersPath = IOPath.Combine(ExtensionManager.ExtensionsDirectory,
                     extensionState.RelativePath, config.AnalyzersRelativePath);
 
-                var analyzersDirectory = IOPath.GetFullPath(analyzersPath);
+                var analyzersDirectory = FileUtility.GetAbsolutePath(analyzersPath);
                 if (!Directory.Exists(analyzersDirectory))
                     continue;
 
