@@ -9,15 +9,24 @@ This package is designed for general purpose communication with Unity Editor, fo
 
 ### Supported VS Code Forks
 - Visual Studio Code
+- Visual Studio Code Insiders
 - Cursor
 - Windsurf
+- Windsurf Next
 - Trae
+- Trae CN
+- Lingma
+- Antigravity
+- VSCodium
 
 About the forks:
 All forks are treated as if they are Visual Studio Code, but with different executable name, extension path(where their extensions are installed) and a few other minor differences.
 
 Notes:
 - If you use other forks, you need to add their support yourself, it's very easy, look at the file `CodeFork.cs` and add data for your forks to the array `Forks`. If you would like, you can create a pull request to share your changes.
+
+### Other Supported Editors
+- **Zed** (⚠️ Limited support: only project generation and open file to specific line. Advanced integration like runing tests is not available because we don't have a Zed extension.)
 
 ### VS Code Extensions
 This package is designed to work with Unity Code Pro and Dot Rush extension for VS Code. But you can still use it with C# Dev Kit and Unity extension, it can work(but the Unity extension will not be able to talk to this package through the networking protocol, you may want to install the official Visual Studio Editor package along with this package if communication between Unity Editor and Unity extension is needed), but I don't officially support it.
