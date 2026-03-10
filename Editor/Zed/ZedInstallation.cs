@@ -114,6 +114,7 @@ namespace Hackerzhuli.Code.Editor.Zed
 
         public override bool Open(string path, int line, int column, string solution)
         {
+            // we need to use the cli executable instead of the main executable to open files, as the cli can handle the command line arguments better
             var cliPath = GetCliPath();
 
             line = Math.Max(1, line);
@@ -121,7 +122,9 @@ namespace Hackerzhuli.Code.Editor.Zed
 
             var directory = IOPath.GetDirectoryName(solution);
 
-            var filePath = string.IsNullOrEmpty(path) ? string.Empty : FileUtility.GetAbsolutePath(path);
+            // fix: we need to use the relative path
+            // otherwise when we open zed for project for the first time, it will open the file and workspace but treat the file as if it is out of the workspace
+            var filePath = string.IsNullOrEmpty(path) ? string.Empty : IOPath.GetRelativePath(directory, path);
 
             var arguments = string.IsNullOrEmpty(filePath)
                 ? $"\"{directory}\""
@@ -176,7 +179,7 @@ namespace Hackerzhuli.Code.Editor.Zed
 #else
             return ProcessRunner.ProcessStartInfoFor(exePath, arguments, false);
 #endif
-        } 
+        }
 
         public static void Initialize()
         {
