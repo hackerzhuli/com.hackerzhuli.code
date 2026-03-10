@@ -1,5 +1,9 @@
 # Code Editor Package for Visual Studio
 
+## [1.0.14] - 2026-03-10
+Fix:
+- Fixed zed open the workspace for the first time failed to recognize the file as a workspace file
+
 ## [1.0.13] - 2026-03-10
 Feature:
 - Add Zed editor support and fix Windows app discovery
