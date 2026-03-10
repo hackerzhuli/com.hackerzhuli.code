@@ -1,5 +1,9 @@
 # Code Editor Package for Visual Studio
 
+## [1.0.13] - 2026-03-10
+Feature:
+- Add Zed editor support and fix Windows app discovery
+
 ## [1.0.12] - 2026-03-04
 Merged the following changes from upstream:
 

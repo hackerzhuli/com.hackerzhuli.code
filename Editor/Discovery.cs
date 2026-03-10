@@ -7,6 +7,7 @@
 using System.Collections.Generic;
 using System.IO;
 using Hackerzhuli.Code.Editor.Code;
+using Hackerzhuli.Code.Editor.Zed;
 
 namespace Hackerzhuli.Code.Editor
 {
@@ -16,6 +17,9 @@ namespace Hackerzhuli.Code.Editor
         {
             foreach (var installation in CodeInstallation.GetInstallations())
                 yield return installation;
+
+            foreach (var installation in ZedInstallation.GetInstallations())
+                yield return installation;
         }
 
         public static bool TryDiscoverInstallation(string editorPath, out ICodeEditorInstallation installation)
@@ -23,6 +27,9 @@ namespace Hackerzhuli.Code.Editor
             try
             {
                 if (CodeInstallation.TryDiscoverInstallation(editorPath, out installation))
+                    return true;
+
+                if (ZedInstallation.TryDiscoverInstallation(editorPath, out installation))
                     return true;
             }
             catch (IOException)
@@ -36,6 +43,7 @@ namespace Hackerzhuli.Code.Editor
         public static void Initialize()
         {
             CodeInstallation.Initialize();
+            ZedInstallation.Initialize();
         }
     }
 }
