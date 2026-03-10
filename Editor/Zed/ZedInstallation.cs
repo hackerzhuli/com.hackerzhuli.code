@@ -28,6 +28,7 @@ namespace Hackerzhuli.Code.Editor.Zed
     {
         private static readonly IGenerator _generator = GeneratorFactory.GetInstance(GeneratorStyle.SDK);
         private static readonly IAppDiscover _discoverer = AppDiscoverUtils.CreateAppDiscover(new ZedAppInfo());
+        private static readonly ZedFilePatcher _filePatcher = new();
 
         public override bool SupportsAnalyzers => false;
 
@@ -108,7 +109,7 @@ namespace Hackerzhuli.Code.Editor.Zed
 
         public override void CreateExtraFiles(string projectDirectory)
         {
-            // Zed does not require extra configuration files
+            _filePatcher.CreateOrPatchFiles(projectDirectory);
         }
 
         public override bool Open(string path, int line, int column, string solution)
