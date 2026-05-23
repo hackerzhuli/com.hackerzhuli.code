@@ -100,7 +100,16 @@ namespace Hackerzhuli.Code.Editor.Code
                 LinuxExeName = "antigravity",
                 UserDataDirName = ".antigravity"
             },
-			      new()
+			new()
+            {
+                Name = "Antigravity IDE",
+                WindowsDefaultDirName = "Antigravity IDE",
+                WindowsExeName = "Antigravity IDE.exe",
+                MacAppName = "Antigravity IDE.app",
+                LinuxExeName = "antigravity IDE",
+                UserDataDirName = ".antigravity-ide"
+            },
+			new()
             {
                 Name = "VSCodium",
                 WindowsDefaultDirName = "VSCodium",
