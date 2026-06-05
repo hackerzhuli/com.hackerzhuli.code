@@ -55,6 +55,16 @@ namespace Hackerzhuli.Code.Editor.Code
                 LinuxExeName = "windsurf",
                 UserDataDirName = ".windsurf"
             },
+			
+            new()
+            {
+                Name = "Devin",
+                WindowsDefaultDirName = "Devin",
+                WindowsExeName = "Devin.exe",
+                MacAppName = "Devin.app",
+                LinuxExeName = "Devin",
+                UserDataDirName = ".Devin"
+            },
             new()
             {
                 Name = "Windsurf Next",
