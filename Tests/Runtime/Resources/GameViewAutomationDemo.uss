@@ -56,6 +56,11 @@
     margin-bottom: 8px;
 }
 
+.demo-root .unity-base-text-field__input,
+.demo-root .unity-base-popup-field__text {
+    color: rgb(24, 29, 38);
+}
+
 .event-log {
     height: 180px;
     padding: 8px;

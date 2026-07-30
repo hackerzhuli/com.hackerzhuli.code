@@ -437,6 +437,12 @@ namespace Hackerzhuli.Code.Editor
                 return;
             }
 
+            if (Equals(currentValue, converted))
+            {
+                ReplySuccess(message, requestId);
+                return;
+            }
+
             try
             {
                 valueProperty.SetValue(element, converted);
@@ -449,6 +455,10 @@ namespace Hackerzhuli.Code.Editor
                 return;
             }
 
+            // BaseField<T>.value already marks its visual content dirty. An inactive Game View
+            // may still defer presenting that frame, and forcing another element repaint does not
+            // address the view's presentation timing.
+            // element.MarkDirtyRepaint();
             ReplySuccess(message, requestId);
         }
 
