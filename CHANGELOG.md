@@ -1,5 +1,9 @@
 # Code Editor Package for Visual Studio
 
+## [1.1.0] - 2026-07-30
+Feature:
+- Added runtime UI Toolkit and Game View automation for snapshots, hierarchy inspection, pointer interaction, field value assignment, and screenshot capture
+
 ## [1.0.14] - 2026-03-10
 Fix:
 - Fixed zed open the workspace for the first time failed to recognize the file as a workspace file
