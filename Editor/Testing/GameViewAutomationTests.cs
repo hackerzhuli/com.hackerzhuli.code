@@ -392,8 +392,8 @@ namespace Hackerzhuli.Code.Editor.Testing
         [Test]
         public void JsonResponses_PreserveOpaqueNumericRequestIdAndErrorShape()
         {
-            var success = JObject.Parse(GameViewAutomationService.Success(new JValue(42), "snapshot", "- Button"));
-            var failure = JObject.Parse(GameViewAutomationService.Error(new JValue("abc"), "unknown_ref", "Missing"));
+            var success = JObject.Parse(AutomationProtocol.Success(new JValue(42), "snapshot", "- Button"));
+            var failure = JObject.Parse(AutomationProtocol.Error(new JValue("abc"), "unknown_ref", "Missing"));
 
             Assert.That(success["requestId"]?.Type, Is.EqualTo(JTokenType.Integer));
             Assert.That(success.Value<bool>("ok"), Is.True);

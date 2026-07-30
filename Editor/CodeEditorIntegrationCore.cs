@@ -460,6 +460,14 @@ namespace Hackerzhuli.Code.Editor
                     _gameViewAutomation ??= new GameViewAutomationService(Answer);
                     _gameViewAutomation.Process(message);
                     break;
+                case MessageType.SceneList:
+                case MessageType.SceneOpen:
+                    SceneAutomation.Process(message, Answer);
+                    break;
+                case MessageType.LocaleList:
+                case MessageType.LocaleSelect:
+                    LocaleAutomation.Process(message, Answer);
+                    break;
             }
         }
 

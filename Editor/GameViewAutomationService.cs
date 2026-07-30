@@ -59,14 +59,15 @@ namespace Hackerzhuli.Code.Editor
 
         internal void Process(Message message)
         {
-            if (!IsLoopback(message.Origin))
+            if (!AutomationProtocol.IsLoopback(message.Origin))
             {
-                ReplyError(message, TryReadRequestId(message.Value), "forbidden",
+                ReplyError(message, AutomationProtocol.TryReadRequestId(message.Value), "forbidden",
                     "Game View automation requests are only accepted from loopback clients.");
                 return;
             }
 
-            if (!TryParseRequest(message.Value, out var request, out var requestId, out var parseError))
+            if (!AutomationProtocol.TryParseRequest(message.Value, out var request, out var requestId,
+                    out var parseError))
             {
                 ReplyError(message, requestId, "invalid_request", parseError);
                 return;
@@ -183,7 +184,7 @@ namespace Hackerzhuli.Code.Editor
                 var completed = _activeScreenshot;
                 _activeScreenshot = null;
                 _answer(completed.EndPoint, completed.MessageType,
-                    Success(completed.RequestId, "path", Path.GetFullPath(completed.Path)));
+                    AutomationProtocol.Success(completed.RequestId, "path", Path.GetFullPath(completed.Path)));
             }
             catch (UnauthorizedAccessException exception)
             {
@@ -1857,13 +1858,13 @@ namespace Hackerzhuli.Code.Editor
 
         private static string QuoteYamlString(string value)
         {
-            return string.Concat("\"", EscapeYamlString(value ?? string.Empty), "\"");
+            return string.Concat("\"", AutomationProtocol.EscapeYamlString(value ?? string.Empty), "\"");
         }
 
         private static string FormatStringCollection(IEnumerable<string> values)
         {
             return string.Concat("[", string.Join(",",
-                values.Select(value => $"\"{EscapeYamlString(value ?? string.Empty)}\"")), "]");
+                values.Select(value => $"\"{AutomationProtocol.EscapeYamlString(value ?? string.Empty)}\"")), "]");
         }
 
         private static string FormatEnumerable(System.Collections.IEnumerable values)
@@ -1874,14 +1875,14 @@ namespace Hackerzhuli.Code.Editor
                 if (value == null)
                     items.Add("null");
                 else if (value is string text)
-                    items.Add($"\"{EscapeYamlString(text)}\"");
+                    items.Add($"\"{AutomationProtocol.EscapeYamlString(text)}\"");
                 else if (value is bool boolean)
                     items.Add(boolean ? "true" : "false");
                 else if (value is Enum ||
                          value is byte or sbyte or short or ushort or int or uint or long or ulong or float or double or decimal)
                     items.Add(Convert.ToString(value, CultureInfo.InvariantCulture));
                 else
-                    items.Add($"\"{EscapeYamlString(value.ToString())}\"");
+                    items.Add($"\"{AutomationProtocol.EscapeYamlString(value.ToString())}\"");
             }
 
             return string.Concat("[", string.Join(",", items), "]");
@@ -1952,7 +1953,7 @@ namespace Hackerzhuli.Code.Editor
             builder.Append(" [");
             builder.Append(name);
             builder.Append("=\"");
-            builder.Append(EscapeYamlString(value ?? string.Empty));
+            builder.Append(AutomationProtocol.EscapeYamlString(value ?? string.Empty));
             builder.Append("\"]");
         }
 
@@ -1980,30 +1981,6 @@ namespace Hackerzhuli.Code.Editor
         {
             return string.Concat("[", value.x.ToString("R", CultureInfo.InvariantCulture), ",",
                 value.y.ToString("R", CultureInfo.InvariantCulture), "]");
-        }
-
-        internal static string EscapeYamlString(string value)
-        {
-            var builder = new StringBuilder(value.Length);
-            foreach (var character in value)
-            {
-                switch (character)
-                {
-                    case '\\': builder.Append("\\\\"); break;
-                    case '"': builder.Append("\\\""); break;
-                    case '\n': builder.Append("\\n"); break;
-                    case '\r': builder.Append("\\r"); break;
-                    case '\t': builder.Append("\\t"); break;
-                    default:
-                        if (character < 0x20)
-                            builder.Append("\\u").Append(((int)character).ToString("x4"));
-                        else
-                            builder.Append(character);
-                        break;
-                }
-            }
-
-            return builder.ToString();
         }
 
         private string GetOrCreateRef(VisualElement element)
@@ -2164,17 +2141,17 @@ namespace Hackerzhuli.Code.Editor
             catch (UnauthorizedAccessException exception)
             {
                 _answer(request.EndPoint, request.MessageType,
-                    Error(request.RequestId, "write_failed", exception.Message));
+                    AutomationProtocol.Error(request.RequestId, "write_failed", exception.Message));
             }
             catch (IOException exception)
             {
                 _answer(request.EndPoint, request.MessageType,
-                    Error(request.RequestId, "write_failed", exception.Message));
+                    AutomationProtocol.Error(request.RequestId, "write_failed", exception.Message));
             }
             catch (Exception exception)
             {
                 _answer(request.EndPoint, request.MessageType,
-                    Error(request.RequestId, "capture_failed", exception.Message));
+                    AutomationProtocol.Error(request.RequestId, "capture_failed", exception.Message));
             }
         }
 
@@ -2204,7 +2181,7 @@ namespace Hackerzhuli.Code.Editor
                 return;
             var request = _activeScreenshot;
             _activeScreenshot = null;
-            _answer(request.EndPoint, request.MessageType, Error(request.RequestId, code, message));
+            _answer(request.EndPoint, request.MessageType, AutomationProtocol.Error(request.RequestId, code, message));
         }
 
         private void FailQueuedScreenshots(string code, string message)
@@ -2212,100 +2189,20 @@ namespace Hackerzhuli.Code.Editor
             while (_screenshotQueue.Count > 0)
             {
                 var request = _screenshotQueue.Dequeue();
-                _answer(request.EndPoint, request.MessageType, Error(request.RequestId, code, message));
+                _answer(request.EndPoint, request.MessageType, AutomationProtocol.Error(request.RequestId, code, message));
             }
-        }
-
-        private static bool TryParseRequest(string value, out JObject request, out JToken requestId,
-            out string error)
-        {
-            request = null;
-            requestId = null;
-            error = null;
-            if (string.IsNullOrWhiteSpace(value))
-            {
-                error = "The request value must be a JSON object.";
-                return false;
-            }
-
-            try
-            {
-                request = JObject.Parse(value);
-                requestId = request["requestId"]?.DeepClone();
-                if (requestId == null || requestId.Type == JTokenType.Null ||
-                    (requestId.Type != JTokenType.String && requestId.Type != JTokenType.Integer &&
-                     requestId.Type != JTokenType.Float))
-                {
-                    error = "requestId must be a string or number.";
-                    return false;
-                }
-
-                return true;
-            }
-            catch (JsonException exception)
-            {
-                error = $"Invalid JSON request: {exception.Message}";
-                return false;
-            }
-        }
-
-        private static JToken TryReadRequestId(string value)
-        {
-            try
-            {
-                return JObject.Parse(value ?? string.Empty)["requestId"]?.DeepClone();
-            }
-            catch (JsonException)
-            {
-                return null;
-            }
-        }
-
-        private static bool IsLoopback(IPEndPoint endPoint)
-        {
-            if (endPoint?.Address == null)
-                return false;
-            var address = endPoint.Address;
-            if (address.IsIPv4MappedToIPv6)
-                address = address.MapToIPv4();
-            return IPAddress.IsLoopback(address);
         }
 
         private void ReplySuccess(Message message, JToken requestId, string propertyName = null,
             string propertyValue = null)
         {
-            _answer(message.Origin, message.Type, Success(requestId, propertyName, propertyValue));
+            _answer(message.Origin, message.Type,
+                AutomationProtocol.Success(requestId, propertyName, propertyValue));
         }
 
         private void ReplyError(Message message, JToken requestId, string code, string errorMessage)
         {
-            _answer(message.Origin, message.Type, Error(requestId, code, errorMessage));
-        }
-
-        internal static string Success(JToken requestId, string propertyName = null, string propertyValue = null)
-        {
-            var result = new JObject
-            {
-                ["requestId"] = requestId?.DeepClone() ?? JValue.CreateNull(),
-                ["ok"] = true
-            };
-            if (propertyName != null)
-                result[propertyName] = propertyValue;
-            return result.ToString(Formatting.None);
-        }
-
-        internal static string Error(JToken requestId, string code, string message)
-        {
-            return new JObject
-            {
-                ["requestId"] = requestId?.DeepClone() ?? JValue.CreateNull(),
-                ["ok"] = false,
-                ["error"] = new JObject
-                {
-                    ["code"] = code,
-                    ["message"] = message
-                }
-            }.ToString(Formatting.None);
+            _answer(message.Origin, message.Type, AutomationProtocol.Error(requestId, code, errorMessage));
         }
 
         private sealed class ScreenshotRequest

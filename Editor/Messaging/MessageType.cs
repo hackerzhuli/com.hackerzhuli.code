@@ -232,6 +232,26 @@ namespace Hackerzhuli.Code.Editor.Messaging
         /// <summary>
         ///     Assign value to a BaseField element(eg. Toggle, Slider).
         /// </summary>
-        UiSetValue = 113
+        UiSetValue = 113,
+
+        /// <summary>
+        ///     List the currently open scenes and which one is active. Available in Edit and Play Mode.
+        /// </summary>
+        SceneList = 114,
+
+        /// <summary>
+        ///     Open a scene asset. Only available in Edit Mode.
+        /// </summary>
+        SceneOpen = 115,
+
+        /// <summary>
+        ///     List the available locales and the selected one. Only available in Play Mode.
+        /// </summary>
+        LocaleList = 116,
+
+        /// <summary>
+        ///     Change the selected locale. Only available in Play Mode.
+        /// </summary>
+        LocaleSelect = 117
     }
 }

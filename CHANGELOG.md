@@ -1,5 +1,10 @@
 # Code Editor Package for Visual Studio
 
+## [1.2.0] - 2026-07-30
+Feature:
+- Added scene messages to list the open scenes and to open a scene asset in Edit Mode
+- Added locale messages to list the available locales and to change the selected one in Play Mode, without taking a dependency on the Localization package
+
 ## [1.1.0] - 2026-07-30
 Feature:
 - Added runtime UI Toolkit and Game View automation for snapshots, hierarchy inspection, pointer interaction, field value assignment, and screenshot capture

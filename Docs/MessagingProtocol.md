@@ -86,6 +86,10 @@ All available message types:
 | `UiHierarchy` | 111 | Request a type/name/USS-class descendant hierarchy for one element | JSON request / JSON response containing YAML |
 | `UiInspect` | 112 | Get layout, styles, and properties for an element | JSON request / JSON response containing YAML |
 | `UiSetValue` | 113 | Assign a value to a BaseField element such as `Toggle` or `Slider` | JSON request / JSON success or error response |
+| `SceneList` | 114 | List the currently open scenes and which one is active | JSON request / JSON response containing YAML |
+| `SceneOpen` | 115 | Open a scene asset (Edit Mode only) | JSON request / JSON response containing YAML |
+| `LocaleList` | 116 | List the available locales and the selected one (Play Mode only) | JSON request / JSON response containing YAML |
+| `LocaleSelect` | 117 | Change the selected locale (Play Mode only) | JSON request / JSON response containing YAML |
 
 Note:
 - Message value greater than or equal to 100 means it does not exist in the official package but was added in this package.
@@ -203,7 +207,8 @@ These messages automate runtime UI Toolkit content rendered in the Unity Game Vi
 inspect Editor UI, do not use the Unity Accessibility API, and are available only while the Editor
 is in Play Mode. Paused Play Mode is supported.
 
-All Game View automation requests:
+All Game View automation requests, and the Editor state requests documented in
+[Editor State (Values: 114-117)](#editor-state-values-114-117), share the same envelope:
 
 - Must originate from a loopback address. Non-loopback requests receive `forbidden`.
 - Use a JSON object as the message value.
@@ -560,6 +565,141 @@ hittable screen point. A public `isReadOnly=true` property causes `read_only`.
 | `capture_timeout` | The PNG did not become complete within 10 seconds |
 | `write_failed` | The screenshot directory or file could not be written |
 | `internal_error` | An unexpected automation exception occurred |
+
+### Editor State (Values: 114-117)
+
+These messages report and change Editor state that is not part of the Game View: the open scenes and
+the selected locale. They use the same request and response envelope as Game View automation
+(loopback only, opaque `requestId`, response reuses the request message type, automatic TCP fallback),
+and the same error shape.
+
+Unlike Game View automation, each message has its own mode requirement:
+
+| Message | Value | Edit Mode | Play Mode |
+|---------|-------|-----------|-----------|
+| `SceneList` | 114 | Yes | Yes |
+| `SceneOpen` | 115 | Yes | No, returns `is_playing` |
+| `LocaleList` | 116 | No, returns `not_playing` | Yes |
+| `LocaleSelect` | 117 | No, returns `not_playing` | Yes |
+
+#### SceneList (Value: 114)
+
+Request:
+
+```json
+{"requestId":"scene-1"}
+```
+
+Success returns the `scenes` property, a YAML document describing every scene that is currently open
+in the Editor, in hierarchy order:
+
+```yaml
+mode: Edit
+activeScene: "Assets/Scenes/Main.unity"
+scenes:
+  - name: "Main"
+    path: "Assets/Scenes/Main.unity"
+    isActive: true
+    isLoaded: true
+    isDirty: false
+    isSubScene: false
+    buildIndex: 0
+    rootCount: 12
+```
+
+- `mode` is `Edit` or `Play`.
+- `activeScene` is the path of the active scene, or `null` when there is none.
+- `path` is the project relative asset path, and is empty for a scene that was never saved.
+- `buildIndex` is `-1` when the scene is not in the build settings.
+- `rootCount` is omitted for a scene that is open but not loaded, because it cannot be read.
+- When no scene is open, `scenes: []` is emitted.
+
+#### SceneOpen (Value: 115)
+
+Only available in Edit Mode. Request:
+
+```json
+{
+  "requestId":"scene-2",
+  "path":"Assets/Scenes/Main.unity",
+  "mode":"Single",
+  "unsavedChanges":"refuse"
+}
+```
+
+- `path` is required. Absolute paths are accepted and normalized; a path outside the project or one
+  that does not end in `.unity` returns `invalid_request`, and a path with no scene asset returns
+  `not_found`.
+- `mode` is optional and defaults to `Single`. It accepts `Single`, `Additive` and
+  `AdditiveWithoutLoading`, matched case insensitively, and maps to Unity's `OpenSceneMode`.
+- `unsavedChanges` is optional and defaults to `refuse`. It only applies to `Single`, the only mode
+  that closes the open scenes and can therefore discard unsaved work:
+  - `refuse` returns `unsaved_changes` and names the modified scenes.
+  - `save` saves every modified open scene first, and returns `save_failed` if Unity could not.
+  - `discard` opens the scene and loses the unsaved changes.
+
+Unity never shows a save dialog for this request, because a modal dialog would block automation.
+
+Success returns the same `scenes` YAML as `SceneList`, describing the state after the scene was
+opened.
+
+#### LocaleList (Value: 116)
+
+Only available in Play Mode, because the runtime locale list is only populated while playing.
+Request:
+
+```json
+{"requestId":"locale-1"}
+```
+
+Success returns the `locales` property:
+
+```yaml
+selectedLocale: "zh-Hans"
+locales:
+  - code: "en"
+    name: "English"
+    sortOrder: 0
+  - code: "zh-Hans"
+    name: "Chinese (Simplified)"
+    sortOrder: 10
+```
+
+- `selectedLocale` is the identifier code of the selected locale, or `null` when none is selected.
+- When there are no locales, `locales: []` is emitted.
+
+This package has no dependency on the Localization package. It reads
+`UnityEngine.Localization.Settings.LocalizationSettings` through reflection, so a project without
+com.unity.localization keeps working and only receives `localization_unavailable` for this message.
+
+#### LocaleSelect (Value: 117)
+
+Only available in Play Mode. Request:
+
+```json
+{"requestId":"locale-2","code":"zh-Hans"}
+```
+
+`code` is required and is matched case insensitively against the locale identifier code first, and
+against the locale name second. Unity assigns `LocalizationSettings.SelectedLocale`, so the normal
+selected locale changed notifications apply.
+
+Success returns the same `locales` YAML as `LocaleList`, so the new selection is visible immediately.
+
+#### Editor State Error Codes
+
+In addition to the shared `invalid_request`, `forbidden` and `internal_error` codes:
+
+| Code | Meaning |
+|------|---------|
+| `is_playing` | `SceneOpen` was requested while the Editor is in Play Mode |
+| `busy` | Unity is compiling scripts or importing assets and cannot open a scene |
+| `not_found` | No scene asset exists at the requested path |
+| `unsaved_changes` | Opening the scene in `Single` mode would discard unsaved changes, and `unsavedChanges` is `refuse` |
+| `save_failed` | Unity could not save the modified scenes, so the scene was not opened |
+| `not_playing` | A locale message was requested outside of Play Mode |
+| `localization_unavailable` | com.unity.localization is not installed, or the project has no Localization Settings asset |
+| `unknown_locale` | No available locale matches the requested code or name |
 
 #### RetrieveTestList (Value: 23)
 - **Format**: Test mode string ("EditMode" or "PlayMode")
