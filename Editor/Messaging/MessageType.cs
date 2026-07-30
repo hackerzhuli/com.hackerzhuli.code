@@ -197,6 +197,41 @@ namespace Hackerzhuli.Code.Editor.Messaging
         /// <summary>
         ///     Request for compile error information.
         /// </summary>
-        GetCompileErrors = 106
+        GetCompileErrors = 106,
+
+        /// <summary>
+        ///     Request a compact snapshot of runtime UI Toolkit documents in the Game View.
+        /// </summary>
+        UiSnapshot = 107,
+
+        /// <summary>
+        ///     Activate an element returned by UiSnapshot or UiHierarchy.
+        /// </summary>
+        UiClick = 108,
+
+        /// <summary>
+        ///     Move the synthetic mouse pointer over an element.
+        /// </summary>
+        UiHover = 109,
+
+        /// <summary>
+        ///     Capture the currently rendered Game View to the project's Temp directory.
+        /// </summary>
+        GameViewScreenshot = 110,
+
+        /// <summary>
+        ///     Request a type/name/USS-class descendant hierarchy for one UI element ref.
+        /// </summary>
+        UiHierarchy = 111,
+
+        /// <summary>
+        ///     Get layout, styles and properties for an element.
+        /// </summary>
+        UiInspect = 112,
+
+        /// <summary>
+        ///     Assign value to a BaseField element(eg. Toggle, Slider).
+        /// </summary>
+        UiSetValue = 113
     }
 }

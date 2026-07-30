@@ -1,0 +1,8 @@
+{
+  "name": "Hackerzhuli.Code.PlayModeTests",
+  "rootNamespace": "Hackerzhuli.Code.PlayModeTests",
+  "references": [],
+  "optionalUnityReferences": [
+    "TestAssemblies"
+  ]
+}

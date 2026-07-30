@@ -118,6 +118,7 @@ namespace Hackerzhuli.Code.Editor
 
         [NonSerialized] private Messenger _messenger;
         [NonSerialized] private bool _needsOnlineNotification;
+        [NonSerialized] private GameViewAutomationService _gameViewAutomation;
 
         private void OnEnable()
         {
@@ -135,6 +136,7 @@ namespace Hackerzhuli.Code.Editor
 
             // Flag that we need to notify clients that we're online
             _needsOnlineNotification = true;
+            _gameViewAutomation = new GameViewAutomationService(Answer);
             FileLogger.Initialize();
             FileLogger.Log("OnEnable");
         }
@@ -183,6 +185,8 @@ namespace Hackerzhuli.Code.Editor
             CompilationPipeline.assemblyCompilationFinished -= OnAssemblyCompilationFinished;
             Application.logMessageReceived -= OnLogMessageReceived;
             Application.logMessageReceivedThreaded -= OnLogMessageReceivedThreaded;
+            _gameViewAutomation?.Dispose();
+            _gameViewAutomation = null;
 
             // Notify clients that Unity is going offline before disposing the messenger
             if (_messenger != null)
@@ -203,6 +207,7 @@ namespace Hackerzhuli.Code.Editor
                     BroadcastMessage(MessageType.IsPlaying, "true");
                     break;
                 case PlayModeStateChange.ExitingPlayMode:
+                    _gameViewAutomation?.OnExitingPlayMode();
                     BroadcastMessage(MessageType.IsPlaying, "false");
                     break;
             }
@@ -229,6 +234,8 @@ namespace Hackerzhuli.Code.Editor
             if (_messenger != null)
                 while (_messenger.TryDequeueMessage(out var message))
                     ProcessIncoming(message);
+
+            _gameViewAutomation?.Update();
 
             var currentTime = EditorApplication.timeSinceStartup;
             var deltaTime = currentTime - _lastUpdateTime;
@@ -442,6 +449,16 @@ namespace Hackerzhuli.Code.Editor
                     break;
                 case MessageType.GetCompileErrors:
                     Answer(message, MessageType.GetCompileErrors, GetCompileErrorsJson());
+                    break;
+                case MessageType.UiSnapshot:
+                case MessageType.UiClick:
+                case MessageType.UiHover:
+                case MessageType.GameViewScreenshot:
+                case MessageType.UiHierarchy:
+                case MessageType.UiInspect:
+                case MessageType.UiSetValue:
+                    _gameViewAutomation ??= new GameViewAutomationService(Answer);
+                    _gameViewAutomation.Process(message);
                     break;
             }
         }

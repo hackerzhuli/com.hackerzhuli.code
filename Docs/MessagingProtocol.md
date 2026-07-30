@@ -79,6 +79,13 @@ All available message types:
 | `IsPlaying` | 104 | Notification of current play mode state | "true" (in play mode) / "false" (in edit mode) |
 | `CompilationStarted` | 105 | Notification that compilation has started | Empty string |
 | `GetCompileErrors` | 106 | Auto-sent after CompilationFinished, or manual request/response for compile error information | Empty string (request) / JSON serialized LogContainer (response) |
+| `UiSnapshot` | 107 | Request a compact snapshot of runtime UI Toolkit documents in the Game View | JSON request / JSON response containing YAML |
+| `UiClick` | 108 | Click a button element | JSON request / JSON success or error response |
+| `UiHover` | 109 | Move the mouse pointer over an element | JSON request / JSON success or error response |
+| `GameViewScreenshot` | 110 | Capture the currently rendered Game View to the project's Temp directory | JSON request / JSON response containing an absolute PNG path |
+| `UiHierarchy` | 111 | Request a type/name/USS-class descendant hierarchy for one element | JSON request / JSON response containing YAML |
+| `UiInspect` | 112 | Get layout, styles, and properties for an element | JSON request / JSON response containing YAML |
+| `UiSetValue` | 113 | Assign a value to a BaseField element such as `Toggle` or `Slider` | JSON request / JSON success or error response |
 
 Note:
 - Message value greater than or equal to 100 means it does not exist in the official package but was added in this package.
@@ -189,6 +196,370 @@ public class Log
   - **Automatic Clearing**: Previous compile errors are cleared when compilation starts
   - **Response Format**: Returns JSON with LogContainer containing array of Log objects
 - **Usage**: Clients automatically receive structured compile error information after each compilation for IDE integration, error highlighting, and debugging assistance. Manual requests are also supported for on-demand error retrieval.
+
+### Game View Automation (Values: 107-113)
+
+These messages automate runtime UI Toolkit content rendered in the Unity Game View. They do not
+inspect Editor UI, do not use the Unity Accessibility API, and are available only while the Editor
+is in Play Mode. Paused Play Mode is supported.
+
+All Game View automation requests:
+
+- Must originate from a loopback address. Non-loopback requests receive `forbidden`.
+- Use a JSON object as the message value.
+- Require an opaque `requestId`. A JSON string or number is accepted and returned unchanged.
+- Receive their response using the same message type as the request.
+- May use TCP fallback automatically when a YAML snapshot or inspection exceeds the UDP limit.
+
+Minimal request:
+
+```json
+{"requestId":"request-42"}
+```
+
+Success without a result value:
+
+```json
+{"requestId":"request-42","ok":true}
+```
+
+Success with a result value:
+
+```json
+{
+  "requestId":"request-42",
+  "ok":true,
+  "snapshot":"- UIDocument:\n  - Button [text=\"Play\"] [ref=e1]"
+}
+```
+
+All failures use the same shape:
+
+```json
+{
+  "requestId":"request-42",
+  "ok":false,
+  "error":{
+    "code":"unknown_ref",
+    "message":"Unknown UI element ref 'e1'."
+  }
+}
+```
+
+#### Element Refs
+
+`[ref=eN]` is automation metadata, not a Unity UI Toolkit property. Snapshot and hierarchy nodes
+receive refs so later requests can address the exact `VisualElement`.
+
+- Refs are stable while their mapping and element remain valid.
+- A detached element returns `stale_ref`.
+- An unrecognized or pruned mapping returns `unknown_ref`.
+- Domain reload recreates the service and invalidates all refs.
+- Clients should acquire fresh refs after domain reload and should prefer refs from the most recent
+  snapshot or hierarchy response.
+
+#### UiSnapshot (Value: 107)
+
+Request:
+
+```json
+{"requestId":"snapshot-1"}
+```
+
+Success:
+
+```json
+{
+  "requestId":"snapshot-1",
+  "ok":true,
+  "snapshot":"- UIDocument [name=\"Runtime HUD\"]:\n  - Button [name=\"play\"] [text=\"Play\"] [ref=e1]"
+}
+```
+
+The snapshot starts at every active `UIDocument` attached to a runtime panel. Documents are ordered
+by panel settings, document sorting order, and visual-tree order. Editor panels are not included.
+
+The compact YAML tree:
+
+- Uses `element.GetType().Name`, including the actual type name of custom derived controls.
+- Uses UI Toolkit property names rather than ARIA roles or accessibility states.
+- Includes standard controls, text elements, informative generic elements, and custom elements.
+- Collapses implementation children of common built-in controls derived from `BaseField<T>` and
+  other controls whose internal hierarchy is normally noise.
+- Retains an element whose resolved `display` is `None` or `visibility` is `Hidden`, but silently
+  omits its descendants. Opacity zero does not trigger this rule.
+- When one parent has at least 20 direct children and every child has the same runtime type, emits
+  only the first 10. Compact snapshots do not add omission metadata.
+
+The native property whitelist includes, where applicable:
+
+- Common: `name`, `tooltip`, and `enabledSelf=false`.
+- Visibility: `display=None` and `visibility=Hidden`.
+- Text controls: `text`.
+- `Toggle` and `RadioButton`: `label`, `value`.
+- Text and numeric fields: `label`, `value`, and relevant `isReadOnly`/`multiline` state.
+- Sliders: `label`, `value`, and their range properties.
+- Popup fields: `label`, `value`, `index`.
+- `Foldout`, `ProgressBar`, collection views, and `ScrollView`: their compact native state.
+
+Strings use deterministic YAML escaping and numbers use invariant culture.
+
+#### UiClick (Value: 108)
+
+Request:
+
+```json
+{"requestId":"click-1","ref":"e1"}
+```
+
+Before activation, Unity validates that the element is attached, visible, enabled, and has a point
+inside its clipped bounds that is not covered by another element.
+
+Activation depends on the target:
+
+- `Button` and custom `Button` subclasses receive `NavigationSubmitEvent`. Unity's own Button
+  handler invokes its `Clickable`, fires `Button.clicked` once, and manages the temporary
+  `:active` state. Synthetic PointerDown/PointerUp events are not sent for this path.
+- Other elements receive synthetic move, primary-button down, and primary-button up events through
+  the runtime panel. This preserves the normal UI Toolkit event pipeline for controls such as
+  `Toggle`.
+
+The request does not call user callbacks through reflection.
+
+#### UiHover (Value: 109)
+
+Request:
+
+```json
+{"requestId":"hover-1","ref":"e1"}
+```
+
+Unity finds and validates a visible hittable point, then sends pointer and mouse move events through
+the runtime panel. Normal hit testing, PointerEnter/PointerLeave callbacks, and `:hover` state apply.
+Another hover request or real pointer movement naturally replaces the current hover target.
+
+#### GameViewScreenshot (Value: 110)
+
+Request:
+
+```json
+{"requestId":"screenshot-1"}
+```
+
+Success:
+
+```json
+{
+  "requestId":"screenshot-1",
+  "ok":true,
+  "path":"F:\\projects\\MyGame\\Temp\\GameViewScreenshots\\game-view-20260730-153012-123-a1b2c3.png"
+}
+```
+
+The screenshot captures the complete Game View using `ScreenCapture.CaptureScreenshot` with
+`superSize = 1`; it is not limited to UI Toolkit content.
+
+- The destination is always `<project>/Temp/GameViewScreenshots`.
+- Unity generates a unique `game-view-<UTC timestamp>-<random id>.png` filename.
+- Requests cannot provide `path`, `fileName`, or `filename`.
+- Requests are queued and processed one at a time.
+- Unity responds only after the file size is stable across two checks and the PNG signature and
+  terminal IEND chunk are valid.
+- The default timeout is 10 seconds.
+- PNG files are not automatically deleted.
+
+#### UiHierarchy (Value: 111)
+
+Request:
+
+```json
+{"requestId":"hierarchy-1","ref":"e1","depth":3}
+```
+
+`depth` is optional and must be a non-negative integer:
+
+- `0` returns only the selected element.
+- `1` returns the selected element and all of its direct children.
+- Higher values request additional descendant levels.
+- The effective depth may be reduced automatically to keep output at or below 200 elements.
+- Direct children are always retained by the dynamic limit.
+
+Success:
+
+```json
+{
+  "requestId":"hierarchy-1",
+  "ok":true,
+  "hierarchy":"- VisualElement [name=\"toolbar\"] [ussClasses=[\"toolbar\"]] [ref=e1]:\n  - Button [name=\"play\"] [ussClasses=[\"unity-button\",\"primary\"]] [ref=e2]"
+}
+```
+
+Unlike `UiSnapshot`, hierarchy expands built-in implementation nodes and invisible descendants.
+Each normal node contains only:
+
+- Its actual runtime type.
+- Non-empty `name`.
+- Non-empty USS class list as `ussClasses`.
+- Its automation `ref`.
+
+Protocol omission metadata may additionally appear on a parent:
+
+```yaml
+- VisualElement [name="items"] [childrenOmitted=true] [omittedChildCount=12] [omissionReason="similar_children"] [ref=e1]:
+  - Label [ussClasses=["unity-label"]] [ref=e2]
+  # 12 more Label children omitted (22 same-type children total)
+```
+
+The same-type sibling rule applies when a parent has at least 20 direct children of exactly the same
+runtime type: only the first 10 are emitted. Depth-limited parents are also marked with
+`childrenOmitted`, `omittedChildCount`, and an `omissionReason`.
+
+The runtime panel root and a `UIDocument` root cannot be used as the hierarchy target because their
+trees may be unbounded. Such requests return `forbidden`; select one of their descendants instead.
+
+#### UiInspect (Value: 112)
+
+Gets the layout, styles, and properties of one referenced element. Descendants are not included.
+
+Request:
+
+```json
+{"requestId":"inspect-1","ref":"e1"}
+```
+
+Success returns a YAML document for exactly one element, without descendants:
+
+```yaml
+type: VisualElement
+ref: e1
+layout:
+  margin: {top: 0, right: 0, bottom: 0, left: 0}
+  border: {top: 0, right: 0, bottom: 0, left: 0}
+  padding: {top: 8, right: 8, bottom: 8, left: 8}
+  contentSize: [370,115]
+geometry:
+  worldBound: [464,273,386,131]
+  worldClip: [0,0,1920,1080]
+  boundingBox: [0,0,386,131]
+  layout: [14,175,386,131]
+  lastLayout: [14,175,386,131]
+element:
+  name: "event-log"
+  debugId: 2042
+  pickingMode: Position
+  pseudoStates: 0
+  focusable: false
+  display: Flex
+  visibility: Visible
+  opacity: 1
+  enabledSelf: true
+  enabledInHierarchy: true
+uss:
+  classes: ["unity-scroll-view","event-log"]
+  styleSheets:
+    - "GameViewAutomationDemo (owner=TemplateContainer, name=Runtime HUD-container)"
+  inlineStyles: {}
+  resolvedStyles:
+    background-color: "#181D26"
+    flex-direction: Column
+properties:
+  childCount: 2
+```
+
+The sections are modeled after the useful parts of UI Toolkit Debugger:
+
+- `layout`: box model and content size.
+- `geometry`: world, clip, bounding, current layout, and last layout rectangles.
+- `element`: identity, data source, picking, pseudo state, focus, visibility, and enabled state.
+- `uss`: classes, inherited stylesheet sources, explicitly set inline styles, and resolved styles.
+- `properties`: remaining public properties marked with Unity's `[CreateProperty]`.
+
+The `properties` section filters common properties declared by `VisualElement` or its base types when
+they are duplicated by another section, expose large implementation objects, or contain arbitrary
+user state. `[CreateProperty]` members declared by derived controls and custom elements are retained.
+
+Resolved style output is intentionally diagnostic rather than exhaustive. It omits only obvious
+no-effect values or fields made meaningless by another value, including:
+
+- Background image placement, repeat, size, tint, and slice fields when there is no background image.
+- A side's border color when that side's border width is zero.
+- Zero border radius and transparent background color.
+- Zero offsets for the default relative positioning mode.
+- Transition fields when all transition durations are zero.
+- Transform fields when the transform is identity.
+- Text outline color when outline width is zero.
+- Box-model values already present in the `layout` section.
+- `display`, `visibility`, and `opacity`, which already appear in the `element` section.
+
+Colors use quoted USS-compatible hex strings: `"#RRGGBB"` when opaque and `"#RRGGBBAA"` when
+alpha is present.
+
+#### UiSetValue (Value: 113)
+
+Assigns a value to a value-bearing runtime field, such as `Toggle`, `Slider`, or `TextField`.
+The current protocol implementation supports elements derived from `BaseField<T>`.
+
+Request:
+
+```json
+{"requestId":"set-1","ref":"e1","value":"25%"}
+```
+
+`value` may be a JSON string, primitive, array, or object. Non-string JSON values are converted to
+their compact JSON representation before parsing. The target must derive from `BaseField<T>`.
+Unity assigns the converted value through the public `value` property, so normal value-change
+notifications and `ChangeEvent<T>` behavior apply.
+
+Successful assignment:
+
+```json
+{"requestId":"set-1","ok":true}
+```
+
+Supported input forms include:
+
+| Target type | Accepted examples |
+|-------------|-------------------|
+| `string` | Any JSON string, including empty strings and escaped newlines |
+| `bool` | `true`, `false`, `1`, `0`, `yes`, `no`, `on`, `off`, `checked`, `unchecked`, `enabled`, `disabled` |
+| Integer types | `42`, `1_000`, `0x2A`, `0b101010` |
+| `float`, `double`, `decimal` | `0.25`, `1.5e2`, `25%`, optional `f`/`d`/`m` suffix |
+| Enum and flags | Case-insensitive names, numeric values, and names separated by `,`, `|`, or `+`; spaces, hyphens, and underscores in names are ignored |
+| `Color`, `Color32` | `#RGB`, `#RGBA`, `#RRGGBB`, `#RRGGBBAA`, `rgb(...)`, `rgba(...)`, numeric component lists, and common color names |
+| `Vector2/3/4`, `Vector2Int/3Int` | `[1,2]`, `(1, 2, 3)`, `x=1; y=2; z=3` |
+| `Rect`, `RectInt` | `[x,y,width,height]` or a labeled four-component form |
+| `Bounds`, `BoundsInt` | Six components: center/position followed by size |
+| `Quaternion` | Four numeric components |
+| `LayerMask` | Any supported integer form |
+| `Guid` | Standard GUID strings |
+| Other types | A public static `Parse(string, IFormatProvider)`, `Parse(string)`, or public string constructor, when available |
+
+Null is accepted only for reference types and nullable value types. Unity object references are not
+resolved from strings.
+
+`UiSetValue` requires an attached and enabled element but does not require geometric visibility or a
+hittable screen point. A public `isReadOnly=true` property causes `read_only`.
+
+#### Game View Automation Error Codes
+
+| Code | Meaning |
+|------|---------|
+| `invalid_request` | Malformed JSON, missing/invalid fields, invalid `depth`, forbidden screenshot path input, or a non-`BaseField<T>` set-value target |
+| `not_playing` | The Editor is not in Play Mode, or Play Mode ended before queued capture |
+| `unknown_ref` | The ref is not present in the current automation mapping |
+| `stale_ref` | The mapped element is detached from its runtime panel |
+| `not_visible` | A click or hover target is hidden or has no visible clipped area |
+| `disabled` | The target is disabled in its hierarchy |
+| `read_only` | `UiSetValue` targeted a field whose public `isReadOnly` property is true |
+| `not_hittable` | No sampled point can hit the target or one of its descendants |
+| `panel_missing` | No active runtime `UIDocument` is attached to a panel |
+| `forbidden` | Non-loopback caller, or a forbidden hierarchy root |
+| `invalid_value` | The supplied value cannot be converted or assigned to the field value type |
+| `unsupported_value_type` | No safe string conversion is available for the field value type |
+| `capture_failed` | Unity could not begin Game View capture |
+| `capture_timeout` | The PNG did not become complete within 10 seconds |
+| `write_failed` | The screenshot directory or file could not be written |
+| `internal_error` | An unexpected automation exception occurred |
 
 #### RetrieveTestList (Value: 23)
 - **Format**: Test mode string ("EditMode" or "PlayMode")

@@ -1,0 +1,92 @@
+<ui:UXML xmlns:ui="UnityEngine.UIElements">
+    <Style src="GameViewAutomationDemo.uss" />
+    <ui:VisualElement name="automation-demo" class="demo-root">
+        <ui:VisualElement class="demo-header">
+            <ui:VisualElement>
+                <ui:Label text="Mission Control" class="demo-title" />
+                <ui:Label text="Runtime UI Toolkit automation sample" class="demo-subtitle" />
+            </ui:VisualElement>
+            <ui:VisualElement class="demo-toolbar">
+                <ui:Toggle name="live-updates" label="Live Updates" value="true" />
+                <ui:Button name="primary-action" text="Launch Mission" tooltip="Runs the primary action" />
+            </ui:VisualElement>
+        </ui:VisualElement>
+
+        <ui:VisualElement class="demo-content">
+            <ui:VisualElement class="demo-column">
+                <ui:Label text="Operator Profile" class="section-title" />
+                <ui:TextField name="operator-name" label="Operator Name" value="Alice &quot;Ace&quot;&#10;Ng" />
+                <ui:IntegerField name="crew-size" label="Crew Size" value="4" />
+                <ui:DropdownField name="mission-type" label="Mission Type" />
+                <ui:Toggle name="music" label="Music" value="true" />
+                <ui:RadioButton name="radio-alpha" label="Channel Alpha" value="true" />
+                <ui:RadioButton name="radio-beta" label="Channel Beta" />
+
+                <ui:Foldout name="advanced-settings" text="Advanced Settings" value="true">
+                    <ui:Slider name="volume" label="Volume" low-value="0" high-value="1" value="0.8" />
+                    <ui:SliderInt name="difficulty" label="Difficulty" low-value="1" high-value="10" value="7" />
+                    <ui:MinMaxSlider name="safe-range" label="Safe Range" low-limit="0" high-limit="100"
+                                     min-value="25" max-value="75" />
+                    <ui:TextField name="read-only-id" label="Mission ID" value="MC-2026-0730" is-read-only="true" />
+                </ui:Foldout>
+            </ui:VisualElement>
+
+            <ui:VisualElement class="demo-column">
+                <ui:Label text="Telemetry" class="section-title" />
+                <ui:ProgressBar name="fuel" title="Fuel" low-value="0" high-value="100" value="68" />
+                <ui:ProgressBar name="oxygen" title="Oxygen" low-value="0" high-value="100" value="92" />
+                <ui:ListView name="crew-list" selection-type="Single" />
+                <ui:ScrollView name="event-log" mode="Vertical" class="event-log">
+                    <ui:VisualElement class="status-row">
+                        <ui:Label text="Navigation" />
+                        <ui:Label text="Nominal" tooltip="All navigation systems online" />
+                    </ui:VisualElement>
+                    <ui:VisualElement class="status-row">
+                        <ui:Label text="Communications" />
+                        <ui:Label text="Standby" />
+                    </ui:VisualElement>
+                    <ui:VisualElement class="status-row">
+                        <ui:Label text="Last event: Docking clamps released&#10;Awaiting departure window" />
+                    </ui:VisualElement>
+                </ui:ScrollView>
+                <ui:VisualElement name="focus-target" focusable="true">
+                    <ui:Label text="Focusable custom region" />
+                </ui:VisualElement>
+                <ui:VisualElement name="display-none-panel" class="display-none-panel">
+                    <ui:Label text="Display-none child must be omitted" />
+                </ui:VisualElement>
+                <ui:VisualElement name="visibility-hidden-panel" class="visibility-hidden-panel">
+                    <ui:Label text="Visibility-hidden child must be omitted" />
+                </ui:VisualElement>
+                <ui:VisualElement name="transparent-panel" class="transparent-panel">
+                    <ui:Label text="Transparent child remains in the snapshot" />
+                </ui:VisualElement>
+                <ui:VisualElement name="uniform-event-feed">
+                    <ui:Label text="Queue item 01" />
+                    <ui:Label text="Queue item 02" />
+                    <ui:Label text="Queue item 03" />
+                    <ui:Label text="Queue item 04" />
+                    <ui:Label text="Queue item 05" />
+                    <ui:Label text="Queue item 06" />
+                    <ui:Label text="Queue item 07" />
+                    <ui:Label text="Queue item 08" />
+                    <ui:Label text="Queue item 09" />
+                    <ui:Label text="Queue item 10" />
+                    <ui:Label text="Queue item 11" />
+                    <ui:Label text="Queue item 12" />
+                    <ui:Label text="Queue item 13" />
+                    <ui:Label text="Queue item 14" />
+                    <ui:Label text="Queue item 15" />
+                    <ui:Label text="Queue item 16" />
+                    <ui:Label text="Queue item 17" />
+                    <ui:Label text="Queue item 18" />
+                    <ui:Label text="Queue item 19" />
+                    <ui:Label text="Queue item 20" />
+                    <ui:Label text="Queue item 21" />
+                    <ui:Label text="Queue item 22" />
+                </ui:VisualElement>
+                <ui:Button name="disabled-action" text="Abort (Locked)" enabled="false" />
+            </ui:VisualElement>
+        </ui:VisualElement>
+    </ui:VisualElement>
+</ui:UXML>

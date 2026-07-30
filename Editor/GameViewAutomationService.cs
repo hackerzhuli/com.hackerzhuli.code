@@ -1,0 +1,2319 @@
+using System;
+using System.Collections.Generic;
+using System.Globalization;
+using System.IO;
+using System.Linq;
+using System.Net;
+using System.Reflection;
+using System.Text;
+using System.Text.RegularExpressions;
+using Hackerzhuli.Code.Editor.Messaging;
+using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
+using UnityEditor;
+using UnityEngine;
+using UnityEngine.UIElements;
+using MessageType = Hackerzhuli.Code.Editor.Messaging.MessageType;
+
+namespace Hackerzhuli.Code.Editor
+{
+    /// <summary>
+    /// Handles loopback-only automation of the runtime UI Toolkit hierarchy and Game View.
+    /// All methods are called from the editor main thread by <see cref="CodeEditorIntegrationCore"/>.
+    /// </summary>
+    internal sealed class GameViewAutomationService : IDisposable
+    {
+        private const double ScreenshotTimeoutSeconds = 10.0;
+        private const int HierarchyElementLimit = 200;
+        private static readonly byte[] PngSignature = { 137, 80, 78, 71, 13, 10, 26, 10 };
+        private static readonly Regex NumericComponentPattern = new(
+            @"[-+]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][-+]?\d+)?",
+            RegexOptions.Compiled | RegexOptions.CultureInvariant);
+        // These CreateProperty members are declared by VisualElement or one of its base types.
+        // They are either
+        // represented more clearly in the debugger-style sections below, duplicate other
+        // geometry, expose a large implementation object, or carry arbitrary user state.
+        // Properties declared by derived controls and custom elements are never filtered by
+        // this list, even if they happen to use one of the same names.
+        private static readonly HashSet<string> VisualElementInspectionPropertyBlacklist =
+            new(StringComparer.Ordinal)
+            {
+                "contentRect", "dataSource", "dataSourcePath", "enabledInHierarchy", "enabledSelf",
+                "focusable", "layout", "localBound", "name", "panel", "pickingMode",
+                "resolvedStyle", "style", "styleSheets", "tabIndex", "tooltip", "usageHints",
+                "userData", "viewDataKey", "visible", "worldBound", "worldTransform",
+                "disablePlayModeTint"
+            };
+
+        private readonly Action<IPEndPoint, MessageType, string> _answer;
+        private readonly Dictionary<VisualElement, string> _elementRefs = new();
+        private readonly Dictionary<string, VisualElement> _refElements = new(StringComparer.Ordinal);
+        private readonly Queue<ScreenshotRequest> _screenshotQueue = new();
+        private int _nextRef = 1;
+        private ScreenshotRequest _activeScreenshot;
+
+        internal GameViewAutomationService(Action<IPEndPoint, MessageType, string> answer)
+        {
+            _answer = answer ?? throw new ArgumentNullException(nameof(answer));
+        }
+
+        internal void Process(Message message)
+        {
+            if (!IsLoopback(message.Origin))
+            {
+                ReplyError(message, TryReadRequestId(message.Value), "forbidden",
+                    "Game View automation requests are only accepted from loopback clients.");
+                return;
+            }
+
+            if (!TryParseRequest(message.Value, out var request, out var requestId, out var parseError))
+            {
+                ReplyError(message, requestId, "invalid_request", parseError);
+                return;
+            }
+
+            if (!EditorApplication.isPlaying)
+            {
+                ReplyError(message, requestId, "not_playing",
+                    "Game View automation is only available while the Editor is in Play Mode.");
+                return;
+            }
+
+            try
+            {
+                switch (message.Type)
+                {
+                    case MessageType.UiSnapshot:
+                        var snapshot = BuildRuntimeSnapshot();
+                        if (snapshot == null)
+                            ReplyError(message, requestId, "panel_missing",
+                                "No active UIDocument is attached to a runtime panel.");
+                        else
+                            ReplySuccess(message, requestId, "snapshot", snapshot);
+                        break;
+                    case MessageType.UiClick:
+                        ProcessPointerAction(message, request, requestId, true);
+                        break;
+                    case MessageType.UiHover:
+                        ProcessPointerAction(message, request, requestId, false);
+                        break;
+                    case MessageType.GameViewScreenshot:
+                        if (request["path"] != null || request["fileName"] != null || request["filename"] != null)
+                        {
+                            ReplyError(message, requestId, "invalid_request",
+                                "Screenshot paths and file names are generated by Unity and cannot be supplied.");
+                            return;
+                        }
+
+                        _screenshotQueue.Enqueue(new ScreenshotRequest(message.Origin, message.Type, requestId));
+                        break;
+                    case MessageType.UiHierarchy:
+                        ProcessHierarchy(message, request, requestId);
+                        break;
+                    case MessageType.UiInspect:
+                        ProcessInspect(message, request, requestId);
+                        break;
+                    case MessageType.UiSetValue:
+                        ProcessSetValue(message, request, requestId);
+                        break;
+                }
+            }
+            catch (Exception exception)
+            {
+                ReplyError(message, requestId, "internal_error", exception.Message);
+            }
+        }
+
+        internal void Update()
+        {
+            if (_activeScreenshot == null)
+            {
+                if (_screenshotQueue.Count == 0)
+                    return;
+
+                if (!EditorApplication.isPlaying)
+                {
+                    FailQueuedScreenshots("not_playing",
+                        "Play Mode ended before the Game View screenshot could be captured.");
+                    return;
+                }
+
+                StartNextScreenshot();
+            }
+
+            if (_activeScreenshot == null)
+                return;
+
+            if (!EditorApplication.isPlaying)
+            {
+                CompleteActiveScreenshotError("not_playing",
+                    "Play Mode ended before the Game View screenshot was written.");
+                FailQueuedScreenshots("not_playing",
+                    "Play Mode ended before the Game View screenshot could be captured.");
+                return;
+            }
+
+            if (EditorApplication.timeSinceStartup - _activeScreenshot.StartTime > ScreenshotTimeoutSeconds)
+            {
+                CompleteActiveScreenshotError("capture_timeout",
+                    "Timed out waiting for Unity to finish writing the Game View screenshot.");
+                return;
+            }
+
+            try
+            {
+                if (!File.Exists(_activeScreenshot.Path))
+                    return;
+
+                var length = new FileInfo(_activeScreenshot.Path).Length;
+                if (length <= 0)
+                    return;
+
+                if (length == _activeScreenshot.LastLength)
+                    _activeScreenshot.StableLengthChecks++;
+                else
+                {
+                    _activeScreenshot.LastLength = length;
+                    _activeScreenshot.StableLengthChecks = 1;
+                }
+
+                if (_activeScreenshot.StableLengthChecks < 2 || !IsCompletePng(_activeScreenshot.Path))
+                    return;
+
+                var completed = _activeScreenshot;
+                _activeScreenshot = null;
+                _answer(completed.EndPoint, completed.MessageType,
+                    Success(completed.RequestId, "path", Path.GetFullPath(completed.Path)));
+            }
+            catch (UnauthorizedAccessException exception)
+            {
+                CompleteActiveScreenshotError("write_failed", exception.Message);
+            }
+            catch (IOException exception)
+            {
+                // CaptureScreenshot may still have the file open. Keep polling until timeout.
+                FileLogger.Log($"Waiting for screenshot file: {exception.Message}");
+            }
+        }
+
+        internal void OnExitingPlayMode()
+        {
+            CompleteActiveScreenshotError("not_playing",
+                "Play Mode ended before the Game View screenshot was written.");
+            FailQueuedScreenshots("not_playing",
+                "Play Mode ended before the Game View screenshot could be captured.");
+        }
+
+        public void Dispose()
+        {
+            CompleteActiveScreenshotError("internal_error", "Game View automation was stopped.");
+            FailQueuedScreenshots("internal_error", "Game View automation was stopped.");
+            _elementRefs.Clear();
+            _refElements.Clear();
+        }
+
+        private void ProcessPointerAction(Message message, JObject request, JToken requestId, bool click)
+        {
+            var reference = request.Value<string>("ref");
+            if (string.IsNullOrEmpty(reference))
+            {
+                ReplyError(message, requestId, "invalid_request", "A non-empty ref is required.");
+                return;
+            }
+
+            if (!_refElements.TryGetValue(reference, out var element))
+            {
+                ReplyError(message, requestId, "unknown_ref", $"Unknown UI element ref '{reference}'.");
+                return;
+            }
+
+            if (element.panel == null)
+            {
+                ReplyError(message, requestId, "stale_ref",
+                    "The referenced element is no longer attached to a runtime panel.");
+                return;
+            }
+
+            if (!IsVisible(element))
+            {
+                ReplyError(message, requestId, "not_visible", "The referenced element is not visible.");
+                return;
+            }
+
+            if (!element.enabledInHierarchy)
+            {
+                ReplyError(message, requestId, "disabled", "The referenced element is disabled.");
+                return;
+            }
+
+            if (!TryFindHittablePoint(element, out var point))
+            {
+                ReplyError(message, requestId, "not_hittable",
+                    "No visible point on the referenced element can receive pointer events.");
+                return;
+            }
+
+            if (click && element is Button button)
+            {
+                SendButtonSubmit(button);
+                ReplySuccess(message, requestId);
+                return;
+            }
+
+            SendMouseEvent(element.panel, EventType.MouseMove, point);
+            if (click)
+            {
+                SendMouseEvent(element.panel, EventType.MouseDown, point);
+                SendMouseEvent(element.panel, EventType.MouseUp, point);
+            }
+
+            ReplySuccess(message, requestId);
+        }
+
+        private static void SendButtonSubmit(Button button)
+        {
+            using var submit = NavigationSubmitEvent.GetPooled();
+            submit.target = button;
+            button.SendEvent(submit);
+        }
+
+        private void ProcessHierarchy(Message message, JObject request, JToken requestId)
+        {
+            var reference = request.Value<string>("ref");
+            if (string.IsNullOrEmpty(reference))
+            {
+                ReplyError(message, requestId, "invalid_request", "A non-empty ref is required.");
+                return;
+            }
+
+            if (!_refElements.TryGetValue(reference, out var element))
+            {
+                ReplyError(message, requestId, "unknown_ref", $"Unknown UI element ref '{reference}'.");
+                return;
+            }
+
+            if (element.panel == null)
+            {
+                ReplyError(message, requestId, "stale_ref",
+                    "The referenced element is no longer attached to a runtime panel.");
+                return;
+            }
+
+            if (IsHierarchyRoot(element))
+            {
+                ReplyError(message, requestId, "forbidden",
+                    "UiHierarchy cannot be requested for a UIDocument or Panel root element. Select one of its descendants.");
+                return;
+            }
+
+            int? requestedDepth = null;
+            var depthToken = request["depth"];
+            if (depthToken != null)
+            {
+                if (depthToken.Type != JTokenType.Integer ||
+                    !long.TryParse(depthToken.ToString(), NumberStyles.Integer,
+                        CultureInfo.InvariantCulture, out var parsedDepth) ||
+                    parsedDepth < 0 || parsedDepth > int.MaxValue)
+                {
+                    ReplyError(message, requestId, "invalid_request",
+                        "depth must be a non-negative integer.");
+                    return;
+                }
+
+                requestedDepth = (int)parsedDepth;
+            }
+
+            ReplySuccess(message, requestId, "hierarchy",
+                BuildHierarchy(element, requestedDepth));
+        }
+
+        private static bool IsHierarchyRoot(VisualElement element)
+        {
+            if (element.panel != null && element.panel.visualTree == element)
+                return true;
+
+            return UnityEngine.Object.FindObjectsByType<UIDocument>(
+                    FindObjectsInactive.Exclude, FindObjectsSortMode.None)
+                .Any(document => document != null && document.rootVisualElement == element);
+        }
+
+        private void ProcessInspect(Message message, JObject request, JToken requestId)
+        {
+            var reference = request.Value<string>("ref");
+            if (string.IsNullOrEmpty(reference))
+            {
+                ReplyError(message, requestId, "invalid_request", "A non-empty ref is required.");
+                return;
+            }
+
+            if (!_refElements.TryGetValue(reference, out var element))
+            {
+                ReplyError(message, requestId, "unknown_ref", $"Unknown UI element ref '{reference}'.");
+                return;
+            }
+
+            if (element.panel == null)
+            {
+                ReplyError(message, requestId, "stale_ref",
+                    "The referenced element is no longer attached to a runtime panel.");
+                return;
+            }
+
+            ReplySuccess(message, requestId, "inspection", BuildInspection(element));
+        }
+
+        private void ProcessSetValue(Message message, JObject request, JToken requestId)
+        {
+            var reference = request.Value<string>("ref");
+            if (string.IsNullOrEmpty(reference))
+            {
+                ReplyError(message, requestId, "invalid_request", "A non-empty ref is required.");
+                return;
+            }
+
+            if (!_refElements.TryGetValue(reference, out var element))
+            {
+                ReplyError(message, requestId, "unknown_ref", $"Unknown UI element ref '{reference}'.");
+                return;
+            }
+
+            if (element.panel == null)
+            {
+                ReplyError(message, requestId, "stale_ref",
+                    "The referenced element is no longer attached to a runtime panel.");
+                return;
+            }
+
+            if (!element.enabledInHierarchy)
+            {
+                ReplyError(message, requestId, "disabled", "The referenced element is disabled.");
+                return;
+            }
+
+            if (!TryGetBaseFieldValueProperty(element, out var valueType, out var valueProperty))
+            {
+                ReplyError(message, requestId, "invalid_request",
+                    $"Element type '{element.GetType().Name}' is not a BaseField<T>.");
+                return;
+            }
+
+            var readOnlyProperty = element.GetType().GetProperty("isReadOnly",
+                BindingFlags.Instance | BindingFlags.Public);
+            if (readOnlyProperty?.PropertyType == typeof(bool) &&
+                (bool)readOnlyProperty.GetValue(element))
+            {
+                ReplyError(message, requestId, "read_only",
+                    "The referenced field is read-only.");
+                return;
+            }
+
+            if (!request.TryGetValue("value", out var valueToken))
+            {
+                ReplyError(message, requestId, "invalid_request", "A value is required.");
+                return;
+            }
+
+            var input = valueToken.Type == JTokenType.Null
+                ? null
+                : valueToken.Type == JTokenType.String
+                    ? valueToken.Value<string>()
+                    : valueToken.ToString(Formatting.None);
+            object currentValue;
+            try
+            {
+                currentValue = valueProperty.GetValue(element);
+            }
+            catch (Exception exception)
+            {
+                ReplyError(message, requestId, "internal_error",
+                    UnwrapReflectionException(exception).Message);
+                return;
+            }
+
+            if (!TryConvertFieldValue(valueType, input, currentValue, out var converted,
+                    out var errorCode, out var conversionError))
+            {
+                ReplyError(message, requestId, errorCode, conversionError);
+                return;
+            }
+
+            try
+            {
+                valueProperty.SetValue(element, converted);
+            }
+            catch (Exception exception)
+            {
+                var cause = UnwrapReflectionException(exception);
+                ReplyError(message, requestId, "invalid_value",
+                    $"Could not set {element.GetType().Name}.value: {cause.Message}");
+                return;
+            }
+
+            ReplySuccess(message, requestId);
+        }
+
+        private static bool TryGetBaseFieldValueProperty(VisualElement element, out Type valueType,
+            out PropertyInfo valueProperty)
+        {
+            for (var type = element.GetType(); type != null; type = type.BaseType)
+            {
+                if (!type.IsGenericType ||
+                    type.GetGenericTypeDefinition() != typeof(BaseField<>))
+                    continue;
+
+                valueType = type.GetGenericArguments()[0];
+                valueProperty = element.GetType().GetProperty("value",
+                    BindingFlags.Instance | BindingFlags.Public);
+                return valueProperty?.SetMethod != null;
+            }
+
+            valueType = null;
+            valueProperty = null;
+            return false;
+        }
+
+        internal static bool TryConvertFieldValue(Type declaredType, string input, object currentValue,
+            out object converted, out string errorCode, out string errorMessage)
+        {
+            converted = null;
+            errorCode = "invalid_value";
+            errorMessage = null;
+            if (declaredType == null)
+            {
+                errorCode = "unsupported_value_type";
+                errorMessage = "The field does not expose a value type.";
+                return false;
+            }
+
+            var nullableType = Nullable.GetUnderlyingType(declaredType);
+            var valueType = nullableType ?? declaredType;
+            if (input == null)
+            {
+                if (!declaredType.IsValueType || nullableType != null)
+                    return true;
+
+                errorMessage = $"A null value cannot be assigned to {GetFriendlyTypeName(declaredType)}.";
+                return false;
+            }
+
+            if (valueType == typeof(string) || valueType == typeof(object))
+            {
+                converted = input;
+                return true;
+            }
+
+            var text = input.Trim();
+            if (nullableType != null &&
+                (text.Length == 0 || string.Equals(text, "null", StringComparison.OrdinalIgnoreCase)))
+                return true;
+
+            if (valueType == typeof(char))
+            {
+                var unquoted = text.Length == 3 &&
+                               (text[0] == '\'' && text[2] == '\'' ||
+                                text[0] == '"' && text[2] == '"')
+                    ? text.Substring(1, 1)
+                    : text;
+                if (unquoted.Length == 1)
+                {
+                    converted = unquoted[0];
+                    return true;
+                }
+
+                return InvalidConversion(declaredType, input, out errorMessage);
+            }
+
+            if (valueType == typeof(bool))
+            {
+                switch (text.ToLowerInvariant())
+                {
+                    case "true":
+                    case "1":
+                    case "yes":
+                    case "y":
+                    case "on":
+                    case "checked":
+                    case "enabled":
+                        converted = true;
+                        return true;
+                    case "false":
+                    case "0":
+                    case "no":
+                    case "n":
+                    case "off":
+                    case "unchecked":
+                    case "disabled":
+                        converted = false;
+                        return true;
+                    default:
+                        return InvalidConversion(declaredType, input, out errorMessage,
+                            "Use true/false, 1/0, yes/no, on/off, or checked/unchecked.");
+                }
+            }
+
+            if (IsIntegerType(valueType))
+            {
+                if (TryParseInteger(text, valueType, out converted))
+                    return true;
+                return InvalidConversion(declaredType, input, out errorMessage,
+                    "Decimal, 0x hexadecimal, and 0b binary forms are supported.");
+            }
+
+            if (valueType == typeof(float) || valueType == typeof(double) ||
+                valueType == typeof(decimal))
+            {
+                if (TryParseFloatingPoint(text, valueType, out converted))
+                    return true;
+                return InvalidConversion(declaredType, input, out errorMessage,
+                    "Invariant decimal, scientific notation, and percentages are supported.");
+            }
+
+            var enumType = valueType == typeof(Enum) && currentValue is Enum currentEnum
+                ? currentEnum.GetType()
+                : valueType;
+            if (enumType.IsEnum)
+            {
+                if (TryParseEnum(enumType, text, out converted))
+                    return true;
+                return InvalidConversion(enumType, input, out errorMessage,
+                    $"Expected one of: {string.Join(", ", Enum.GetNames(enumType))}.");
+            }
+
+            if (TryConvertUnityValue(valueType, text, out converted, out var unityTypeSupported))
+                return true;
+            if (unityTypeSupported)
+                return InvalidConversion(declaredType, input, out errorMessage);
+
+            if (valueType == typeof(Guid) && Guid.TryParse(text, out var guid))
+            {
+                converted = guid;
+                return true;
+            }
+
+            if (typeof(UnityEngine.Object).IsAssignableFrom(valueType))
+            {
+                errorCode = "unsupported_value_type";
+                errorMessage =
+                    $"UiSetValue cannot resolve Unity object references for {GetFriendlyTypeName(valueType)}.";
+                return false;
+            }
+
+            if (TryInvokeStringParser(valueType, text, out converted, out var parserFound))
+                return true;
+            if (parserFound)
+                return InvalidConversion(declaredType, input, out errorMessage);
+
+            errorCode = "unsupported_value_type";
+            errorMessage =
+                $"UiSetValue does not have a string converter for {GetFriendlyTypeName(valueType)}.";
+            return false;
+        }
+
+        private static bool TryConvertUnityValue(Type type, string input, out object converted,
+            out bool supported)
+        {
+            converted = null;
+            supported = type == typeof(Color) || type == typeof(Color32) ||
+                        type == typeof(LayerMask) ||
+                        type == typeof(Vector2) || type == typeof(Vector2Int) ||
+                        type == typeof(Vector3) || type == typeof(Vector3Int) ||
+                        type == typeof(Vector4) || type == typeof(Quaternion) ||
+                        type == typeof(Rect) || type == typeof(RectInt) ||
+                        type == typeof(Bounds) || type == typeof(BoundsInt);
+            if (!supported)
+                return false;
+
+            if (type == typeof(Color) || type == typeof(Color32))
+            {
+                if (!TryParseColor(input, out var color))
+                    return false;
+                converted = type == typeof(Color) ? (object)color : (Color32)color;
+                return true;
+            }
+
+            if (type == typeof(LayerMask))
+            {
+                if (!TryParseInteger(input, typeof(int), out var layerValue))
+                    return false;
+                converted = new LayerMask { value = (int)layerValue };
+                return true;
+            }
+
+            var expectedComponents = type == typeof(Vector2) || type == typeof(Vector2Int) ? 2 :
+                type == typeof(Vector3) || type == typeof(Vector3Int) ? 3 :
+                type == typeof(Vector4) || type == typeof(Quaternion) ||
+                type == typeof(Rect) || type == typeof(RectInt) ? 4 :
+                type == typeof(Bounds) || type == typeof(BoundsInt) ? 6 : 0;
+            if (expectedComponents == 0 ||
+                !TryExtractNumericComponents(input, expectedComponents, out var values))
+                return false;
+
+            if (type == typeof(Vector2))
+                converted = new Vector2(values[0], values[1]);
+            else if (type == typeof(Vector3))
+                converted = new Vector3(values[0], values[1], values[2]);
+            else if (type == typeof(Vector4))
+                converted = new Vector4(values[0], values[1], values[2], values[3]);
+            else if (type == typeof(Quaternion))
+                converted = new Quaternion(values[0], values[1], values[2], values[3]);
+            else if (type == typeof(Rect))
+                converted = new Rect(values[0], values[1], values[2], values[3]);
+            else if (type == typeof(Bounds))
+                converted = new Bounds(
+                    new Vector3(values[0], values[1], values[2]),
+                    new Vector3(values[3], values[4], values[5]));
+            else if (!TryConvertToIntComponents(values, out var integers))
+                return false;
+            else if (type == typeof(Vector2Int))
+                converted = new Vector2Int(integers[0], integers[1]);
+            else if (type == typeof(Vector3Int))
+                converted = new Vector3Int(integers[0], integers[1], integers[2]);
+            else if (type == typeof(RectInt))
+                converted = new RectInt(integers[0], integers[1], integers[2], integers[3]);
+            else if (type == typeof(BoundsInt))
+                converted = new BoundsInt(
+                    new Vector3Int(integers[0], integers[1], integers[2]),
+                    new Vector3Int(integers[3], integers[4], integers[5]));
+            return converted != null;
+        }
+
+        private static bool TryParseInteger(string input, Type type, out object converted)
+        {
+            converted = null;
+            var text = input.Replace("_", string.Empty).Trim();
+            try
+            {
+                decimal number;
+                var negative = text.StartsWith("-", StringComparison.Ordinal);
+                var unsignedText = negative ? text.Substring(1) : text;
+                if (unsignedText.StartsWith("0x", StringComparison.OrdinalIgnoreCase))
+                {
+                    number = Convert.ToUInt64(unsignedText.Substring(2), 16);
+                    if (negative)
+                        number = -number;
+                }
+                else if (unsignedText.StartsWith("0b", StringComparison.OrdinalIgnoreCase))
+                {
+                    number = Convert.ToUInt64(unsignedText.Substring(2), 2);
+                    if (negative)
+                        number = -number;
+                }
+                else if (!decimal.TryParse(text, NumberStyles.Integer,
+                             CultureInfo.InvariantCulture, out number))
+                {
+                    return false;
+                }
+
+                if (decimal.Truncate(number) != number)
+                    return false;
+                if (type == typeof(byte))
+                    converted = checked((byte)number);
+                else if (type == typeof(sbyte))
+                    converted = checked((sbyte)number);
+                else if (type == typeof(short))
+                    converted = checked((short)number);
+                else if (type == typeof(ushort))
+                    converted = checked((ushort)number);
+                else if (type == typeof(int))
+                    converted = checked((int)number);
+                else if (type == typeof(uint))
+                    converted = checked((uint)number);
+                else if (type == typeof(long))
+                    converted = checked((long)number);
+                else if (type == typeof(ulong))
+                    converted = checked((ulong)number);
+                return converted != null && decimal.Truncate(number) == number;
+            }
+            catch (Exception exception) when (exception is FormatException or OverflowException)
+            {
+                return false;
+            }
+        }
+
+        private static bool TryParseFloatingPoint(string input, Type type, out object converted)
+        {
+            converted = null;
+            var text = input.Replace("_", string.Empty).Trim();
+            var percentage = text.EndsWith("%", StringComparison.Ordinal);
+            if (percentage)
+                text = text.Substring(0, text.Length - 1).Trim();
+            if (text.EndsWith("f", StringComparison.OrdinalIgnoreCase) ||
+                text.EndsWith("d", StringComparison.OrdinalIgnoreCase) ||
+                text.EndsWith("m", StringComparison.OrdinalIgnoreCase))
+                text = text.Substring(0, text.Length - 1);
+
+            const NumberStyles styles = NumberStyles.Float | NumberStyles.AllowThousands;
+            if (type == typeof(float) &&
+                float.TryParse(text, styles, CultureInfo.InvariantCulture, out var single))
+            {
+                converted = percentage ? single / 100f : single;
+                return true;
+            }
+
+            if (type == typeof(double) &&
+                double.TryParse(text, styles, CultureInfo.InvariantCulture, out var doubleValue))
+            {
+                converted = percentage ? doubleValue / 100d : doubleValue;
+                return true;
+            }
+
+            if (type == typeof(decimal) &&
+                decimal.TryParse(text, styles, CultureInfo.InvariantCulture, out var decimalValue))
+            {
+                converted = percentage ? decimalValue / 100m : decimalValue;
+                return true;
+            }
+
+            return false;
+        }
+
+        private static bool TryParseEnum(Type enumType, string input, out object converted)
+        {
+            converted = null;
+            if (TryParseInteger(input, Enum.GetUnderlyingType(enumType), out var numeric))
+            {
+                converted = Enum.ToObject(enumType, numeric);
+                return true;
+            }
+
+            var requestedParts = Regex.Split(input, @"\s*[,|+]\s*")
+                .Where(part => !string.IsNullOrWhiteSpace(part))
+                .ToArray();
+            if (requestedParts.Length == 0)
+                return false;
+
+            var names = Enum.GetNames(enumType);
+            var resolvedNames = new List<string>();
+            foreach (var requestedPart in requestedParts)
+            {
+                var normalized = NormalizeIdentifier(requestedPart);
+                var match = names.FirstOrDefault(name =>
+                    string.Equals(NormalizeIdentifier(name), normalized,
+                        StringComparison.OrdinalIgnoreCase));
+                if (match == null)
+                    return false;
+                resolvedNames.Add(match);
+            }
+
+            try
+            {
+                converted = Enum.Parse(enumType, string.Join(",", resolvedNames), true);
+                return true;
+            }
+            catch (ArgumentException)
+            {
+                return false;
+            }
+        }
+
+        private static string NormalizeIdentifier(string value)
+        {
+            return new string(value.Where(char.IsLetterOrDigit)
+                .Select(char.ToLowerInvariant).ToArray());
+        }
+
+        private static bool TryParseColor(string input, out Color color)
+        {
+            var text = input.Trim();
+            var lower = text.ToLowerInvariant();
+            switch (lower)
+            {
+                case "transparent": color = Color.clear; return true;
+                case "black": color = Color.black; return true;
+                case "white": color = Color.white; return true;
+                case "red": color = Color.red; return true;
+                case "green": color = Color.green; return true;
+                case "blue": color = Color.blue; return true;
+                case "yellow": color = Color.yellow; return true;
+                case "cyan": color = Color.cyan; return true;
+                case "magenta": color = Color.magenta; return true;
+                case "gray":
+                case "grey": color = Color.gray; return true;
+            }
+
+            if (Regex.IsMatch(text, @"^[0-9a-fA-F]{3,4}$|^[0-9a-fA-F]{6}$|^[0-9a-fA-F]{8}$"))
+                text = string.Concat("#", text);
+            if (ColorUtility.TryParseHtmlString(text, out color))
+                return true;
+
+            if (!TryExtractNumericComponents(text, 3, 4, out var values))
+            {
+                color = default;
+                return false;
+            }
+
+            var byteRgb = values.Take(3).Any(component => component > 1f);
+            var red = byteRgb ? values[0] / 255f : values[0];
+            var green = byteRgb ? values[1] / 255f : values[1];
+            var blue = byteRgb ? values[2] / 255f : values[2];
+            var alpha = values.Length == 4
+                ? values[3] > 1f ? values[3] / 255f : values[3]
+                : 1f;
+            if (new[] { red, green, blue, alpha }.Any(component => component < 0f || component > 1f))
+            {
+                color = default;
+                return false;
+            }
+
+            color = new Color(red, green, blue, alpha);
+            return true;
+        }
+
+        private static bool TryExtractNumericComponents(string input, int expectedCount,
+            out float[] values)
+        {
+            return TryExtractNumericComponents(input, expectedCount, expectedCount, out values);
+        }
+
+        private static bool TryExtractNumericComponents(string input, int minimumCount,
+            int maximumCount, out float[] values)
+        {
+            var matches = NumericComponentPattern.Matches(input);
+            if (matches.Count < minimumCount || matches.Count > maximumCount)
+            {
+                values = null;
+                return false;
+            }
+
+            values = new float[matches.Count];
+            for (var index = 0; index < matches.Count; index++)
+                if (!float.TryParse(matches[index].Value, NumberStyles.Float,
+                        CultureInfo.InvariantCulture, out values[index]))
+                {
+                    values = null;
+                    return false;
+                }
+            return true;
+        }
+
+        private static bool TryConvertToIntComponents(float[] values, out int[] integers)
+        {
+            integers = new int[values.Length];
+            for (var index = 0; index < values.Length; index++)
+            {
+                if (values[index] < int.MinValue || values[index] > int.MaxValue ||
+                    !Mathf.Approximately(values[index], Mathf.Round(values[index])))
+                {
+                    integers = null;
+                    return false;
+                }
+                integers[index] = Mathf.RoundToInt(values[index]);
+            }
+            return true;
+        }
+
+        private static bool TryInvokeStringParser(Type type, string input, out object converted,
+            out bool parserFound)
+        {
+            converted = null;
+            parserFound = false;
+            try
+            {
+                var parseWithProvider = type.GetMethod("Parse",
+                    BindingFlags.Public | BindingFlags.Static, null,
+                    new[] { typeof(string), typeof(IFormatProvider) }, null);
+                if (parseWithProvider != null)
+                {
+                    parserFound = true;
+                    converted = parseWithProvider.Invoke(null,
+                        new object[] { input, CultureInfo.InvariantCulture });
+                    return true;
+                }
+
+                var parse = type.GetMethod("Parse", BindingFlags.Public | BindingFlags.Static,
+                    null, new[] { typeof(string) }, null);
+                if (parse != null)
+                {
+                    parserFound = true;
+                    converted = parse.Invoke(null, new object[] { input });
+                    return true;
+                }
+
+                var constructor = type.GetConstructor(new[] { typeof(string) });
+                if (constructor == null)
+                    return false;
+                parserFound = true;
+                converted = constructor.Invoke(new object[] { input });
+                return true;
+            }
+            catch (Exception)
+            {
+                return false;
+            }
+        }
+
+        private static bool IsIntegerType(Type type)
+        {
+            return type == typeof(byte) || type == typeof(sbyte) ||
+                   type == typeof(short) || type == typeof(ushort) ||
+                   type == typeof(int) || type == typeof(uint) ||
+                   type == typeof(long) || type == typeof(ulong);
+        }
+
+        private static bool InvalidConversion(Type type, string input, out string errorMessage,
+            string hint = null)
+        {
+            errorMessage =
+                $"Could not convert {QuoteYamlString(input)} to {GetFriendlyTypeName(type)}.";
+            if (!string.IsNullOrEmpty(hint))
+                errorMessage = string.Concat(errorMessage, " ", hint);
+            return false;
+        }
+
+        private static string GetFriendlyTypeName(Type type)
+        {
+            return type.FullName ?? type.Name;
+        }
+
+        private static Exception UnwrapReflectionException(Exception exception)
+        {
+            return exception is TargetInvocationException { InnerException: not null }
+                ? exception.InnerException
+                : exception;
+        }
+
+        private string BuildRuntimeSnapshot()
+        {
+            var documents = UnityEngine.Object.FindObjectsByType<UIDocument>(
+                    FindObjectsInactive.Exclude, FindObjectsSortMode.None)
+                .Where(document => document != null && document.isActiveAndEnabled &&
+                                   document.rootVisualElement != null &&
+                                   document.rootVisualElement.panel != null)
+                .OrderBy(document => document.panelSettings != null
+                    ? document.panelSettings.sortingOrder
+                    : 0f)
+                .ThenBy(document => document.panelSettings != null
+                    ? document.panelSettings.GetInstanceID()
+                    : 0)
+                .ThenBy(document => document.sortingOrder)
+                .ThenBy(document => document.GetInstanceID())
+                .ToArray();
+
+            var liveElements = new HashSet<VisualElement>();
+            if (documents.Length == 0)
+            {
+                RemoveInvalidRefs(liveElements);
+                return null;
+            }
+
+            var builder = new StringBuilder();
+            foreach (var document in documents)
+            {
+                builder.Append("- UIDocument");
+                if (!string.IsNullOrEmpty(document.name))
+                    AppendStringProperty(builder, "name", document.name);
+                builder.Append(":\n");
+                AppendElement(builder, document.rootVisualElement, 1, liveElements, false, int.MaxValue);
+            }
+
+            RemoveInvalidRefs(liveElements);
+            return builder.ToString().TrimEnd();
+        }
+
+        /// <summary>
+        /// Builds the same compact tree without requiring a live panel. This keeps serialization
+        /// rules independently testable in EditMode; production snapshots always use UIDocuments.
+        /// </summary>
+        internal string BuildSnapshotForTests(VisualElement root)
+        {
+            var liveElements = new HashSet<VisualElement>();
+            var builder = new StringBuilder("- UIDocument:\n");
+            AppendElement(builder, root, 1, liveElements, false, int.MaxValue);
+
+            var invalid = _elementRefs.Keys.Where(element => !liveElements.Contains(element)).ToArray();
+            foreach (var element in invalid)
+            {
+                var reference = _elementRefs[element];
+                _elementRefs.Remove(element);
+                _refElements.Remove(reference);
+            }
+
+            return builder.ToString().TrimEnd();
+        }
+
+        internal string BuildHierarchyForTests(VisualElement root, int? requestedDepth = null)
+        {
+            return BuildHierarchy(root, requestedDepth);
+        }
+
+        private string BuildHierarchy(VisualElement root, int? requestedDepth)
+        {
+            var elements = new HashSet<VisualElement>();
+            var builder = new StringBuilder();
+            var dynamicMaximumDepth = DetermineHierarchyDepth(root);
+            var maximumDepth = requestedDepth.HasValue
+                ? Math.Min(requestedDepth.Value, dynamicMaximumDepth)
+                : dynamicMaximumDepth;
+            var depthOmissionReason = requestedDepth.HasValue &&
+                                      requestedDepth.Value <= dynamicMaximumDepth
+                ? "requested_depth_limit"
+                : "dynamic_depth_limit";
+            AppendElement(builder, root, 0, elements, true, maximumDepth,
+                depthOmissionReason);
+            return builder.ToString().TrimEnd();
+        }
+
+        internal string BuildInspectionForTests(VisualElement element)
+        {
+            return BuildInspection(element);
+        }
+
+        private string BuildInspection(VisualElement element)
+        {
+            var builder = new StringBuilder();
+            builder.Append("type: ");
+            builder.Append(element.GetType().Name);
+            builder.Append("\nref: ");
+            builder.Append(GetOrCreateRef(element));
+            AppendInspectionLayout(builder, element);
+            AppendInspectionGeometry(builder, element);
+            AppendInspectionElement(builder, element);
+            AppendInspectionUss(builder, element);
+            builder.Append("properties:\n");
+            AppendInspectionProperties(builder, element);
+            return builder.ToString().TrimEnd();
+        }
+
+        private static void AppendInspectionLayout(StringBuilder builder, VisualElement element)
+        {
+            var style = element.resolvedStyle;
+            builder.Append("\nlayout:\n");
+            AppendYamlBox(builder, "margin", style.marginTop, style.marginRight,
+                style.marginBottom, style.marginLeft);
+            AppendYamlBox(builder, "border", style.borderTopWidth, style.borderRightWidth,
+                style.borderBottomWidth, style.borderLeftWidth);
+            AppendYamlBox(builder, "padding", style.paddingTop, style.paddingRight,
+                style.paddingBottom, style.paddingLeft);
+            builder.Append("  contentSize: [");
+            builder.Append(element.contentRect.width.ToString("R", CultureInfo.InvariantCulture));
+            builder.Append(',');
+            builder.Append(element.contentRect.height.ToString("R", CultureInfo.InvariantCulture));
+            builder.Append("]\n");
+        }
+
+        private static void AppendYamlBox(StringBuilder builder, string name,
+            float top, float right, float bottom, float left)
+        {
+            builder.Append("  ");
+            builder.Append(name);
+            builder.Append(": {top: ");
+            builder.Append(top.ToString("R", CultureInfo.InvariantCulture));
+            builder.Append(", right: ");
+            builder.Append(right.ToString("R", CultureInfo.InvariantCulture));
+            builder.Append(", bottom: ");
+            builder.Append(bottom.ToString("R", CultureInfo.InvariantCulture));
+            builder.Append(", left: ");
+            builder.Append(left.ToString("R", CultureInfo.InvariantCulture));
+            builder.Append("}\n");
+        }
+
+        private static void AppendInspectionGeometry(StringBuilder builder, VisualElement element)
+        {
+            builder.Append("geometry:\n");
+            AppendYamlValue(builder, 1, "worldBound", element.worldBound);
+            AppendYamlValue(builder, 1, "worldClip", GetInternalMemberValue(element, "worldClip"));
+            AppendYamlValue(builder, 1, "boundingBox", GetInternalMemberValue(element, "boundingBox"));
+            AppendYamlValue(builder, 1, "layout", element.layout);
+            AppendYamlValue(builder, 1, "lastLayout", GetInternalMemberValue(element, "lastLayout"));
+        }
+
+        private static void AppendInspectionElement(StringBuilder builder, VisualElement element)
+        {
+            builder.Append("element:\n");
+            AppendYamlValue(builder, 1, "name", element.name);
+            AppendYamlValue(builder, 1, "debugId", GetInternalMemberValue(element, "controlid"));
+            AppendYamlValue(builder, 1, "tooltip", element.tooltip);
+            AppendYamlValue(builder, 1, "viewDataKey", element.viewDataKey);
+            AppendYamlValue(builder, 1, "dataSourceType", element.dataSource?.GetType().FullName);
+            AppendYamlValue(builder, 1, "dataSourcePath", element.dataSourcePath);
+            AppendYamlValue(builder, 1, "pickingMode", element.pickingMode);
+            AppendYamlValue(builder, 1, "pseudoStates", GetInternalMemberValue(element, "pseudoStates"));
+            AppendYamlValue(builder, 1, "focusable", element.focusable);
+            AppendYamlValue(builder, 1, "usageHints", element.usageHints);
+            AppendYamlValue(builder, 1, "tabIndex", element.tabIndex);
+            AppendYamlValue(builder, 1, "display", element.resolvedStyle.display);
+            AppendYamlValue(builder, 1, "visibility", element.resolvedStyle.visibility);
+            AppendYamlValue(builder, 1, "opacity", element.resolvedStyle.opacity);
+            AppendYamlValue(builder, 1, "enabledSelf", element.enabledSelf);
+            AppendYamlValue(builder, 1, "enabledInHierarchy", element.enabledInHierarchy);
+            AppendYamlValue(builder, 1, "visible", element.visible);
+        }
+
+        private static void AppendInspectionUss(StringBuilder builder, VisualElement element)
+        {
+            builder.Append("uss:\n");
+            builder.Append("  classes: ");
+            builder.Append(FormatStringCollection(element.GetClasses()));
+            builder.Append('\n');
+            AppendStyleSheets(builder, element);
+            AppendStyleProperties(builder, "inlineStyles", element.style, typeof(IStyle), true);
+            AppendStyleProperties(builder, "resolvedStyles", element.resolvedStyle,
+                typeof(IResolvedStyle), false);
+        }
+
+        private static void AppendStyleSheets(StringBuilder builder, VisualElement element)
+        {
+            var entries = new List<string>();
+            for (var current = element; current != null; current = current.parent)
+            {
+                var set = current.styleSheets;
+                for (var index = 0; index < set.count; index++)
+                {
+                    var sheet = set[index];
+                    if (sheet == null)
+                        continue;
+                    var entry = $"{sheet.name} (owner={current.GetType().Name}, name={current.name})";
+                    if (!entries.Contains(entry))
+                        entries.Add(entry);
+                }
+            }
+
+            if (entries.Count == 0)
+            {
+                builder.Append("  styleSheets: []\n");
+                return;
+            }
+
+            builder.Append("  styleSheets:\n");
+            foreach (var entry in entries)
+            {
+                builder.Append("    - ");
+                builder.Append(QuoteYamlString(entry));
+                builder.Append('\n');
+            }
+        }
+
+        private static void AppendStyleProperties(StringBuilder builder, string sectionName,
+            object source, Type interfaceType, bool skipUnsetInlineValues)
+        {
+            var values = new List<KeyValuePair<string, object>>();
+            foreach (var property in interfaceType.GetProperties(BindingFlags.Instance | BindingFlags.Public)
+                         .Where(property => property.GetMethod != null)
+                         .OrderBy(property => property.Name, StringComparer.Ordinal))
+            {
+                try
+                {
+                    var value = property.GetValue(source);
+                    if (skipUnsetInlineValues && IsUnsetInlineStyleValue(value))
+                        continue;
+                    values.Add(new KeyValuePair<string, object>(ToUssPropertyName(property.Name), value));
+                }
+                catch (Exception exception)
+                {
+                    var cause = exception is TargetInvocationException { InnerException: not null }
+                        ? exception.InnerException
+                        : exception;
+                    values.Add(new KeyValuePair<string, object>(ToUssPropertyName(property.Name),
+                        $"<error: {cause.GetType().Name}: {cause.Message}>"));
+                }
+            }
+
+            if (!skipUnsetInlineValues)
+            {
+                var resolvedValues = values.ToDictionary(pair => pair.Key, pair => pair.Value,
+                    StringComparer.Ordinal);
+                values.RemoveAll(pair =>
+                    ShouldOmitResolvedStyleProperty(pair.Key, pair.Value, resolvedValues));
+            }
+
+            if (values.Count == 0)
+            {
+                builder.Append("  ");
+                builder.Append(sectionName);
+                builder.Append(": {}\n");
+                return;
+            }
+
+            builder.Append("  ");
+            builder.Append(sectionName);
+            builder.Append(":\n");
+            foreach (var pair in values)
+                AppendYamlValue(builder, 2, pair.Key, pair.Value);
+        }
+
+        private static bool ShouldOmitResolvedStyleProperty(string name, object value,
+            IReadOnlyDictionary<string, object> values)
+        {
+            // The box model is already presented by the layout section.
+            if (name.StartsWith("margin-", StringComparison.Ordinal) ||
+                name.StartsWith("padding-", StringComparison.Ordinal) ||
+                name.EndsWith("-width", StringComparison.Ordinal) &&
+                name.StartsWith("border-", StringComparison.Ordinal))
+                return true;
+
+            // These values are already presented in the element section.
+            if (name is "display" or "visibility" or "opacity")
+                return true;
+
+            var hasBackgroundImage = values.TryGetValue("background-image", out var backgroundImage) &&
+                                     !IsAbsentBackgroundImage(backgroundImage);
+            if (name == "background-image")
+                return !hasBackgroundImage;
+            if (!hasBackgroundImage &&
+                (name.StartsWith("background-position-", StringComparison.Ordinal) ||
+                 name is "background-repeat" or "background-size" or
+                     "-unity-background-image-tint-color" or "-unity-background-scale-mode" or
+                     "-unity-slice-bottom" or "-unity-slice-left" or "-unity-slice-right" or
+                     "-unity-slice-scale" or "-unity-slice-top" or "-unity-slice-type"))
+                return true;
+
+            if (name == "background-color" && IsTransparentColor(value))
+                return true;
+
+            if (TryGetBorderSide(name, "-color", out var side) &&
+                values.TryGetValue($"border-{side}-width", out var width) &&
+                IsZeroNumber(width))
+                return true;
+            if (name.StartsWith("border-", StringComparison.Ordinal) &&
+                name.EndsWith("-radius", StringComparison.Ordinal) && IsZeroNumber(value))
+                return true;
+
+            var isDefaultPosition = values.TryGetValue("position", out var position) &&
+                                    IsNamedValue(position, "Relative");
+            if (name is "left" or "right" or "top" or "bottom")
+                return isDefaultPosition && IsZeroNumber(value);
+
+            var hasTransition = values.TryGetValue("transition-duration", out var durations) &&
+                                !IsZeroTimeCollection(durations);
+            if (!hasTransition && name.StartsWith("transition-", StringComparison.Ordinal))
+                return true;
+
+            var hasTransform = HasEffectiveTransform(values);
+            if (!hasTransform &&
+                name is "rotate" or "scale" or "translate" or "transform-origin")
+                return true;
+
+            switch (name)
+            {
+                case "max-height":
+                case "max-width":
+                    return IsNamedValue(value, "None");
+                case "min-height":
+                case "min-width":
+                    return IsNamedValue(value, "Auto");
+                case "letter-spacing":
+                case "word-spacing":
+                case "-unity-paragraph-spacing":
+                    return IsZeroNumber(value);
+                case "-unity-font":
+                case "-unity-font-definition":
+                    return value == null || string.IsNullOrEmpty(value.ToString());
+                case "-unity-text-outline-color":
+                    return values.TryGetValue("-unity-text-outline-width", out var outlineWidth) &&
+                           IsZeroNumber(outlineWidth);
+                case "-unity-text-outline-width":
+                    return IsZeroNumber(value);
+                default:
+                    return false;
+            }
+        }
+
+        private static bool TryGetBorderSide(string propertyName, string suffix, out string side)
+        {
+            const string prefix = "border-";
+            if (propertyName.StartsWith(prefix, StringComparison.Ordinal) &&
+                propertyName.EndsWith(suffix, StringComparison.Ordinal))
+            {
+                side = propertyName.Substring(prefix.Length,
+                    propertyName.Length - prefix.Length - suffix.Length);
+                return side is "top" or "right" or "bottom" or "left";
+            }
+
+            side = null;
+            return false;
+        }
+
+        private static bool IsAbsentBackgroundImage(object value)
+        {
+            return value == null || string.IsNullOrEmpty(value.ToString());
+        }
+
+        private static bool IsTransparentColor(object value)
+        {
+            return value is Color color && Mathf.Approximately(color.a, 0f);
+        }
+
+        private static bool IsZeroNumber(object value)
+        {
+            return IsNumber(value, 0f);
+        }
+
+        private static bool IsNumber(object value, float expected)
+        {
+            try
+            {
+                return value is byte or sbyte or short or ushort or int or uint or long or ulong or
+                           float or double or decimal &&
+                       Mathf.Approximately(Convert.ToSingle(value, CultureInfo.InvariantCulture),
+                           expected);
+            }
+            catch (Exception)
+            {
+                return false;
+            }
+        }
+
+        private static bool IsNamedValue(object value, string expected)
+        {
+            return string.Equals(value?.ToString(), expected, StringComparison.Ordinal);
+        }
+
+        private static bool IsZeroTimeCollection(object value)
+        {
+            if (value is not System.Collections.IEnumerable items)
+                return false;
+
+            var foundAny = false;
+            foreach (var item in items)
+            {
+                foundAny = true;
+                var text = item?.ToString();
+                if (!string.Equals(text, "0s", StringComparison.Ordinal) &&
+                    !string.Equals(text, "0ms", StringComparison.Ordinal))
+                    return false;
+            }
+
+            return foundAny;
+        }
+
+        private static bool HasEffectiveTransform(IReadOnlyDictionary<string, object> values)
+        {
+            return !values.TryGetValue("rotate", out var rotate) ||
+                   rotate?.ToString().StartsWith("0 ", StringComparison.Ordinal) != true ||
+                   !values.TryGetValue("scale", out var scale) ||
+                   !IsNamedValue(scale, "(1.00, 1.00, 1.00)") ||
+                   !values.TryGetValue("translate", out var translate) ||
+                   translate is not Vector3 translation ||
+                   translation != Vector3.zero;
+        }
+
+        private static bool IsUnsetInlineStyleValue(object value)
+        {
+            if (value == null)
+                return true;
+            var keyword = value.GetType().GetProperty("keyword",
+                BindingFlags.Instance | BindingFlags.Public)?.GetValue(value);
+            return keyword != null &&
+                   (string.Equals(keyword.ToString(), "Null", StringComparison.Ordinal) ||
+                    string.Equals(keyword.ToString(), "Undefined", StringComparison.Ordinal));
+        }
+
+        private static string ToUssPropertyName(string propertyName)
+        {
+            var builder = new StringBuilder(propertyName.Length + 4);
+            foreach (var character in propertyName)
+            {
+                if (char.IsUpper(character))
+                    builder.Append('-').Append(char.ToLowerInvariant(character));
+                else
+                    builder.Append(character);
+            }
+
+            var result = builder.ToString();
+            return result.StartsWith("unity-", StringComparison.Ordinal)
+                ? string.Concat("-", result)
+                : result;
+        }
+
+        private static object GetInternalMemberValue(object target, string memberName)
+        {
+            for (var type = target.GetType(); type != null; type = type.BaseType)
+            {
+                try
+                {
+                    var property = type.GetProperty(memberName,
+                        BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic |
+                        BindingFlags.DeclaredOnly);
+                    if (property?.GetMethod != null)
+                        return property.GetValue(target);
+
+                    var field = type.GetField(memberName,
+                        BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic |
+                        BindingFlags.DeclaredOnly);
+                    if (field != null)
+                        return field.GetValue(target);
+                }
+                catch (Exception exception)
+                {
+                    var cause = exception is TargetInvocationException { InnerException: not null }
+                        ? exception.InnerException
+                        : exception;
+                    return $"<error: {cause.GetType().Name}: {cause.Message}>";
+                }
+            }
+
+            return "<unavailable>";
+        }
+
+        private static void AppendYamlValue(StringBuilder builder, int indent, string name, object value)
+        {
+            builder.Append(' ', indent * 2);
+            builder.Append(name);
+            builder.Append(": ");
+            builder.Append(FormatInspectionValue(value));
+            builder.Append('\n');
+        }
+
+        private void AppendChildren(StringBuilder builder, VisualElement parent, int depth,
+            HashSet<VisualElement> liveElements, bool detailed, int detailedMaximumDepth,
+            string depthOmissionReason = null)
+        {
+            var children = parent.Children().ToList();
+            var truncateSimilarChildren = children.Count >= 20 &&
+                                          children.All(child => child.GetType() == children[0].GetType());
+            var outputCount = truncateSimilarChildren ? 10 : children.Count;
+            for (var index = 0; index < outputCount; index++)
+                AppendElement(builder, children[index], depth, liveElements, detailed,
+                    detailedMaximumDepth, depthOmissionReason);
+
+            if (truncateSimilarChildren && detailed)
+            {
+                builder.Append(' ', depth * 2);
+                builder.Append("# ");
+                builder.Append(children.Count - outputCount);
+                builder.Append(" more ");
+                builder.Append(children[0].GetType().Name);
+                builder.Append(" children omitted (");
+                builder.Append(children.Count);
+                builder.Append(" same-type children total)\n");
+            }
+        }
+
+        private void AppendElement(StringBuilder builder, VisualElement element, int depth,
+            HashSet<VisualElement> liveElements, bool detailed, int detailedMaximumDepth,
+            string depthOmissionReason = null)
+        {
+            liveElements.Add(element);
+            var children = element.Children().ToList();
+            var hiddenChildren = !detailed && children.Count > 0 && IsHiddenForCompactSnapshot(element);
+            var builtInChildren = !detailed && children.Count > 0 && !hiddenChildren &&
+                                  ShouldOmitBuiltInChildren(element);
+            var depthLimitedChildren = detailed && children.Count > 0 &&
+                                       depth >= detailedMaximumDepth;
+            var similarChildren = !hiddenChildren && !builtInChildren && !depthLimitedChildren &&
+                                  children.Count >= 20 &&
+                                  children.All(child => child.GetType() == children[0].GetType());
+            var omittedChildCount = hiddenChildren || builtInChildren || depthLimitedChildren
+                ? children.Count
+                : similarChildren
+                    ? children.Count - 10
+                    : 0;
+
+            builder.Append(' ', depth * 2);
+            builder.Append("- ");
+            builder.Append(element.GetType().Name);
+            if (detailed)
+                AppendHierarchyProperties(builder, element);
+            else
+                AppendProperties(builder, element);
+            if (detailed && omittedChildCount > 0)
+            {
+                AppendBoolProperty(builder, "childrenOmitted", true);
+                AppendNumberProperty(builder, "omittedChildCount", omittedChildCount);
+                AppendStringProperty(builder, "omissionReason",
+                    hiddenChildren ? "hidden" :
+                    builtInChildren ? "built_in_implementation" :
+                    depthLimitedChildren ? depthOmissionReason ?? "dynamic_depth_limit" :
+                    "similar_children");
+            }
+            builder.Append(" [ref=");
+            builder.Append(GetOrCreateRef(element));
+            builder.Append(']');
+
+            if (children.Count == 0)
+            {
+                builder.Append('\n');
+            }
+            else if (hiddenChildren || builtInChildren)
+            {
+                // Compact snapshots intentionally omit implementation/hidden descendants
+                // without protocol metadata. UiHierarchy is the surface that explains omissions.
+                builder.Append('\n');
+            }
+            else if (depthLimitedChildren)
+            {
+                builder.Append(":\n");
+                builder.Append(' ', (depth + 1) * 2);
+                builder.Append("# ");
+                builder.Append(children.Count);
+                builder.Append(" child elements omitted (");
+                builder.Append(hiddenChildren ? "element is hidden" :
+                    builtInChildren ? "built-in implementation" :
+                    depthOmissionReason == "requested_depth_limit"
+                        ? $"requested depth limit {detailedMaximumDepth} reached"
+                        : $"dynamic depth limit {detailedMaximumDepth} reached");
+                builder.Append(")\n");
+            }
+            else
+            {
+                builder.Append(":\n");
+                AppendChildren(builder, element, depth + 1, liveElements, detailed,
+                    detailedMaximumDepth, depthOmissionReason);
+            }
+        }
+
+        private static int DetermineHierarchyDepth(VisualElement root)
+        {
+            var maximumDepth = GetMaximumOutputDepth(root);
+            while (maximumDepth > 1 &&
+                   CountOutputElements(root, maximumDepth, HierarchyElementLimit + 1) >
+                   HierarchyElementLimit)
+                maximumDepth--;
+            return maximumDepth;
+        }
+
+        private static int GetMaximumOutputDepth(VisualElement element)
+        {
+            var children = GetOutputChildren(element);
+            if (children.Count == 0)
+                return 0;
+            return 1 + children.Max(GetMaximumOutputDepth);
+        }
+
+        private static int CountOutputElements(VisualElement element, int remainingDepth, int stopAfter)
+        {
+            var count = 1;
+            if (remainingDepth <= 0)
+                return count;
+
+            foreach (var child in GetOutputChildren(element))
+            {
+                count += CountOutputElements(child, remainingDepth - 1, stopAfter - count);
+                if (count >= stopAfter)
+                    return count;
+            }
+
+            return count;
+        }
+
+        private static List<VisualElement> GetOutputChildren(VisualElement parent)
+        {
+            var children = parent.Children().ToList();
+            if (children.Count >= 20 &&
+                children.All(child => child.GetType() == children[0].GetType()))
+                return children.Take(10).ToList();
+            return children;
+        }
+
+        private static bool ShouldOmitBuiltInChildren(VisualElement element)
+        {
+            // Foldout and ScrollView are semantic containers: their contentContainer holds
+            // user-authored hierarchy that must remain in the snapshot.
+            if (element is Foldout or ScrollView)
+                return false;
+
+            return element is Button || IsBaseField(element) || element is ProgressBar ||
+                   element is BaseVerticalCollectionView || element is TextElement;
+        }
+
+        private static bool IsHiddenForCompactSnapshot(VisualElement element)
+        {
+            // Opacity is deliberately excluded: fully transparent UI is a distinct state.
+            return element.resolvedStyle.display == DisplayStyle.None ||
+                   element.resolvedStyle.visibility == Visibility.Hidden;
+        }
+
+        private static bool IsBaseField(VisualElement element)
+        {
+            for (var type = element.GetType(); type != null; type = type.BaseType)
+                if (type.IsGenericType && type.GetGenericTypeDefinition() == typeof(BaseField<>))
+                    return true;
+            return false;
+        }
+
+        private static void AppendProperties(StringBuilder builder, VisualElement element)
+        {
+            if (!string.IsNullOrEmpty(element.name))
+                AppendStringProperty(builder, "name", element.name);
+            if (!string.IsNullOrEmpty(element.tooltip))
+                AppendStringProperty(builder, "tooltip", element.tooltip);
+            if (!element.enabledSelf)
+                AppendRawProperty(builder, "enabledSelf", "false");
+            if (element.resolvedStyle.display == DisplayStyle.None)
+                AppendRawProperty(builder, "display", DisplayStyle.None.ToString());
+            if (element.resolvedStyle.visibility == Visibility.Hidden)
+                AppendRawProperty(builder, "visibility", Visibility.Hidden.ToString());
+
+            if (element is not DropdownField && IsPopupField(element))
+            {
+                AppendReflectedPopupProperties(builder, element);
+                return;
+            }
+
+            switch (element)
+            {
+                case Button button:
+                    AppendStringProperty(builder, "text", button.text);
+                    break;
+                case RadioButton radioButton:
+                    AppendStringProperty(builder, "label", radioButton.label);
+                    AppendBoolProperty(builder, "value", radioButton.value);
+                    break;
+                case Toggle toggle:
+                    AppendStringProperty(builder, "label", toggle.label);
+                    AppendBoolProperty(builder, "value", toggle.value);
+                    break;
+                case TextField textField:
+                    AppendStringProperty(builder, "label", textField.label);
+                    AppendStringProperty(builder, "value", textField.value);
+                    AppendBoolProperty(builder, "isReadOnly", textField.isReadOnly);
+                    AppendBoolProperty(builder, "multiline", textField.multiline);
+                    break;
+                case IntegerField integerField:
+                    AppendNumericField(builder, integerField.label, integerField.value, integerField.isReadOnly);
+                    break;
+                case LongField longField:
+                    AppendNumericField(builder, longField.label, longField.value, longField.isReadOnly);
+                    break;
+                case FloatField floatField:
+                    AppendNumericField(builder, floatField.label, floatField.value, floatField.isReadOnly);
+                    break;
+                case DoubleField doubleField:
+                    AppendNumericField(builder, doubleField.label, doubleField.value, doubleField.isReadOnly);
+                    break;
+                case Slider slider:
+                    AppendStringProperty(builder, "label", slider.label);
+                    AppendNumberProperty(builder, "value", slider.value);
+                    AppendNumberProperty(builder, "lowValue", slider.lowValue);
+                    AppendNumberProperty(builder, "highValue", slider.highValue);
+                    break;
+                case SliderInt sliderInt:
+                    AppendStringProperty(builder, "label", sliderInt.label);
+                    AppendNumberProperty(builder, "value", sliderInt.value);
+                    AppendNumberProperty(builder, "lowValue", sliderInt.lowValue);
+                    AppendNumberProperty(builder, "highValue", sliderInt.highValue);
+                    break;
+                case MinMaxSlider minMaxSlider:
+                    AppendStringProperty(builder, "label", minMaxSlider.label);
+                    AppendRawProperty(builder, "value", FormatVector2(minMaxSlider.value));
+                    AppendNumberProperty(builder, "lowLimit", minMaxSlider.lowLimit);
+                    AppendNumberProperty(builder, "highLimit", minMaxSlider.highLimit);
+                    break;
+                case DropdownField dropdown:
+                    AppendStringProperty(builder, "label", dropdown.label);
+                    AppendStringProperty(builder, "value", dropdown.value);
+                    AppendNumberProperty(builder, "index", dropdown.index);
+                    break;
+                case Foldout foldout:
+                    AppendStringProperty(builder, "text", foldout.text);
+                    AppendBoolProperty(builder, "value", foldout.value);
+                    break;
+                case ProgressBar progress:
+                    AppendStringProperty(builder, "title", progress.title);
+                    AppendNumberProperty(builder, "value", progress.value);
+                    AppendNumberProperty(builder, "lowValue", progress.lowValue);
+                    AppendNumberProperty(builder, "highValue", progress.highValue);
+                    break;
+                case BaseVerticalCollectionView collection:
+                    AppendRawProperty(builder, "selectionType", collection.selectionType.ToString());
+                    AppendNumberProperty(builder, "selectedIndex", collection.selectedIndex);
+                    break;
+                case ScrollView scroll:
+                    AppendRawProperty(builder, "mode", scroll.mode.ToString());
+                    AppendRawProperty(builder, "scrollOffset", FormatVector2(scroll.scrollOffset));
+                    break;
+                case TextElement text:
+                    AppendStringProperty(builder, "text", text.text);
+                    break;
+                default:
+                    if (element.focusable)
+                        AppendBoolProperty(builder, "focusable", true);
+                    break;
+            }
+        }
+
+        private static void AppendHierarchyProperties(StringBuilder builder, VisualElement element)
+        {
+            if (!string.IsNullOrEmpty(element.name))
+                AppendStringProperty(builder, "name", element.name);
+            var classes = element.GetClasses().ToArray();
+            if (classes.Length > 0)
+                AppendRawProperty(builder, "ussClasses", FormatStringCollection(classes));
+        }
+
+        private static void AppendInspectionProperties(StringBuilder builder, VisualElement element)
+        {
+            var properties = element.GetType()
+                .GetProperties(BindingFlags.Instance | BindingFlags.Public)
+                .Where(property => property.GetMethod != null && !property.GetMethod.IsStatic)
+                .Where(HasCreatePropertyAttribute)
+                .Where(property => !IsBlacklistedVisualElementInspectionProperty(property))
+                .GroupBy(property => property.Name, StringComparer.Ordinal)
+                .Select(group => group.OrderByDescending(property => GetInheritanceDepth(property.DeclaringType))
+                    .First())
+                .OrderBy(property => property.Name, StringComparer.Ordinal);
+
+            foreach (var property in properties)
+            {
+                if (property.GetIndexParameters().Length > 0)
+                {
+                    AppendInspectionProperty(builder, property.Name, "<indexed property>");
+                    continue;
+                }
+
+                try
+                {
+                    AppendInspectionProperty(builder, property.Name, property.GetValue(element));
+                }
+                catch (Exception exception)
+                {
+                    var cause = exception is TargetInvocationException { InnerException: not null }
+                        ? exception.InnerException
+                        : exception;
+                    AppendInspectionProperty(builder, property.Name,
+                        $"<error: {cause.GetType().Name}: {cause.Message}>");
+                }
+            }
+        }
+
+        private static bool IsBlacklistedVisualElementInspectionProperty(PropertyInfo property)
+        {
+            return property.DeclaringType != null &&
+                   property.DeclaringType.IsAssignableFrom(typeof(VisualElement)) &&
+                   VisualElementInspectionPropertyBlacklist.Contains(property.Name);
+        }
+
+        private static bool HasCreatePropertyAttribute(PropertyInfo property)
+        {
+            return property.GetCustomAttributes(true).Any(IsCreatePropertyAttribute) ||
+                   property.GetMethod != null &&
+                   property.GetMethod.GetCustomAttributes(true).Any(IsCreatePropertyAttribute);
+        }
+
+        private static bool IsCreatePropertyAttribute(object attribute)
+        {
+            return string.Equals(attribute.GetType().FullName,
+                "Unity.Properties.CreatePropertyAttribute", StringComparison.Ordinal);
+        }
+
+        private static int GetInheritanceDepth(Type type)
+        {
+            var depth = 0;
+            for (; type != null; type = type.BaseType)
+                depth++;
+            return depth;
+        }
+
+        private static void AppendInspectionProperty(StringBuilder builder, string name, object value)
+        {
+            builder.Append("  ");
+            builder.Append(name);
+            builder.Append(": ");
+            builder.Append(FormatInspectionValue(value));
+            builder.Append('\n');
+        }
+
+        private static string FormatInspectionValue(object value)
+        {
+            if (value == null)
+                return "null";
+
+            switch (value)
+            {
+                case string text:
+                    return QuoteYamlString(text);
+                case char character:
+                    return QuoteYamlString(character.ToString());
+                case bool boolean:
+                    return boolean ? "true" : "false";
+                case Enum enumeration:
+                    return enumeration.ToString();
+                case byte or sbyte or short or ushort or int or uint or long or ulong or float or double or decimal:
+                    return Convert.ToString(value, CultureInfo.InvariantCulture);
+                case Vector2 vector2:
+                    return FormatVector2(vector2);
+                case Vector3 vector3:
+                    return FormatVector3(vector3);
+                case Vector4 vector4:
+                    return FormatVector4(vector4);
+                case Rect rect:
+                    return FormatRect(rect);
+                case Color color:
+                    return FormatColor(color);
+                case System.Collections.IEnumerable enumerable:
+                    return FormatEnumerable(enumerable);
+                case VisualElement visualElement:
+                    return QuoteYamlString(
+                        $"{visualElement.GetType().Name}(name={visualElement.name})");
+                case UnityEngine.Object unityObject:
+                    return QuoteYamlString(
+                        $"{unityObject.GetType().Name}(name={unityObject.name},instanceId={unityObject.GetInstanceID()})");
+                case IFormattable formattable:
+                    return QuoteYamlString(formattable.ToString(null, CultureInfo.InvariantCulture));
+                default:
+                    return QuoteYamlString(value.ToString());
+            }
+        }
+
+        private static string QuoteYamlString(string value)
+        {
+            return string.Concat("\"", EscapeYamlString(value ?? string.Empty), "\"");
+        }
+
+        private static string FormatStringCollection(IEnumerable<string> values)
+        {
+            return string.Concat("[", string.Join(",",
+                values.Select(value => $"\"{EscapeYamlString(value ?? string.Empty)}\"")), "]");
+        }
+
+        private static string FormatEnumerable(System.Collections.IEnumerable values)
+        {
+            var items = new List<string>();
+            foreach (var value in values)
+            {
+                if (value == null)
+                    items.Add("null");
+                else if (value is string text)
+                    items.Add($"\"{EscapeYamlString(text)}\"");
+                else if (value is bool boolean)
+                    items.Add(boolean ? "true" : "false");
+                else if (value is Enum ||
+                         value is byte or sbyte or short or ushort or int or uint or long or ulong or float or double or decimal)
+                    items.Add(Convert.ToString(value, CultureInfo.InvariantCulture));
+                else
+                    items.Add($"\"{EscapeYamlString(value.ToString())}\"");
+            }
+
+            return string.Concat("[", string.Join(",", items), "]");
+        }
+
+        private static string FormatVector3(Vector3 value)
+        {
+            return string.Concat("[", value.x.ToString("R", CultureInfo.InvariantCulture), ",",
+                value.y.ToString("R", CultureInfo.InvariantCulture), ",",
+                value.z.ToString("R", CultureInfo.InvariantCulture), "]");
+        }
+
+        private static string FormatVector4(Vector4 value)
+        {
+            return string.Concat("[", value.x.ToString("R", CultureInfo.InvariantCulture), ",",
+                value.y.ToString("R", CultureInfo.InvariantCulture), ",",
+                value.z.ToString("R", CultureInfo.InvariantCulture), ",",
+                value.w.ToString("R", CultureInfo.InvariantCulture), "]");
+        }
+
+        private static string FormatRect(Rect value)
+        {
+            return string.Concat("[", value.x.ToString("R", CultureInfo.InvariantCulture), ",",
+                value.y.ToString("R", CultureInfo.InvariantCulture), ",",
+                value.width.ToString("R", CultureInfo.InvariantCulture), ",",
+                value.height.ToString("R", CultureInfo.InvariantCulture), "]");
+        }
+
+        private static string FormatColor(Color value)
+        {
+            var rgba = ColorUtility.ToHtmlStringRGBA(value);
+            var hex = rgba.EndsWith("FF", StringComparison.Ordinal)
+                ? rgba.Substring(0, 6)
+                : rgba;
+            return QuoteYamlString(string.Concat("#", hex));
+        }
+
+        private static bool IsPopupField(VisualElement element)
+        {
+            for (var type = element.GetType(); type != null; type = type.BaseType)
+                if (type.IsGenericType && type.GetGenericTypeDefinition() == typeof(PopupField<>))
+                    return true;
+            return false;
+        }
+
+        private static void AppendReflectedPopupProperties(StringBuilder builder, VisualElement element)
+        {
+            // PopupField<T> has no non-generic interface. Reflect only its three protocol-whitelisted
+            // properties so custom T and custom derived fields retain native values without dumping state.
+            var type = element.GetType();
+            AppendStringProperty(builder, "label", type.GetProperty("label")?.GetValue(element)?.ToString());
+            AppendStringProperty(builder, "value", type.GetProperty("value")?.GetValue(element)?.ToString());
+            var index = type.GetProperty("index")?.GetValue(element);
+            if (index is IFormattable formattable)
+                AppendRawProperty(builder, "index", formattable.ToString(null, CultureInfo.InvariantCulture));
+        }
+
+        private static void AppendNumericField<T>(StringBuilder builder, string label, T value, bool isReadOnly)
+            where T : IFormattable
+        {
+            AppendStringProperty(builder, "label", label);
+            AppendRawProperty(builder, "value", value.ToString(null, CultureInfo.InvariantCulture));
+            AppendBoolProperty(builder, "isReadOnly", isReadOnly);
+        }
+
+        private static void AppendStringProperty(StringBuilder builder, string name, string value)
+        {
+            builder.Append(" [");
+            builder.Append(name);
+            builder.Append("=\"");
+            builder.Append(EscapeYamlString(value ?? string.Empty));
+            builder.Append("\"]");
+        }
+
+        private static void AppendBoolProperty(StringBuilder builder, string name, bool value)
+        {
+            AppendRawProperty(builder, name, value ? "true" : "false");
+        }
+
+        private static void AppendNumberProperty<T>(StringBuilder builder, string name, T value)
+            where T : IFormattable
+        {
+            AppendRawProperty(builder, name, value.ToString(null, CultureInfo.InvariantCulture));
+        }
+
+        private static void AppendRawProperty(StringBuilder builder, string name, string value)
+        {
+            builder.Append(" [");
+            builder.Append(name);
+            builder.Append('=');
+            builder.Append(value);
+            builder.Append(']');
+        }
+
+        private static string FormatVector2(Vector2 value)
+        {
+            return string.Concat("[", value.x.ToString("R", CultureInfo.InvariantCulture), ",",
+                value.y.ToString("R", CultureInfo.InvariantCulture), "]");
+        }
+
+        internal static string EscapeYamlString(string value)
+        {
+            var builder = new StringBuilder(value.Length);
+            foreach (var character in value)
+            {
+                switch (character)
+                {
+                    case '\\': builder.Append("\\\\"); break;
+                    case '"': builder.Append("\\\""); break;
+                    case '\n': builder.Append("\\n"); break;
+                    case '\r': builder.Append("\\r"); break;
+                    case '\t': builder.Append("\\t"); break;
+                    default:
+                        if (character < 0x20)
+                            builder.Append("\\u").Append(((int)character).ToString("x4"));
+                        else
+                            builder.Append(character);
+                        break;
+                }
+            }
+
+            return builder.ToString();
+        }
+
+        private string GetOrCreateRef(VisualElement element)
+        {
+            if (_elementRefs.TryGetValue(element, out var reference))
+                return reference;
+
+            reference = string.Concat("e", _nextRef++.ToString(CultureInfo.InvariantCulture));
+            _elementRefs[element] = reference;
+            _refElements[reference] = element;
+            return reference;
+        }
+
+        private void RemoveInvalidRefs(HashSet<VisualElement> liveElements)
+        {
+            var invalid = _elementRefs.Keys
+                .Where(element => element == null || element.panel == null || !liveElements.Contains(element))
+                .ToArray();
+            foreach (var element in invalid)
+            {
+                var reference = _elementRefs[element];
+                _elementRefs.Remove(element);
+                _refElements.Remove(reference);
+            }
+        }
+
+        private static bool IsVisible(VisualElement element)
+        {
+            for (var current = element; current != null; current = current.parent)
+            {
+                var style = current.resolvedStyle;
+                if (style.display == DisplayStyle.None || style.visibility == Visibility.Hidden ||
+                    style.opacity <= 0f)
+                    return false;
+            }
+
+            var bounds = GetClippedWorldBounds(element);
+            return bounds.width > 0f && bounds.height > 0f;
+        }
+
+        private static Rect GetClippedWorldBounds(VisualElement element)
+        {
+            var result = element.worldBound;
+            for (var parent = element.parent; parent != null; parent = parent.parent)
+            {
+                // IResolvedStyle does not expose overflow. The inline value still covers
+                // programmatically configured runtime controls; Panel.Pick performs the
+                // authoritative clipping check for USS-computed overflow.
+                if (parent.style.overflow.value == Overflow.Hidden)
+                    result = Intersect(result, parent.worldBound);
+            }
+
+            return result;
+        }
+
+        private static Rect Intersect(Rect left, Rect right)
+        {
+            var xMin = Mathf.Max(left.xMin, right.xMin);
+            var yMin = Mathf.Max(left.yMin, right.yMin);
+            var xMax = Mathf.Min(left.xMax, right.xMax);
+            var yMax = Mathf.Min(left.yMax, right.yMax);
+            return xMax <= xMin || yMax <= yMin
+                ? Rect.zero
+                : Rect.MinMaxRect(xMin, yMin, xMax, yMax);
+        }
+
+        private static bool TryFindHittablePoint(VisualElement element, out Vector2 point)
+        {
+            var rect = GetClippedWorldBounds(element);
+            var xs = new[] { 0.5f, 0.2f, 0.8f };
+            var ys = new[] { 0.5f, 0.2f, 0.8f };
+            foreach (var y in ys)
+            foreach (var x in xs)
+            {
+                var candidate = new Vector2(
+                    Mathf.Lerp(rect.xMin, rect.xMax, x),
+                    Mathf.Lerp(rect.yMin, rect.yMax, y));
+                var picked = element.panel.Pick(candidate);
+                if (picked != null && (picked == element || element.Contains(picked)))
+                {
+                    point = candidate;
+                    return true;
+                }
+            }
+
+            point = default;
+            return false;
+        }
+
+        private static void SendMouseEvent(IPanel panel, EventType type, Vector2 point)
+        {
+            var target = panel.Pick(point) ?? panel.visualTree;
+            var systemEvent = new Event
+            {
+                type = type,
+                mousePosition = point,
+                button = 0,
+                clickCount = 1
+            };
+
+            switch (type)
+            {
+                case EventType.MouseMove:
+                    using (var pointerMove = PointerMoveEvent.GetPooled(systemEvent))
+                    {
+                        pointerMove.target = target;
+                        panel.visualTree.SendEvent(pointerMove);
+                    }
+                    using (var mouseMove = MouseMoveEvent.GetPooled(systemEvent))
+                    {
+                        mouseMove.target = target;
+                        panel.visualTree.SendEvent(mouseMove);
+                    }
+                    break;
+                case EventType.MouseDown:
+                    using (var pointerDown = PointerDownEvent.GetPooled(systemEvent))
+                    {
+                        pointerDown.target = target;
+                        panel.visualTree.SendEvent(pointerDown);
+                    }
+                    using (var mouseDown = MouseDownEvent.GetPooled(systemEvent))
+                    {
+                        mouseDown.target = target;
+                        panel.visualTree.SendEvent(mouseDown);
+                    }
+                    break;
+                case EventType.MouseUp:
+                    using (var pointerUp = PointerUpEvent.GetPooled(systemEvent))
+                    {
+                        pointerUp.target = target;
+                        panel.visualTree.SendEvent(pointerUp);
+                    }
+                    using (var mouseUp = MouseUpEvent.GetPooled(systemEvent))
+                    {
+                        mouseUp.target = target;
+                        panel.visualTree.SendEvent(mouseUp);
+                    }
+                    break;
+            }
+        }
+
+        private void StartNextScreenshot()
+        {
+            var request = _screenshotQueue.Dequeue();
+            try
+            {
+                var directory = Path.GetFullPath(Path.Combine(Application.dataPath, "..", "Temp",
+                    "GameViewScreenshots"));
+                Directory.CreateDirectory(directory);
+                var name = string.Concat("game-view-",
+                    DateTime.UtcNow.ToString("yyyyMMdd-HHmmss-fff", CultureInfo.InvariantCulture), "-",
+                    Guid.NewGuid().ToString("N").Substring(0, 6), ".png");
+                request.Path = Path.Combine(directory, name);
+                request.StartTime = EditorApplication.timeSinceStartup;
+                _activeScreenshot = request;
+                ScreenCapture.CaptureScreenshot(request.Path, 1);
+            }
+            catch (UnauthorizedAccessException exception)
+            {
+                _answer(request.EndPoint, request.MessageType,
+                    Error(request.RequestId, "write_failed", exception.Message));
+            }
+            catch (IOException exception)
+            {
+                _answer(request.EndPoint, request.MessageType,
+                    Error(request.RequestId, "write_failed", exception.Message));
+            }
+            catch (Exception exception)
+            {
+                _answer(request.EndPoint, request.MessageType,
+                    Error(request.RequestId, "capture_failed", exception.Message));
+            }
+        }
+
+        internal static bool IsCompletePng(string path)
+        {
+            using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
+            if (stream.Length < 20)
+                return false;
+
+            var signature = new byte[PngSignature.Length];
+            if (stream.Read(signature, 0, signature.Length) != signature.Length ||
+                !signature.SequenceEqual(PngSignature))
+                return false;
+
+            stream.Seek(-12, SeekOrigin.End);
+            var tail = new byte[8];
+            if (stream.Read(tail, 0, tail.Length) != tail.Length)
+                return false;
+            return tail[0] == 0 && tail[1] == 0 && tail[2] == 0 && tail[3] == 0 &&
+                   tail[4] == (byte)'I' && tail[5] == (byte)'E' &&
+                   tail[6] == (byte)'N' && tail[7] == (byte)'D';
+        }
+
+        private void CompleteActiveScreenshotError(string code, string message)
+        {
+            if (_activeScreenshot == null)
+                return;
+            var request = _activeScreenshot;
+            _activeScreenshot = null;
+            _answer(request.EndPoint, request.MessageType, Error(request.RequestId, code, message));
+        }
+
+        private void FailQueuedScreenshots(string code, string message)
+        {
+            while (_screenshotQueue.Count > 0)
+            {
+                var request = _screenshotQueue.Dequeue();
+                _answer(request.EndPoint, request.MessageType, Error(request.RequestId, code, message));
+            }
+        }
+
+        private static bool TryParseRequest(string value, out JObject request, out JToken requestId,
+            out string error)
+        {
+            request = null;
+            requestId = null;
+            error = null;
+            if (string.IsNullOrWhiteSpace(value))
+            {
+                error = "The request value must be a JSON object.";
+                return false;
+            }
+
+            try
+            {
+                request = JObject.Parse(value);
+                requestId = request["requestId"]?.DeepClone();
+                if (requestId == null || requestId.Type == JTokenType.Null ||
+                    (requestId.Type != JTokenType.String && requestId.Type != JTokenType.Integer &&
+                     requestId.Type != JTokenType.Float))
+                {
+                    error = "requestId must be a string or number.";
+                    return false;
+                }
+
+                return true;
+            }
+            catch (JsonException exception)
+            {
+                error = $"Invalid JSON request: {exception.Message}";
+                return false;
+            }
+        }
+
+        private static JToken TryReadRequestId(string value)
+        {
+            try
+            {
+                return JObject.Parse(value ?? string.Empty)["requestId"]?.DeepClone();
+            }
+            catch (JsonException)
+            {
+                return null;
+            }
+        }
+
+        private static bool IsLoopback(IPEndPoint endPoint)
+        {
+            if (endPoint?.Address == null)
+                return false;
+            var address = endPoint.Address;
+            if (address.IsIPv4MappedToIPv6)
+                address = address.MapToIPv4();
+            return IPAddress.IsLoopback(address);
+        }
+
+        private void ReplySuccess(Message message, JToken requestId, string propertyName = null,
+            string propertyValue = null)
+        {
+            _answer(message.Origin, message.Type, Success(requestId, propertyName, propertyValue));
+        }
+
+        private void ReplyError(Message message, JToken requestId, string code, string errorMessage)
+        {
+            _answer(message.Origin, message.Type, Error(requestId, code, errorMessage));
+        }
+
+        internal static string Success(JToken requestId, string propertyName = null, string propertyValue = null)
+        {
+            var result = new JObject
+            {
+                ["requestId"] = requestId?.DeepClone() ?? JValue.CreateNull(),
+                ["ok"] = true
+            };
+            if (propertyName != null)
+                result[propertyName] = propertyValue;
+            return result.ToString(Formatting.None);
+        }
+
+        internal static string Error(JToken requestId, string code, string message)
+        {
+            return new JObject
+            {
+                ["requestId"] = requestId?.DeepClone() ?? JValue.CreateNull(),
+                ["ok"] = false,
+                ["error"] = new JObject
+                {
+                    ["code"] = code,
+                    ["message"] = message
+                }
+            }.ToString(Formatting.None);
+        }
+
+        private sealed class ScreenshotRequest
+        {
+            internal ScreenshotRequest(IPEndPoint endPoint, MessageType messageType, JToken requestId)
+            {
+                EndPoint = endPoint;
+                MessageType = messageType;
+                RequestId = requestId.DeepClone();
+            }
+
+            internal IPEndPoint EndPoint { get; }
+            internal MessageType MessageType { get; }
+            internal JToken RequestId { get; }
+            internal string Path { get; set; }
+            internal double StartTime { get; set; }
+            internal long LastLength { get; set; } = -1;
+            internal int StableLengthChecks { get; set; }
+        }
+    }
+}
