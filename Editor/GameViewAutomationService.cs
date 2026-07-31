@@ -1672,7 +1672,7 @@ namespace Hackerzhuli.Code.Editor
             HashSet<VisualElement> liveElements, bool detailed, int detailedMaximumDepth,
             string depthOmissionReason = null)
         {
-            var children = parent.Children().ToList();
+            var children = GetTraversalChildren(parent, detailed);
             var truncateSimilarChildren = children.Count >= 20 &&
                                           children.All(child => child.GetType() == children[0].GetType());
             var outputCount = truncateSimilarChildren ? 10 : children.Count;
@@ -1698,7 +1698,7 @@ namespace Hackerzhuli.Code.Editor
             string depthOmissionReason = null)
         {
             liveElements.Add(element);
-            var children = element.Children().ToList();
+            var children = GetTraversalChildren(element, detailed);
             var hiddenChildren = !detailed && children.Count > 0 && IsHiddenForCompactSnapshot(element);
             var builtInChildren = !detailed && children.Count > 0 && !hiddenChildren &&
                                   ShouldOmitBuiltInChildren(element);
@@ -1800,9 +1800,22 @@ namespace Hackerzhuli.Code.Editor
             return count;
         }
 
+        /// <summary>
+        /// Compact snapshots follow <see cref="VisualElement.Children"/>, the contentContainer view,
+        /// so composite controls stay readable. Detailed hierarchies must follow the real visual tree
+        /// instead: otherwise a ScrollView jumps straight to its content items and hides the viewport,
+        /// the content container and both scrollers.
+        /// </summary>
+        private static List<VisualElement> GetTraversalChildren(VisualElement parent, bool detailed)
+        {
+            return detailed
+                ? parent.hierarchy.Children().ToList()
+                : parent.Children().ToList();
+        }
+
         private static List<VisualElement> GetOutputChildren(VisualElement parent)
         {
-            var children = parent.Children().ToList();
+            var children = parent.hierarchy.Children().ToList();
             if (children.Count >= 20 &&
                 children.All(child => child.GetType() == children[0].GetType()))
                 return children.Take(10).ToList();

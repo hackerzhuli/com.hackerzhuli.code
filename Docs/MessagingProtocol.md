@@ -409,8 +409,10 @@ Success:
 }
 ```
 
-Unlike `UiSnapshot`, hierarchy expands built-in implementation nodes and invisible descendants.
-Each normal node contains only:
+Unlike `UiSnapshot`, hierarchy expands built-in implementation nodes and invisible descendants. It
+walks the real visual tree rather than the content-container view, so the internal structure of
+composite controls is included: a `ScrollView` shows its viewport, content container and scrollers,
+not just its content items. Each normal node contains only:
 
 - Its actual runtime type.
 - Non-empty `name`.

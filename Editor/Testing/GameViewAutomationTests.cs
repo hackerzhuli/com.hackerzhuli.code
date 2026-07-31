@@ -285,6 +285,34 @@ namespace Hackerzhuli.Code.Editor.Testing
         }
 
         [Test]
+        public void Hierarchy_ExpandsTheBuiltInStructureOfCompositeControls()
+        {
+            var scrollView = new ScrollView { name = "log" };
+            scrollView.Add(new Label("Entry") { name = "entry" });
+
+            var snapshot = _service.BuildHierarchyForTests(scrollView);
+
+            Assert.That(snapshot, Does.Contain("[name=\"log\"]"));
+            Assert.That(snapshot, Does.Contain("unity-scroll-view__content-viewport"));
+            Assert.That(snapshot, Does.Contain("unity-scroll-view__content-container"));
+            Assert.That(snapshot, Does.Contain("- Scroller"));
+            Assert.That(snapshot, Does.Contain("[name=\"entry\"]"));
+        }
+
+        [Test]
+        public void Snapshot_KeepsCompositeControlContentWithoutItsBuiltInStructure()
+        {
+            var scrollView = new ScrollView { name = "log" };
+            scrollView.Add(new Label("Entry") { name = "entry" });
+
+            var snapshot = _service.BuildSnapshotForTests(scrollView);
+
+            Assert.That(snapshot, Does.Contain("[name=\"log\"]"));
+            Assert.That(snapshot, Does.Contain("[name=\"entry\"]"));
+            Assert.That(snapshot, Does.Not.Contain("- Scroller"));
+        }
+
+        [Test]
         public void Inspect_OutputsAllCreatePropertiesForOnlyTheTarget()
         {
             var target = new HierarchyElement

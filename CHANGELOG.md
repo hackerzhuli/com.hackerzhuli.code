@@ -1,5 +1,9 @@
 # Code Editor Package for Visual Studio
 
+## [1.2.4] - 2026-07-31
+Fix:
+- Fixed UI hierarchies skipping the built-in structure of composite controls, such as a `ScrollView` jumping straight to its content items and hiding its viewport, content container and scrollers; hierarchies now walk the real visual tree, while snapshots stay compact
+
 ## [1.2.3] - 2026-07-31
 Fix:
 - Fixed the `matchedSelectors` section of UI inspections being unavailable on Unity 6000.2 and later, where the editor helper it relied on no longer exists; it now runs Unity's own selector matcher, which is unchanged across 6000.0 to 6000.3
