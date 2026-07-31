@@ -17,7 +17,8 @@
                 <ui:Label text="Operator Profile" class="section-title" />
                 <ui:TextField name="operator-name" label="Operator Name" value="Alice &quot;Ace&quot;&#10;Ng" />
                 <ui:IntegerField name="crew-size" label="Crew Size" value="4" />
-                <ui:DropdownField name="mission-type" label="Mission Type" />
+                <ui:DropdownField name="mission-type" label="Mission Type"
+                                  choices="Survey,Cargo,Rescue" index="2" />
                 <ui:Toggle name="music" label="Music" value="true" />
                 <ui:RadioButton name="radio-alpha" label="Channel Alpha" value="true" />
                 <ui:RadioButton name="radio-beta" label="Channel Beta" />

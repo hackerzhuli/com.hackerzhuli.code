@@ -241,6 +241,72 @@ namespace Hackerzhuli.Code.PlayModeTests
             }
         }
 
+        [UnityTest]
+        public IEnumerator PanelAttachedContent_IsSnapshottedAndAllowedAsHierarchyTarget()
+        {
+            Responses.Clear();
+            var panelSettings = ScriptableObject.CreateInstance<PanelSettings>();
+            var gameObject = new GameObject("Panel Overlay Test UIDocument");
+            object service = null;
+            Type serviceType = null;
+            try
+            {
+                var document = gameObject.AddComponent<UIDocument>();
+                document.panelSettings = panelSettings;
+                document.rootVisualElement.Add(new Button { name = "anchor", text = "Anchor" });
+
+                yield return null;
+                yield return null;
+                Assert.That(document.rootVisualElement.panel, Is.Not.Null);
+
+                // An open dropdown parents its menu to the panel root rather than to any
+                // UIDocument root, which is what this reproduces.
+                var popup = new VisualElement { name = "panel-popup" };
+                popup.Add(new Label { name = "panel-popup-item", text = "Cargo" });
+                document.rootVisualElement.panel.visualTree.Add(popup);
+
+                yield return null;
+
+                serviceType = AppDomain.CurrentDomain.GetAssemblies()
+                    .Select(assembly => assembly.GetType(
+                        "Hackerzhuli.Code.Editor.GameViewAutomationService", false))
+                    .FirstOrDefault(type => type != null);
+                Assert.That(serviceType, Is.Not.Null, "The Editor automation service assembly was not loaded.");
+                service = CreateService(serviceType);
+
+                InvokeRequest(serviceType, service, "UiSnapshot", "{\"requestId\":\"overlay-snapshot\"}");
+                var response = JsonUtility.FromJson<SnapshotResponse>(Responses[^1]);
+                Assert.That(response.ok, Is.True, Responses[^1]);
+                Assert.That(response.snapshot, Does.Contain("- PanelOverlay"));
+                Assert.That(response.snapshot, Does.Contain("VisualElement [name=\"panel-popup\"]"));
+                Assert.That(response.snapshot, Does.Contain("Label [name=\"panel-popup-item\"]"));
+
+                var popupRef = FindRef(response.snapshot, "VisualElement", "panel-popup");
+                InvokeRequest(serviceType, service, "UiHierarchy",
+                    $"{{\"requestId\":\"overlay-hierarchy\",\"ref\":\"{popupRef}\"}}");
+                var hierarchy = JsonUtility.FromJson<HierarchyResponse>(Responses[^1]);
+                Assert.That(hierarchy.ok, Is.True, Responses[^1]);
+                Assert.That(hierarchy.hierarchy, Does.Contain("panel-popup-item"));
+
+                popup.RemoveFromHierarchy();
+                yield return null;
+
+                InvokeRequest(serviceType, service, "UiSnapshot", "{\"requestId\":\"overlay-closed\"}");
+                var closed = JsonUtility.FromJson<SnapshotResponse>(Responses[^1]);
+                Assert.That(closed.ok, Is.True, Responses[^1]);
+                Assert.That(closed.snapshot, Does.Not.Contain("PanelOverlay"));
+                Assert.That(closed.snapshot, Does.Contain("Button [name=\"anchor\"]"));
+            }
+            finally
+            {
+                if (service != null)
+                    serviceType.GetMethod("Dispose", BindingFlags.Instance | BindingFlags.Public)
+                        ?.Invoke(service, null);
+                UnityEngine.Object.Destroy(gameObject);
+                UnityEngine.Object.Destroy(panelSettings);
+            }
+        }
+
         private static object CreateService(Type serviceType)
         {
             var constructor = serviceType.GetConstructors(BindingFlags.Instance | BindingFlags.NonPublic)

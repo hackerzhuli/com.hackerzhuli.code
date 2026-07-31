@@ -1007,18 +1007,51 @@ namespace Hackerzhuli.Code.Editor
                 return null;
             }
 
+            var documentRoots = new HashSet<VisualElement>(
+                documents.Select(document => document.rootVisualElement));
+
             var builder = new StringBuilder();
-            foreach (var document in documents)
+            foreach (var panelDocuments in documents.GroupBy(document => document.rootVisualElement.panel))
             {
-                builder.Append("- UIDocument");
-                if (!string.IsNullOrEmpty(document.name))
-                    AppendStringProperty(builder, "name", document.name);
-                builder.Append(":\n");
-                AppendElement(builder, document.rootVisualElement, 1, liveElements, false, int.MaxValue);
+                foreach (var document in panelDocuments)
+                {
+                    builder.Append("- UIDocument");
+                    if (!string.IsNullOrEmpty(document.name))
+                        AppendStringProperty(builder, "name", document.name);
+                    builder.Append(":\n");
+                    AppendElement(builder, document.rootVisualElement, 1, liveElements, false, int.MaxValue);
+                }
+
+                AppendPanelOverlays(builder, panelDocuments.Key, documentRoots, liveElements);
             }
 
             RemoveInvalidRefs(liveElements);
             return builder.ToString().TrimEnd();
+        }
+
+        /// <summary>
+        /// An open dropdown attaches its menu directly to the panel root instead of a
+        /// <see cref="UIDocument"/> root, so walking documents alone would hide the whole menu
+        /// hierarchy from the snapshot.
+        /// </summary>
+        private void AppendPanelOverlays(StringBuilder builder, IPanel panel,
+            HashSet<VisualElement> documentRoots, HashSet<VisualElement> liveElements)
+        {
+            var visualTree = panel?.visualTree;
+            if (visualTree == null)
+                return;
+
+            foreach (var child in visualTree.Children())
+            {
+                if (documentRoots.Contains(child))
+                    continue;
+
+                builder.Append("- PanelOverlay");
+                if (!string.IsNullOrEmpty(visualTree.name))
+                    AppendStringProperty(builder, "panel", visualTree.name);
+                builder.Append(":\n");
+                AppendElement(builder, child, 1, liveElements, false, int.MaxValue);
+            }
         }
 
         /// <summary>

@@ -1,5 +1,9 @@
 # Code Editor Package for Visual Studio
 
+## [1.2.1] - 2026-07-31
+Fix:
+- Fixed UI snapshots leaving out content parented to the runtime panel root instead of a `UIDocument` root, such as an open dropdown menu; such elements now appear under a `PanelOverlay` entry
+
 ## [1.2.0] - 2026-07-30
 Feature:
 - Added scene messages to list the open scenes and to open a scene asset in Edit Mode

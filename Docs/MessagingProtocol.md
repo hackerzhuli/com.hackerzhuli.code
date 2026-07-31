@@ -284,6 +284,16 @@ Success:
 The snapshot starts at every active `UIDocument` attached to a runtime panel. Documents are ordered
 by panel settings, document sorting order, and visual-tree order. Editor panels are not included.
 
+Elements parented directly to a runtime panel root instead of a `UIDocument` root, such as the menu
+of an open dropdown, follow the documents of that same panel under a `PanelOverlay` entry, which
+carries the panel root name:
+
+```yaml
+- PanelOverlay [panel="PanelSettings"]:
+  - VisualElement [ref=e7]:
+    - ScrollView [ref=e8]:
+```
+
 The compact YAML tree:
 
 - Uses `element.GetType().Name`, including the actual type name of custom derived controls.
