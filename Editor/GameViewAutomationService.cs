@@ -45,6 +45,11 @@ namespace Hackerzhuli.Code.Editor
                 "disablePlayModeTint"
             };
 
+        // Maps a USS property name to the inline style property that overrides it, so a matched rule
+        // can be reported as losing to an inline style.
+        private static readonly Dictionary<string, PropertyInfo> InlineStyleProperties =
+            BuildInlineStyleProperties();
+
         private readonly Action<IPEndPoint, MessageType, string> _answer;
         private readonly Dictionary<VisualElement, string> _elementRefs = new();
         private readonly Dictionary<string, VisualElement> _refElements = new(StringComparer.Ordinal);
@@ -1190,6 +1195,7 @@ namespace Hackerzhuli.Code.Editor
             builder.Append(FormatStringCollection(element.GetClasses()));
             builder.Append('\n');
             AppendStyleSheets(builder, element);
+            AppendMatchedSelectors(builder, element);
             AppendStyleProperties(builder, "inlineStyles", element.style, typeof(IStyle), true);
             AppendStyleProperties(builder, "resolvedStyles", element.resolvedStyle,
                 typeof(IResolvedStyle), false);
@@ -1225,6 +1231,170 @@ namespace Hackerzhuli.Code.Editor
                 builder.Append(QuoteYamlString(entry));
                 builder.Append('\n');
             }
+        }
+
+        /// <summary>
+        ///     Writes the USS rules matching the element, in the order Unity applies them, and marks
+        ///     which of their declarations actually survive the cascade.
+        /// </summary>
+        /// <remarks>
+        ///     Declarations are compared by the property name as written, so a shorthand such as
+        ///     <c>margin</c> and a longhand such as <c>margin-left</c> can both be applied, each winning
+        ///     for the part of the box it writes.
+        /// </remarks>
+        private static void AppendMatchedSelectors(StringBuilder builder, VisualElement element)
+        {
+            if (!UssMatchedSelectors.TryGetMatchedRules(element, out var rules, out var error))
+            {
+                builder.Append("  matchedSelectors: ");
+                builder.Append(QuoteYamlString($"<unavailable: {error}>"));
+                builder.Append('\n');
+                return;
+            }
+
+            if (rules.Count == 0)
+            {
+                builder.Append("  matchedSelectors: []\n");
+                return;
+            }
+
+            var winners = FindWinningDeclarations(element, rules);
+            builder.Append("  matchedSelectors:\n");
+            for (var ruleIndex = 0; ruleIndex < rules.Count; ruleIndex++)
+            {
+                var rule = rules[ruleIndex];
+                builder.Append("    - selector: ");
+                builder.Append(QuoteYamlString(rule.Selector));
+                builder.Append("\n      source: ");
+                builder.Append(QuoteYamlString(rule.Source));
+                builder.Append("\n      specificity: ");
+                builder.Append(rule.Specificity.ToString(CultureInfo.InvariantCulture));
+                builder.Append('\n');
+
+                var applied = new List<UssMatchedSelectors.UssDeclaration>();
+                var overridden = new List<KeyValuePair<UssMatchedSelectors.UssDeclaration, string>>();
+                for (var index = 0; index < rule.Declarations.Count; index++)
+                {
+                    var declaration = rule.Declarations[index];
+                    var winner = winners[declaration.Name];
+                    if (winner.RuleIndex == ruleIndex && winner.DeclarationIndex == index &&
+                        !winner.IsInline)
+                        applied.Add(declaration);
+                    else
+                        overridden.Add(
+                            new KeyValuePair<UssMatchedSelectors.UssDeclaration, string>(declaration,
+                                winner.IsInline ? "inline" : rules[winner.RuleIndex].Source));
+                }
+
+                AppendDeclarations(builder, "appliedDeclarations", applied, null);
+                if (overridden.Count > 0)
+                    AppendDeclarations(builder, "overriddenDeclarations",
+                        overridden.Select(entry => entry.Key).ToList(),
+                        overridden.Select(entry => entry.Value).ToList());
+            }
+        }
+
+        /// <summary>
+        ///     Resolves who wins for every declared property name. The rules arrive from lowest to
+        ///     highest priority, so the last declaration seen for a name wins, unless an inline style
+        ///     overrides the whole cascade.
+        /// </summary>
+        private static Dictionary<string, DeclarationWinner> FindWinningDeclarations(
+            VisualElement element, IReadOnlyList<UssMatchedSelectors.UssMatchedRule> rules)
+        {
+            var winners = new Dictionary<string, DeclarationWinner>(StringComparer.Ordinal);
+            for (var ruleIndex = 0; ruleIndex < rules.Count; ruleIndex++)
+            {
+                var declarations = rules[ruleIndex].Declarations;
+                for (var index = 0; index < declarations.Count; index++)
+                    winners[declarations[index].Name] = new DeclarationWinner(ruleIndex, index, false);
+            }
+
+            foreach (var name in winners.Keys.ToList())
+                if (IsInlineStyleSet(element, name))
+                    winners[name] = new DeclarationWinner(-1, -1, true);
+
+            return winners;
+        }
+
+        private static void AppendDeclarations(StringBuilder builder, string sectionName,
+            IReadOnlyList<UssMatchedSelectors.UssDeclaration> declarations,
+            IReadOnlyList<string> overriddenBy)
+        {
+            builder.Append("      ");
+            builder.Append(sectionName);
+            if (declarations.Count == 0)
+            {
+                builder.Append(": []\n");
+                return;
+            }
+
+            builder.Append(":\n");
+            for (var index = 0; index < declarations.Count; index++)
+            {
+                var declaration = declarations[index];
+                builder.Append("        - {property: ");
+                builder.Append(QuoteYamlString(declaration.Name));
+                builder.Append(", value: ");
+                builder.Append(QuoteYamlString(declaration.Value));
+                if (declaration.Line > 0)
+                {
+                    builder.Append(", line: ");
+                    builder.Append(declaration.Line.ToString(CultureInfo.InvariantCulture));
+                }
+
+                if (overriddenBy != null)
+                {
+                    builder.Append(", overriddenBy: ");
+                    builder.Append(QuoteYamlString(overriddenBy[index]));
+                }
+
+                builder.Append("}\n");
+            }
+        }
+
+        /// <summary>
+        ///     Tells whether an inline style is set for a USS property name, which makes it beat every
+        ///     matched rule. Shorthand names have no inline counterpart and are never reported as set.
+        /// </summary>
+        private static bool IsInlineStyleSet(VisualElement element, string ussPropertyName)
+        {
+            if (!InlineStyleProperties.TryGetValue(ussPropertyName, out var property))
+                return false;
+
+            var value = property.GetValue(element.style);
+            var keyword = value?.GetType().GetProperty("keyword",
+                BindingFlags.Instance | BindingFlags.Public)?.GetValue(value);
+            // Inline access reports Null for a property that was never assigned. Every other keyword,
+            // including the Undefined that a plain value carries, means an inline style is set and
+            // therefore beats the matched rules.
+            return keyword != null &&
+                   !string.Equals(keyword.ToString(), "Null", StringComparison.Ordinal);
+        }
+
+        private static Dictionary<string, PropertyInfo> BuildInlineStyleProperties()
+        {
+            var properties = new Dictionary<string, PropertyInfo>(StringComparer.Ordinal);
+            foreach (var property in typeof(IStyle).GetProperties(
+                         BindingFlags.Instance | BindingFlags.Public))
+                if (property.GetMethod != null)
+                    properties[ToUssPropertyName(property.Name)] = property;
+
+            return properties;
+        }
+
+        private readonly struct DeclarationWinner
+        {
+            internal DeclarationWinner(int ruleIndex, int declarationIndex, bool isInline)
+            {
+                RuleIndex = ruleIndex;
+                DeclarationIndex = declarationIndex;
+                IsInline = isInline;
+            }
+
+            internal int RuleIndex { get; }
+            internal int DeclarationIndex { get; }
+            internal bool IsInline { get; }
         }
 
         private static void AppendStyleProperties(StringBuilder builder, string sectionName,

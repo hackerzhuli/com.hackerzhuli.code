@@ -473,6 +473,20 @@ uss:
   classes: ["unity-scroll-view","event-log"]
   styleSheets:
     - "GameViewAutomationDemo (owner=TemplateContainer, name=Runtime HUD-container)"
+  matchedSelectors:
+    - selector: ".demo-column"
+      source: "Packages/com.hackerzhuli.code/Tests/Runtime/Resources/GameViewAutomationDemo.uss:40"
+      specificity: 11
+      appliedDeclarations:
+        - {property: "width", value: "50%", line: 42}
+      overriddenDeclarations:
+        - {property: "padding", value: "14px", line: 44, overriddenBy: "Packages/com.hackerzhuli.code/Tests/Runtime/Resources/GameViewAutomationDemo.uss:64"}
+    - selector: ".event-log"
+      source: "Packages/com.hackerzhuli.code/Tests/Runtime/Resources/GameViewAutomationDemo.uss:64"
+      specificity: 11
+      appliedDeclarations:
+        - {property: "padding", value: "8px", line: 66}
+        - {property: "background-color", value: "#11161D", line: 67}
   inlineStyles: {}
   resolvedStyles:
     background-color: "#181D26"
@@ -486,8 +500,26 @@ The sections are modeled after the useful parts of UI Toolkit Debugger:
 - `layout`: box model and content size.
 - `geometry`: world, clip, bounding, current layout, and last layout rectangles.
 - `element`: identity, data source, picking, pseudo state, focus, visibility, and enabled state.
-- `uss`: classes, inherited stylesheet sources, explicitly set inline styles, and resolved styles.
+- `uss`: classes, inherited stylesheet sources, matched selectors, explicitly set inline styles, and
+  resolved styles.
 - `properties`: remaining public properties marked with Unity's `[CreateProperty]`.
+
+The `matchedSelectors` section answers where a style actually comes from. It lists every USS rule
+whose selector matches the element, like the "Matching Selectors" section of the UI Toolkit Debugger,
+ordered the way Unity applies them: from lowest to highest priority, so a later rule overrides an
+earlier one. Each rule reports its `source` as `path:line`, its `specificity`, and splits its
+declarations into the ones that survive the cascade and the ones that lose:
+
+- `appliedDeclarations`: the declarations this rule actually contributes.
+- `overriddenDeclarations`: the ones that lose, each with `overriddenBy` naming the source that wins,
+  or `"inline"` when an inline style beats every rule.
+
+Declarations are compared by the property name as written, so a shorthand such as `margin` and a
+longhand such as `margin-left` can both be applied, each winning for the part it writes. Style sheets
+without a project asset path, such as the built in runtime theme, are identified by their name
+instead of a path. Unity does not expose selector matching publicly, so this section is read through
+the same internals the debugger uses; when a future Unity version moves them, the section reports
+`matchedSelectors: "<unavailable: ...>"` and the rest of the inspection is unaffected.
 
 The `properties` section filters common properties declared by `VisualElement` or its base types when
 they are duplicated by another section, expose large implementation objects, or contain arbitrary

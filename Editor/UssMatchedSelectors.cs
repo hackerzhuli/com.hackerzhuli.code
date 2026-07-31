@@ -1,0 +1,453 @@
+using System;
+using System.Collections;
+using System.Collections.Generic;
+using System.Globalization;
+using System.Reflection;
+using System.Text;
+using UnityEditor;
+using UnityEngine;
+using UnityEngine.UIElements;
+
+namespace Hackerzhuli.Code.Editor
+{
+    /// <summary>
+    ///     Reports which USS rules match a <see cref="VisualElement" />, the way the "Matching Selectors"
+    ///     section of Unity's UI Toolkit Debugger does.
+    /// </summary>
+    /// <remarks>
+    ///     Selector matching is not part of the public UI Toolkit API, so this drives the same internal
+    ///     <c>UnityEditor.UIElements.Debugger.MatchedRulesExtractor</c> the debugger itself uses, through
+    ///     reflection. Every reflection step is optional: when a Unity version renames or moves one of
+    ///     the members, <see cref="TryGetMatchedRules" /> reports why instead of throwing, so an
+    ///     inspection keeps all of its other sections.
+    /// </remarks>
+    internal static class UssMatchedSelectors
+    {
+        private const string ExtractorTypeName = "UnityEditor.UIElements.Debugger.MatchedRulesExtractor";
+        private const string ExtensionsTypeName = "UnityEngine.UIElements.StyleSheets.StyleSheetExtensions";
+
+        private const BindingFlags AnyInstance =
+            BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic;
+
+        private const BindingFlags AnyStatic =
+            BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic;
+
+        private static bool _initialized;
+        private static string _initializationError;
+
+        private static Type _extractorType;
+        private static MethodInfo _findMatchingRules;
+        private static FieldInfo _matchRecords;
+        private static FieldInfo _recordSheet;
+        private static FieldInfo _recordComplexSelector;
+        private static PropertyInfo _complexSelectorSpecificity;
+        private static PropertyInfo _complexSelectorRule;
+        private static PropertyInfo _complexSelectorSelectors;
+        private static PropertyInfo _selectorParts;
+        private static PropertyInfo _selectorPreviousRelationship;
+        private static PropertyInfo _partType;
+        private static PropertyInfo _partValue;
+        private static FieldInfo _ruleLine;
+        private static PropertyInfo _ruleProperties;
+        private static PropertyInfo _propertyName;
+        private static PropertyInfo _propertyLine;
+        private static PropertyInfo _propertyValues;
+        private static PropertyInfo _handleValueType;
+        private static MethodInfo _readAsString;
+        private static MethodInfo _readColor;
+
+        /// <summary>
+        ///     One declaration inside a matched rule, exactly as it is written in the USS source.
+        /// </summary>
+        /// <remarks>
+        ///     Shorthands are not expanded, so <see cref="Name" /> can be either a longhand such as
+        ///     <c>margin-left</c> or a shorthand such as <c>margin</c>, whichever the author wrote.
+        /// </remarks>
+        internal readonly struct UssDeclaration
+        {
+            internal UssDeclaration(string name, string value, int line)
+            {
+                Name = name;
+                Value = value;
+                Line = line;
+            }
+
+            internal string Name { get; }
+            internal string Value { get; }
+
+            /// <summary>
+            ///     The line the declaration is written on, 1 based, or 0 when the style sheet carries no
+            ///     line information.
+            /// </summary>
+            internal int Line { get; }
+        }
+
+        /// <summary>
+        ///     One USS rule whose selector matches the inspected element.
+        /// </summary>
+        internal sealed class UssMatchedRule
+        {
+            internal UssMatchedRule(string selector, string source, int specificity,
+                IReadOnlyList<UssDeclaration> declarations)
+            {
+                Selector = selector;
+                Source = source;
+                Specificity = specificity;
+                Declarations = declarations;
+            }
+
+            /// <summary>
+            ///     The selector as written, for example <c>.hud-group .toolbar-button</c>.
+            /// </summary>
+            internal string Selector { get; }
+
+            /// <summary>
+            ///     Where the rule lives, as <c>path:line</c>, for example
+            ///     <c>Assets/UI/GameScreen.uss:63</c>. Style sheets without a project asset path, such as
+            ///     the built in runtime theme, are identified by their name instead.
+            /// </summary>
+            internal string Source { get; }
+
+            /// <summary>
+            ///     Unity's selector specificity, which decides who wins between two rules in the same
+            ///     style sheet.
+            /// </summary>
+            internal int Specificity { get; }
+
+            internal IReadOnlyList<UssDeclaration> Declarations { get; }
+        }
+
+        /// <summary>
+        ///     Collects the USS rules matching <paramref name="element" />, ordered the way Unity applies
+        ///     them: from lowest to highest priority, so a later rule overrides an earlier one that
+        ///     declares the same property.
+        /// </summary>
+        /// <param name="element">The element to match against, which does not need to be in a panel.</param>
+        /// <param name="rules">The matched rules, empty when no selector matches.</param>
+        /// <param name="error">Why matching could not run, when this returns false.</param>
+        /// <returns>True when matching ran, even when nothing matched.</returns>
+        internal static bool TryGetMatchedRules(VisualElement element,
+            out IReadOnlyList<UssMatchedRule> rules, out string error)
+        {
+            rules = Array.Empty<UssMatchedRule>();
+
+            if (element == null)
+            {
+                error = "No element to match.";
+                return false;
+            }
+
+            if (!Initialize(out error))
+                return false;
+
+            try
+            {
+                var extractor = Activator.CreateInstance(_extractorType, true);
+                _findMatchingRules.Invoke(extractor, new object[] { element });
+
+                var records = (IList)_matchRecords.GetValue(extractor);
+                var matched = new List<UssMatchedRule>(records.Count);
+                foreach (var record in records)
+                {
+                    var rule = BuildRule(record);
+                    if (rule != null)
+                        matched.Add(rule);
+                }
+
+                rules = matched;
+                error = null;
+                return true;
+            }
+            catch (Exception exception)
+            {
+                var cause = exception is TargetInvocationException { InnerException: not null }
+                    ? exception.InnerException
+                    : exception;
+                error = $"{cause.GetType().Name}: {cause.Message}";
+                return false;
+            }
+        }
+
+        private static UssMatchedRule BuildRule(object record)
+        {
+            var complexSelector = _recordComplexSelector.GetValue(record);
+            if (complexSelector == null)
+                return null;
+
+            var sheet = _recordSheet.GetValue(record) as StyleSheet;
+            var rule = _complexSelectorRule.GetValue(complexSelector);
+            var line = rule != null ? (int)_ruleLine.GetValue(rule) : 0;
+
+            return new UssMatchedRule(
+                BuildSelectorText(complexSelector),
+                BuildSource(sheet, line),
+                (int)_complexSelectorSpecificity.GetValue(complexSelector),
+                BuildDeclarations(sheet, rule));
+        }
+
+        /// <summary>
+        ///     Rebuilds the selector text from its parsed parts, the same way the UI Toolkit Debugger
+        ///     does, because Unity keeps no copy of the original source text.
+        /// </summary>
+        private static string BuildSelectorText(object complexSelector)
+        {
+            var selectors = (Array)_complexSelectorSelectors.GetValue(complexSelector);
+            if (selectors == null)
+                return string.Empty;
+
+            var builder = new StringBuilder();
+            foreach (var selector in selectors)
+            {
+                // StyleSelectorRelationship: 1 is Child, 2 is Descendent.
+                switch ((int)_selectorPreviousRelationship.GetValue(selector))
+                {
+                    case 1:
+                        builder.Append(" > ");
+                        break;
+                    case 2:
+                        builder.Append(' ');
+                        break;
+                }
+
+                var parts = (Array)_selectorParts.GetValue(selector);
+                if (parts == null)
+                    continue;
+
+                foreach (var part in parts)
+                {
+                    // StyleSelectorType: 3 is Class, 4 and 5 are pseudo classes, 6 is ID. Wildcard and
+                    // Type parts already carry their own text.
+                    switch ((int)_partType.GetValue(part))
+                    {
+                        case 3:
+                            builder.Append('.');
+                            break;
+                        case 4:
+                        case 5:
+                            builder.Append(':');
+                            break;
+                        case 6:
+                            builder.Append('#');
+                            break;
+                    }
+
+                    builder.Append((string)_partValue.GetValue(part));
+                }
+            }
+
+            return builder.ToString();
+        }
+
+        private static string BuildSource(StyleSheet sheet, int line)
+        {
+            if (sheet == null)
+                return line > 0 ? $"<unknown>:{line.ToString(CultureInfo.InvariantCulture)}" : "<unknown>";
+
+            var path = AssetDatabase.GetAssetPath(sheet);
+            // Built in style sheets such as the default runtime theme live outside the project, where a
+            // path would say nothing useful.
+            if (string.IsNullOrEmpty(path) || path.StartsWith("Library/", StringComparison.OrdinalIgnoreCase))
+                path = sheet.name;
+
+            return line > 0 ? $"{path}:{line.ToString(CultureInfo.InvariantCulture)}" : path;
+        }
+
+        private static IReadOnlyList<UssDeclaration> BuildDeclarations(StyleSheet sheet, object rule)
+        {
+            if (rule == null)
+                return Array.Empty<UssDeclaration>();
+
+            var properties = (Array)_ruleProperties.GetValue(rule);
+            if (properties == null || properties.Length == 0)
+                return Array.Empty<UssDeclaration>();
+
+            var declarations = new List<UssDeclaration>(properties.Length);
+            foreach (var property in properties)
+                declarations.Add(new UssDeclaration(
+                    (string)_propertyName.GetValue(property),
+                    BuildDeclarationValue(sheet, property),
+                    (int)_propertyLine.GetValue(property)));
+
+            return declarations;
+        }
+
+        /// <summary>
+        ///     Rebuilds a declaration value from its parsed value handles, close to how it was written.
+        /// </summary>
+        /// <remarks>
+        ///     A parsed value keeps no end marker for a function, so the closing parentheses of any open
+        ///     function are added at the end. That is exact for the common cases, a single function such
+        ///     as <c>rgb(...)</c> or a nested <c>var(...)</c>, and can misplace a parenthesis only when
+        ///     one value contains several separate function calls.
+        /// </remarks>
+        private static string BuildDeclarationValue(StyleSheet sheet, object property)
+        {
+            var handles = (Array)_propertyValues.GetValue(property);
+            if (sheet == null || handles == null || handles.Length == 0)
+                return string.Empty;
+
+            var builder = new StringBuilder();
+            var openFunctions = 0;
+            foreach (var handle in handles)
+            {
+                var text = ReadHandle(sheet, handle, ref openFunctions);
+                if (string.IsNullOrEmpty(text))
+                    continue;
+
+                var isSeparator = text == ",";
+                var afterFunctionStart = builder.Length > 0 && builder[builder.Length - 1] == '(';
+                if (builder.Length > 0 && !isSeparator && !afterFunctionStart)
+                    builder.Append(' ');
+
+                builder.Append(text);
+            }
+
+            builder.Append(')', openFunctions);
+            return builder.ToString();
+        }
+
+        private static string ReadHandle(StyleSheet sheet, object handle, ref int openFunctions)
+        {
+            try
+            {
+                // StyleValueType: 4 is Color, 10 is Function.
+                switch ((int)_handleValueType.GetValue(handle))
+                {
+                    case 4:
+                        // Written back as hex, the way colors are reported everywhere else.
+                        return FormatColor((Color)_readColor.Invoke(sheet, new[] { handle }));
+                    case 10:
+                        openFunctions++;
+                        return (string)_readAsString.Invoke(null, new[] { sheet, handle }) + "(";
+                    default:
+                        return (string)_readAsString.Invoke(null, new[] { sheet, handle });
+                }
+            }
+            catch (Exception)
+            {
+                return "<unreadable>";
+            }
+        }
+
+        private static string FormatColor(Color value)
+        {
+            var rgba = ColorUtility.ToHtmlStringRGBA(value);
+            return string.Concat("#",
+                rgba.EndsWith("FF", StringComparison.Ordinal) ? rgba.Substring(0, 6) : rgba);
+        }
+
+        private static bool Initialize(out string error)
+        {
+            if (_initialized)
+            {
+                error = _initializationError;
+                return _initializationError == null;
+            }
+
+            _initialized = true;
+            _initializationError = Bind();
+            error = _initializationError;
+            return _initializationError == null;
+        }
+
+        private static string Bind()
+        {
+            try
+            {
+                _extractorType = FindType(ExtractorTypeName);
+                if (_extractorType == null)
+                    return $"{ExtractorTypeName} is not available in this Unity version.";
+
+                var uiElements = typeof(VisualElement).Assembly;
+                var extensionsType = uiElements.GetType(ExtensionsTypeName, false);
+                var recordType = uiElements.GetType("UnityEngine.UIElements.StyleSheets.SelectorMatchRecord", false);
+                var complexSelectorType = uiElements.GetType("UnityEngine.UIElements.StyleComplexSelector", false);
+                var selectorType = uiElements.GetType("UnityEngine.UIElements.StyleSelector", false);
+                var partType = uiElements.GetType("UnityEngine.UIElements.StyleSelectorPart", false);
+                var ruleType = uiElements.GetType("UnityEngine.UIElements.StyleRule", false);
+                var propertyType = uiElements.GetType("UnityEngine.UIElements.StyleProperty", false);
+                var handleType = uiElements.GetType("UnityEngine.UIElements.StyleValueHandle", false);
+                if (extensionsType == null || recordType == null || complexSelectorType == null ||
+                    selectorType == null || partType == null || ruleType == null ||
+                    propertyType == null || handleType == null)
+                    return "The internal UI Toolkit style sheet types are not available in this Unity version.";
+
+                _findMatchingRules = _extractorType.GetMethod("FindMatchingRules", AnyInstance, null,
+                    new[] { typeof(VisualElement) }, null);
+                _matchRecords = _extractorType.GetField("matchRecords", AnyInstance);
+                _recordSheet = recordType.GetField("sheet", AnyInstance);
+                _recordComplexSelector = recordType.GetField("complexSelector", AnyInstance);
+                _complexSelectorSpecificity = complexSelectorType.GetProperty("specificity", AnyInstance);
+                _complexSelectorRule = complexSelectorType.GetProperty("rule", AnyInstance);
+                _complexSelectorSelectors = complexSelectorType.GetProperty("selectors", AnyInstance);
+                _selectorParts = selectorType.GetProperty("parts", AnyInstance);
+                _selectorPreviousRelationship = selectorType.GetProperty("previousRelationship", AnyInstance);
+                _partType = partType.GetProperty("type", AnyInstance);
+                _partValue = partType.GetProperty("value", AnyInstance);
+                _ruleLine = ruleType.GetField("line", AnyInstance);
+                _ruleProperties = ruleType.GetProperty("properties", AnyInstance);
+                _propertyName = propertyType.GetProperty("name", AnyInstance);
+                _propertyLine = propertyType.GetProperty("line", AnyInstance);
+                _propertyValues = propertyType.GetProperty("values", AnyInstance);
+                _handleValueType = handleType.GetProperty("valueType", AnyInstance);
+                _readAsString = extensionsType.GetMethod("ReadAsString", AnyStatic);
+                _readColor = typeof(StyleSheet).GetMethod("ReadColor", AnyInstance, null,
+                    new[] { handleType }, null);
+
+                var missing = FindMissingMember();
+                return missing == null
+                    ? null
+                    : $"The internal UI Toolkit member '{missing}' is not available in this Unity version.";
+            }
+            catch (Exception exception)
+            {
+                return $"{exception.GetType().Name}: {exception.Message}";
+            }
+        }
+
+        private static string FindMissingMember()
+        {
+            if (_findMatchingRules == null) return "MatchedRulesExtractor.FindMatchingRules";
+            if (_matchRecords == null) return "MatchedRulesExtractor.matchRecords";
+            if (_recordSheet == null) return "SelectorMatchRecord.sheet";
+            if (_recordComplexSelector == null) return "SelectorMatchRecord.complexSelector";
+            if (_complexSelectorSpecificity == null) return "StyleComplexSelector.specificity";
+            if (_complexSelectorRule == null) return "StyleComplexSelector.rule";
+            if (_complexSelectorSelectors == null) return "StyleComplexSelector.selectors";
+            if (_selectorParts == null) return "StyleSelector.parts";
+            if (_selectorPreviousRelationship == null) return "StyleSelector.previousRelationship";
+            if (_partType == null) return "StyleSelectorPart.type";
+            if (_partValue == null) return "StyleSelectorPart.value";
+            if (_ruleLine == null) return "StyleRule.line";
+            if (_ruleProperties == null) return "StyleRule.properties";
+            if (_propertyName == null) return "StyleProperty.name";
+            if (_propertyLine == null) return "StyleProperty.line";
+            if (_propertyValues == null) return "StyleProperty.values";
+            if (_handleValueType == null) return "StyleValueHandle.valueType";
+            if (_readAsString == null) return "StyleSheetExtensions.ReadAsString";
+            if (_readColor == null) return "StyleSheet.ReadColor";
+            return null;
+        }
+
+        private static Type FindType(string fullName)
+        {
+            foreach (var assembly in AppDomain.CurrentDomain.GetAssemblies())
+            {
+                Type type;
+                try
+                {
+                    type = assembly.GetType(fullName, false);
+                }
+                catch (Exception)
+                {
+                    continue;
+                }
+
+                if (type != null)
+                    return type;
+            }
+
+            return null;
+        }
+    }
+}

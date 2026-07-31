@@ -1,5 +1,9 @@
 # Code Editor Package for Visual Studio
 
+## [1.2.2] - 2026-07-31
+Feature:
+- Added a `matchedSelectors` section to UI inspections, listing every USS rule matching the element with its source, line and specificity, and marking which of its declarations survive the cascade and which are overridden, and by what
+
 ## [1.2.1] - 2026-07-31
 Fix:
 - Fixed UI snapshots leaving out content parented to the runtime panel root instead of a `UIDocument` root, such as an open dropdown menu; such elements now appear under a `PanelOverlay` entry

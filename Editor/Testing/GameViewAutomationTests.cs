@@ -7,14 +7,19 @@ using Hackerzhuli.Code.Editor.Messaging;
 using Newtonsoft.Json.Linq;
 using NUnit.Framework;
 using Unity.Properties;
+using UnityEditor;
 using UnityEngine;
 using UnityEngine.UIElements;
+using MessageType = Hackerzhuli.Code.Editor.Messaging.MessageType;
 
 namespace Hackerzhuli.Code.Editor.Testing
 {
     [TestFixture]
     internal class GameViewAutomationTests
     {
+        private const string DemoStyleSheetPath =
+            "Packages/com.hackerzhuli.code/Tests/Runtime/Resources/GameViewAutomationDemo.uss";
+
         private GameViewAutomationService _service;
 
         [SetUp]
@@ -342,6 +347,68 @@ namespace Hackerzhuli.Code.Editor.Testing
             Assert.That(resolvedStyles, Does.Not.Contain("    left:"));
             Assert.That(resolvedStyles, Does.Not.Contain("    transition-"));
             Assert.That(resolvedStyles, Does.Not.Contain("    transform-origin:"));
+        }
+
+        [Test]
+        public void Inspect_ReportsMatchedSelectorsWithSourcesAndCascadeWinners()
+        {
+            var sheet = AssetDatabase.LoadAssetAtPath<StyleSheet>(DemoStyleSheetPath);
+            Assert.That(sheet, Is.Not.Null, $"{DemoStyleSheetPath} must be importable.");
+
+            var toolbar = new VisualElement();
+            toolbar.AddToClassList("demo-toolbar");
+            toolbar.styleSheets.Add(sheet);
+            var target = new VisualElement();
+            target.AddToClassList("demo-column");
+            target.AddToClassList("event-log");
+            // Beats the height of .event-log, so the cascade winner is the inline style.
+            target.style.height = 12f;
+            toolbar.Add(target);
+
+            var inspection = _service.BuildInspectionForTests(target);
+            var matched = Section(inspection, "  matchedSelectors:\n", "  inlineStyles:");
+
+            // Ordered the way Unity applies them, so the last one wins a conflict.
+            Assert.That(matched, Does.Contain($"    - selector: \".demo-toolbar > *\"\n" +
+                                              $"      source: \"{DemoStyleSheetPath}:36\"\n" +
+                                              "      specificity: 11\n"));
+            Assert.That(matched.IndexOf("\".demo-column\"", StringComparison.Ordinal),
+                Is.GreaterThan(matched.IndexOf("\".demo-toolbar > *\"", StringComparison.Ordinal)));
+            Assert.That(matched.IndexOf("\".event-log\"", StringComparison.Ordinal),
+                Is.GreaterThan(matched.IndexOf("\".demo-column\"", StringComparison.Ordinal)));
+
+            Assert.That(matched, Does.Contain(
+                "        - {property: \"margin-left\", value: \"10px\", line: 37}"));
+            // .event-log declares padding and background-color later than .demo-column does.
+            Assert.That(matched, Does.Contain(
+                $"        - {{property: \"padding\", value: \"14px\", line: 44, overriddenBy: \"{DemoStyleSheetPath}:64\"}}"));
+            Assert.That(matched, Does.Contain(
+                "        - {property: \"padding\", value: \"8px\", line: 66}"));
+            Assert.That(matched, Does.Contain(
+                "        - {property: \"height\", value: \"180px\", line: 65, overriddenBy: \"inline\"}"));
+            // Every rule reports both lists, so nothing about a matched rule is hidden.
+            Assert.That(matched, Does.Contain("      appliedDeclarations:\n"));
+            Assert.That(matched, Does.Contain("      overriddenDeclarations:\n"));
+        }
+
+        [Test]
+        public void Inspect_ReportsNoMatchedSelectorsWithoutStyleSheets()
+        {
+            var target = new VisualElement { name = "unstyled" };
+            target.AddToClassList("demo-column");
+
+            var inspection = _service.BuildInspectionForTests(target);
+
+            Assert.That(inspection, Does.Contain("  matchedSelectors: []\n"));
+        }
+
+        private static string Section(string inspection, string start, string end)
+        {
+            var startIndex = inspection.IndexOf(start, StringComparison.Ordinal);
+            Assert.That(startIndex, Is.GreaterThanOrEqualTo(0), $"'{start}' must be present.");
+            var endIndex = inspection.IndexOf(end, startIndex, StringComparison.Ordinal);
+            Assert.That(endIndex, Is.GreaterThan(startIndex), $"'{end}' must follow '{start}'.");
+            return inspection.Substring(startIndex, endIndex - startIndex);
         }
 
         [Test]
