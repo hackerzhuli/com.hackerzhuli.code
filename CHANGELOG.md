@@ -1,5 +1,9 @@
 # Code Editor Package for Visual Studio
 
+## [1.2.3] - 2026-07-31
+Fix:
+- Fixed the `matchedSelectors` section of UI inspections being unavailable on Unity 6000.2 and later, where the editor helper it relied on no longer exists; it now runs Unity's own selector matcher, which is unchanged across 6000.0 to 6000.3
+
 ## [1.2.2] - 2026-07-31
 Feature:
 - Added a `matchedSelectors` section to UI inspections, listing every USS rule matching the element with its source, line and specificity, and marking which of its declarations survive the cascade and which are overridden, and by what

@@ -517,8 +517,8 @@ declarations into the ones that survive the cascade and the ones that lose:
 Declarations are compared by the property name as written, so a shorthand such as `margin` and a
 longhand such as `margin-left` can both be applied, each winning for the part it writes. Style sheets
 without a project asset path, such as the built in runtime theme, are identified by their name
-instead of a path. Unity does not expose selector matching publicly, so this section is read through
-the same internals the debugger uses; when a future Unity version moves them, the section reports
+instead of a path. Unity does not expose selector matching publicly, so this section runs Unity's own
+matcher through reflection; when a future Unity version moves it, the section reports
 `matchedSelectors: "<unavailable: ...>"` and the rest of the inspection is unaffected.
 
 The `properties` section filters common properties declared by `VisualElement` or its base types when

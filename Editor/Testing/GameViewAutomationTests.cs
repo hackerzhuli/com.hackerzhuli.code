@@ -20,6 +20,9 @@ namespace Hackerzhuli.Code.Editor.Testing
         private const string DemoStyleSheetPath =
             "Packages/com.hackerzhuli.code/Tests/Runtime/Resources/GameViewAutomationDemo.uss";
 
+        private const string RuntimeThemePath =
+            "Assets/UI Toolkit/UnityThemes/UnityDefaultRuntimeTheme.tss";
+
         private GameViewAutomationService _service;
 
         [SetUp]
@@ -389,6 +392,25 @@ namespace Hackerzhuli.Code.Editor.Testing
             // Every rule reports both lists, so nothing about a matched rule is hidden.
             Assert.That(matched, Does.Contain("      appliedDeclarations:\n"));
             Assert.That(matched, Does.Contain("      overriddenDeclarations:\n"));
+        }
+
+        [Test]
+        public void Inspect_ReportsMatchedSelectorsFromImportedStyleSheets()
+        {
+            // A theme declares nothing itself and only imports the sheets that carry the built in
+            // control styles, so its rules are only reachable when imports are matched too.
+            var theme = AssetDatabase.LoadAssetAtPath<StyleSheet>(RuntimeThemePath);
+            Assert.That(theme, Is.Not.Null, $"{RuntimeThemePath} must be importable.");
+
+            var root = new VisualElement();
+            root.styleSheets.Add(theme);
+            var target = new Button();
+            root.Add(target);
+
+            var inspection = _service.BuildInspectionForTests(target);
+
+            Assert.That(inspection, Does.Contain("    - selector: \".unity-button\"\n"));
+            Assert.That(inspection, Does.Contain($"      source: \"{RuntimeThemePath}:"));
         }
 
         [Test]

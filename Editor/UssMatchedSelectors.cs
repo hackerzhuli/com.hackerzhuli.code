@@ -15,15 +15,18 @@ namespace Hackerzhuli.Code.Editor
     ///     section of Unity's UI Toolkit Debugger does.
     /// </summary>
     /// <remarks>
-    ///     Selector matching is not part of the public UI Toolkit API, so this drives the same internal
-    ///     <c>UnityEditor.UIElements.Debugger.MatchedRulesExtractor</c> the debugger itself uses, through
-    ///     reflection. Every reflection step is optional: when a Unity version renames or moves one of
-    ///     the members, <see cref="TryGetMatchedRules" /> reports why instead of throwing, so an
-    ///     inspection keeps all of its other sections.
+    ///     Selector matching is not part of the public UI Toolkit API, so this runs Unity's own matcher,
+    ///     <c>StyleSelectorHelper.FindMatches</c>, through reflection, and does the small amount of work
+    ///     around it that the matcher expects a caller to do: walk the ancestors, push them into the
+    ///     match context and stack up their style sheets. The editor once had a debugger helper for
+    ///     exactly that, <c>UnityEditor.UIElements.Debugger.MatchedRulesExtractor</c>, but it was removed
+    ///     in Unity 6000.2, while everything used here is unchanged across 6000.0 to 6000.3.
+    ///     Every reflection step is still optional: when a Unity version renames or moves one of the
+    ///     members, <see cref="TryGetMatchedRules" /> reports why instead of throwing, so an inspection
+    ///     keeps all of its other sections.
     /// </remarks>
     internal static class UssMatchedSelectors
     {
-        private const string ExtractorTypeName = "UnityEditor.UIElements.Debugger.MatchedRulesExtractor";
         private const string ExtensionsTypeName = "UnityEngine.UIElements.StyleSheets.StyleSheetExtensions";
 
         private const BindingFlags AnyInstance =
@@ -35,9 +38,17 @@ namespace Hackerzhuli.Code.Editor
         private static bool _initialized;
         private static string _initializationError;
 
-        private static Type _extractorType;
-        private static MethodInfo _findMatchingRules;
-        private static FieldInfo _matchRecords;
+        private static ConstructorInfo _contextConstructor;
+        private static object _processResult;
+        private static FieldInfo _contextCurrentElement;
+        private static FieldInfo _contextAncestorFilter;
+        private static MethodInfo _contextAddStyleSheet;
+        private static PropertyInfo _flattenedImports;
+        private static MethodInfo _pushElement;
+        private static MethodInfo _findMatches;
+        private static Type _recordListType;
+        private static MethodInfo _recordListSort;
+        private static object _recordComparison;
         private static FieldInfo _recordSheet;
         private static FieldInfo _recordComplexSelector;
         private static PropertyInfo _complexSelectorSpecificity;
@@ -142,10 +153,15 @@ namespace Hackerzhuli.Code.Editor
 
             try
             {
-                var extractor = Activator.CreateInstance(_extractorType, true);
-                _findMatchingRules.Invoke(extractor, new object[] { element });
+                var context = _contextConstructor.Invoke(new[] { _processResult });
+                _contextCurrentElement.SetValue(context, element);
+                PushAncestors(element, context);
 
-                var records = (IList)_matchRecords.GetValue(extractor);
+                var records = (IList)Activator.CreateInstance(_recordListType);
+                _findMatches.Invoke(null, new[] { context, records });
+                // The matcher reports in lookup order, so sort it into the order Unity applies.
+                _recordListSort.Invoke(records, new[] { _recordComparison });
+
                 var matched = new List<UssMatchedRule>(records.Count);
                 foreach (var record in records)
                 {
@@ -166,6 +182,48 @@ namespace Hackerzhuli.Code.Editor
                 error = $"{cause.GetType().Name}: {cause.Message}";
                 return false;
             }
+        }
+
+        /// <summary>
+        ///     Prepares the match context the way Unity's own style traversal does: ancestors before
+        ///     descendants, each pushed into the filter the matcher tests candidates against, and each
+        ///     one's style sheets stacked up so a rule is attributed to the right sheet.
+        /// </summary>
+        private static void PushAncestors(VisualElement element, object context)
+        {
+            var parent = element.hierarchy.parent;
+            if (parent != null)
+                PushAncestors(parent, context);
+
+            _pushElement.Invoke(_contextAncestorFilter.GetValue(context), new object[] { element });
+
+            var sheets = element.styleSheets;
+            for (var index = 0; index < sheets.count; index++)
+            {
+                var sheet = sheets[index];
+                if (sheet == null)
+                    continue;
+
+                // A sheet's imports go on the stack ahead of the sheet itself, so that what the sheet
+                // declares wins over what it imported. A theme such as UnityDefaultRuntimeTheme.tss
+                // declares nothing at all and is only a wrapper around its imports, so skipping this
+                // loses every built in control style.
+                if (_flattenedImports.GetValue(sheet) is IList imports)
+                    foreach (var import in imports)
+                        if (import != null)
+                            _contextAddStyleSheet.Invoke(context, new[] { import });
+
+                _contextAddStyleSheet.Invoke(context, new object[] { sheet });
+            }
+        }
+
+        /// <summary>
+        ///     Stands in for the callback the matcher reports pseudo state dependencies to, which only
+        ///     a live panel has any use for. It is generic so that it can be bound to the internal
+        ///     result type without naming it.
+        /// </summary>
+        private static void IgnoreMatchResult<TResult>(VisualElement element, TResult result)
+        {
         }
 
         private static UssMatchedRule BuildRule(object record)
@@ -354,11 +412,11 @@ namespace Hackerzhuli.Code.Editor
         {
             try
             {
-                _extractorType = FindType(ExtractorTypeName);
-                if (_extractorType == null)
-                    return $"{ExtractorTypeName} is not available in this Unity version.";
-
                 var uiElements = typeof(VisualElement).Assembly;
+                var contextType = uiElements.GetType("UnityEngine.UIElements.StyleMatchingContext", false);
+                var filterType = uiElements.GetType("UnityEngine.UIElements.AncestorFilter", false);
+                var helperType = uiElements.GetType("UnityEngine.UIElements.StyleSheets.StyleSelectorHelper", false);
+                var resultType = uiElements.GetType("UnityEngine.UIElements.StyleSheets.MatchResultInfo", false);
                 var extensionsType = uiElements.GetType(ExtensionsTypeName, false);
                 var recordType = uiElements.GetType("UnityEngine.UIElements.StyleSheets.SelectorMatchRecord", false);
                 var complexSelectorType = uiElements.GetType("UnityEngine.UIElements.StyleComplexSelector", false);
@@ -367,14 +425,35 @@ namespace Hackerzhuli.Code.Editor
                 var ruleType = uiElements.GetType("UnityEngine.UIElements.StyleRule", false);
                 var propertyType = uiElements.GetType("UnityEngine.UIElements.StyleProperty", false);
                 var handleType = uiElements.GetType("UnityEngine.UIElements.StyleValueHandle", false);
-                if (extensionsType == null || recordType == null || complexSelectorType == null ||
-                    selectorType == null || partType == null || ruleType == null ||
-                    propertyType == null || handleType == null)
+                if (contextType == null || filterType == null || helperType == null ||
+                    resultType == null || extensionsType == null || recordType == null ||
+                    complexSelectorType == null || selectorType == null || partType == null ||
+                    ruleType == null || propertyType == null || handleType == null)
                     return "The internal UI Toolkit style sheet types are not available in this Unity version.";
 
-                _findMatchingRules = _extractorType.GetMethod("FindMatchingRules", AnyInstance, null,
+                _recordListType = typeof(List<>).MakeGenericType(recordType);
+                var processResultType = typeof(Action<,>).MakeGenericType(typeof(VisualElement), resultType);
+                _contextConstructor = contextType.GetConstructor(AnyInstance, null,
+                    new[] { processResultType }, null);
+                _processResult = Delegate.CreateDelegate(processResultType,
+                    typeof(UssMatchedSelectors)
+                        .GetMethod(nameof(IgnoreMatchResult), AnyStatic)
+                        ?.MakeGenericMethod(resultType));
+                _contextCurrentElement = contextType.GetField("currentElement", AnyInstance);
+                _contextAncestorFilter = contextType.GetField("ancestorFilter", AnyInstance);
+                _contextAddStyleSheet = contextType.GetMethod("AddStyleSheet", AnyInstance, null,
+                    new[] { typeof(StyleSheet) }, null);
+                _flattenedImports = typeof(StyleSheet).GetProperty("flattenedRecursiveImports", AnyInstance);
+                _pushElement = filterType.GetMethod("PushElement", AnyInstance, null,
                     new[] { typeof(VisualElement) }, null);
-                _matchRecords = _extractorType.GetField("matchRecords", AnyInstance);
+                _findMatches = helperType.GetMethod("FindMatches", AnyStatic, null,
+                    new[] { contextType, _recordListType }, null);
+                var comparisonType = typeof(Comparison<>).MakeGenericType(recordType);
+                _recordListSort = _recordListType.GetMethod("Sort", new[] { comparisonType });
+                var compare = recordType.GetMethod("Compare", AnyStatic, null,
+                    new[] { recordType, recordType }, null);
+                if (compare != null)
+                    _recordComparison = Delegate.CreateDelegate(comparisonType, compare);
                 _recordSheet = recordType.GetField("sheet", AnyInstance);
                 _recordComplexSelector = recordType.GetField("complexSelector", AnyInstance);
                 _complexSelectorSpecificity = complexSelectorType.GetProperty("specificity", AnyInstance);
@@ -407,8 +486,16 @@ namespace Hackerzhuli.Code.Editor
 
         private static string FindMissingMember()
         {
-            if (_findMatchingRules == null) return "MatchedRulesExtractor.FindMatchingRules";
-            if (_matchRecords == null) return "MatchedRulesExtractor.matchRecords";
+            if (_contextConstructor == null) return "StyleMatchingContext..ctor";
+            if (_processResult == null) return "StyleMatchingContext.processResult";
+            if (_contextCurrentElement == null) return "StyleMatchingContext.currentElement";
+            if (_contextAncestorFilter == null) return "StyleMatchingContext.ancestorFilter";
+            if (_contextAddStyleSheet == null) return "StyleMatchingContext.AddStyleSheet";
+            if (_flattenedImports == null) return "StyleSheet.flattenedRecursiveImports";
+            if (_pushElement == null) return "AncestorFilter.PushElement";
+            if (_findMatches == null) return "StyleSelectorHelper.FindMatches";
+            if (_recordListSort == null) return "List<SelectorMatchRecord>.Sort";
+            if (_recordComparison == null) return "SelectorMatchRecord.Compare";
             if (_recordSheet == null) return "SelectorMatchRecord.sheet";
             if (_recordComplexSelector == null) return "SelectorMatchRecord.complexSelector";
             if (_complexSelectorSpecificity == null) return "StyleComplexSelector.specificity";
@@ -426,27 +513,6 @@ namespace Hackerzhuli.Code.Editor
             if (_handleValueType == null) return "StyleValueHandle.valueType";
             if (_readAsString == null) return "StyleSheetExtensions.ReadAsString";
             if (_readColor == null) return "StyleSheet.ReadColor";
-            return null;
-        }
-
-        private static Type FindType(string fullName)
-        {
-            foreach (var assembly in AppDomain.CurrentDomain.GetAssemblies())
-            {
-                Type type;
-                try
-                {
-                    type = assembly.GetType(fullName, false);
-                }
-                catch (Exception)
-                {
-                    continue;
-                }
-
-                if (type != null)
-                    return type;
-            }
-
             return null;
         }
     }
