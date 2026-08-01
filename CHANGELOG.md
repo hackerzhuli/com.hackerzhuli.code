@@ -1,5 +1,20 @@
 # Code Editor Package for Visual Studio
 
+## [1.3.0] - 2026-08-01
+Feature:
+- Added scene and GameObject messages to see what is inside the open scenes: the GameObject tree of a scene, the descendant tree of one GameObject, a search for GameObjects by name or by exact path, and the properties and component members of one GameObject
+- GameObjects are reported with an instance id that addresses them exactly in later requests, and a path that matches more than one object now returns the candidate ids instead of guessing which one was meant
+- GameObject inspections never read the property getters that quietly instantiate a copy of a material or mesh, so looking at a scene can no longer dirty it
+
+Change:
+- UI hierarchies no longer repeat in a comment what the properties on an element already say, and the depth limit is explained once at the top of the document rather than on every element it truncates; `childrenOmitted` is gone, since `omittedChildCount` already says children are missing, and an element the depth limit stopped no longer carries an omission reason at all
+- Built-in components report a curated selection of members by default, roughly what the inspector shows, instead of everything reflection can reach; naming the component in `fullDetailComponents` still gives the full picture
+
+Fix:
+- Fixed a reference to an object that can be enumerated, such as a `Transform` or a `VisualElement`, being reported as a list of its children instead of as a reference to it, which also affected UI inspections
+- Fixed the items of a collection being reported as raw text, so an object reference inside one now carries its type, name and instance id like any other
+- Fixed a `LayerMask` being reported as its type name rather than its value, and compiler generated members such as auto property backing fields showing up in inspections
+
 ## [1.2.4] - 2026-07-31
 Fix:
 - Fixed UI hierarchies skipping the built-in structure of composite controls, such as a `ScrollView` jumping straight to its content items and hiding its viewport, content container and scrollers; hierarchies now walk the real visual tree, while snapshots stay compact

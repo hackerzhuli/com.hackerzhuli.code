@@ -234,9 +234,15 @@ namespace Hackerzhuli.Code.Editor.Testing
                 Assert.That(snapshot, Does.Contain($"[name=\"child-{index}\"]"));
             Assert.That(snapshot.Split('\n').Count(line => line.TrimStart().StartsWith("- ")),
                 Is.LessThanOrEqualTo(200));
-            Assert.That(snapshot, Does.Contain("child elements omitted (dynamic depth limit"));
-            Assert.That(snapshot, Does.Contain("[omissionReason=\"dynamic_depth_limit\"]"));
+            Assert.That(snapshot, Does.StartWith("# maxDepth "));
+            Assert.That(snapshot, Does.Contain("(dynamic, 200 element budget)"));
+            // Elements at the depth limit carry only the count, never a reason.
+            Assert.That(snapshot, Does.Contain("[omittedChildCount=4]"));
+            Assert.That(snapshot, Does.Not.Contain("omissionReason"));
+            Assert.That(snapshot, Does.Not.Contain("childrenOmitted"));
             Assert.That(snapshot, Does.Not.Contain("[name=\"leaf-0-0-0\"]"));
+            // The depth limit is stated once in the header, never repeated per element.
+            Assert.That(snapshot.Split('\n').Count(line => line.TrimStart().StartsWith("#")), Is.EqualTo(1));
         }
 
         [Test]
@@ -249,8 +255,9 @@ namespace Hackerzhuli.Code.Editor.Testing
 
             Assert.That(snapshot, Does.Contain("[name=\"root\"]"));
             Assert.That(snapshot, Does.Not.Contain("[name=\"child\"]"));
-            Assert.That(snapshot, Does.Contain("[omissionReason=\"requested_depth_limit\"]"));
-            Assert.That(snapshot, Does.Contain("requested depth limit 0 reached"));
+            Assert.That(snapshot, Does.Contain("[omittedChildCount=1]"));
+            Assert.That(snapshot, Does.Not.Contain("omissionReason"));
+            Assert.That(snapshot, Does.StartWith("# maxDepth 0 (requested)"));
         }
 
         [Test]
@@ -265,7 +272,8 @@ namespace Hackerzhuli.Code.Editor.Testing
 
             Assert.That(snapshot, Does.Contain("[name=\"child\"]"));
             Assert.That(snapshot, Does.Not.Contain("[name=\"grandchild\"]"));
-            Assert.That(snapshot, Does.Contain("[omissionReason=\"requested_depth_limit\"]"));
+            Assert.That(snapshot, Does.Contain("[omittedChildCount=1]"));
+            Assert.That(snapshot, Does.Not.Contain("omissionReason"));
         }
 
         [Test]
@@ -277,11 +285,11 @@ namespace Hackerzhuli.Code.Editor.Testing
 
             var snapshot = _service.BuildHierarchyForTests(root);
 
-            Assert.That(snapshot, Does.Contain("[childrenOmitted=true]"));
             Assert.That(snapshot, Does.Contain("[omittedChildCount=12]"));
             Assert.That(snapshot, Does.Contain("[omissionReason=\"similar_children\"]"));
-            Assert.That(snapshot,
-                Does.Contain("# 12 more Label children omitted (22 same-type children total)"));
+            Assert.That(snapshot, Does.Not.Contain("childrenOmitted"));
+            // The properties above say it all, so nothing repeats them as a comment.
+            Assert.That(snapshot, Does.Not.Contain("#"));
         }
 
         [Test]

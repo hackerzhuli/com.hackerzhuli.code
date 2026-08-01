@@ -468,6 +468,12 @@ namespace Hackerzhuli.Code.Editor
                 case MessageType.LocaleSelect:
                     LocaleAutomation.Process(message, Answer);
                     break;
+                case MessageType.SceneHierarchy:
+                case MessageType.GameObjectHierarchy:
+                case MessageType.GameObjectFind:
+                case MessageType.GameObjectInspect:
+                    GameObjectAutomation.Process(message, Answer);
+                    break;
             }
         }
 

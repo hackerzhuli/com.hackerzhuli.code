@@ -14,6 +14,7 @@ using UnityEditor;
 using UnityEngine;
 using UnityEngine.UIElements;
 using MessageType = Hackerzhuli.Code.Editor.Messaging.MessageType;
+using static Hackerzhuli.Code.Editor.AutomationValueFormatter;
 
 namespace Hackerzhuli.Code.Editor
 {
@@ -1093,12 +1094,20 @@ namespace Hackerzhuli.Code.Editor
             var maximumDepth = requestedDepth.HasValue
                 ? Math.Min(requestedDepth.Value, dynamicMaximumDepth)
                 : dynamicMaximumDepth;
-            var depthOmissionReason = requestedDepth.HasValue &&
-                                      requestedDepth.Value <= dynamicMaximumDepth
-                ? "requested_depth_limit"
-                : "dynamic_depth_limit";
-            AppendElement(builder, root, 0, elements, true, maximumDepth,
-                depthOmissionReason);
+
+            // The depth limit is explained once here rather than on every element it truncates,
+            // because repeating the same sentence per element only costs the reader context.
+            if (maximumDepth < GetMaximumOutputDepth(root))
+            {
+                builder.Append("# maxDepth ");
+                builder.Append(maximumDepth.ToString(CultureInfo.InvariantCulture));
+                builder.Append(requestedDepth.HasValue && requestedDepth.Value < dynamicMaximumDepth
+                    ? " (requested)"
+                    : $" (dynamic, {HierarchyElementLimit} element budget)");
+                builder.Append("; elements cut off by it carry omittedChildCount without a reason\n");
+            }
+
+            AppendElement(builder, root, 0, elements, true, maximumDepth);
             return builder.ToString().TrimEnd();
         }
 
@@ -1659,18 +1668,8 @@ namespace Hackerzhuli.Code.Editor
             return "<unavailable>";
         }
 
-        private static void AppendYamlValue(StringBuilder builder, int indent, string name, object value)
-        {
-            builder.Append(' ', indent * 2);
-            builder.Append(name);
-            builder.Append(": ");
-            builder.Append(FormatInspectionValue(value));
-            builder.Append('\n');
-        }
-
         private void AppendChildren(StringBuilder builder, VisualElement parent, int depth,
-            HashSet<VisualElement> liveElements, bool detailed, int detailedMaximumDepth,
-            string depthOmissionReason = null)
+            HashSet<VisualElement> liveElements, bool detailed, int detailedMaximumDepth)
         {
             var children = GetTraversalChildren(parent, detailed);
             var truncateSimilarChildren = children.Count >= 20 &&
@@ -1678,24 +1677,11 @@ namespace Hackerzhuli.Code.Editor
             var outputCount = truncateSimilarChildren ? 10 : children.Count;
             for (var index = 0; index < outputCount; index++)
                 AppendElement(builder, children[index], depth, liveElements, detailed,
-                    detailedMaximumDepth, depthOmissionReason);
-
-            if (truncateSimilarChildren && detailed)
-            {
-                builder.Append(' ', depth * 2);
-                builder.Append("# ");
-                builder.Append(children.Count - outputCount);
-                builder.Append(" more ");
-                builder.Append(children[0].GetType().Name);
-                builder.Append(" children omitted (");
-                builder.Append(children.Count);
-                builder.Append(" same-type children total)\n");
-            }
+                    detailedMaximumDepth);
         }
 
         private void AppendElement(StringBuilder builder, VisualElement element, int depth,
-            HashSet<VisualElement> liveElements, bool detailed, int detailedMaximumDepth,
-            string depthOmissionReason = null)
+            HashSet<VisualElement> liveElements, bool detailed, int detailedMaximumDepth)
         {
             liveElements.Add(element);
             var children = GetTraversalChildren(element, detailed);
@@ -1722,47 +1708,32 @@ namespace Hackerzhuli.Code.Editor
                 AppendProperties(builder, element);
             if (detailed && omittedChildCount > 0)
             {
-                AppendBoolProperty(builder, "childrenOmitted", true);
                 AppendNumberProperty(builder, "omittedChildCount", omittedChildCount);
-                AppendStringProperty(builder, "omissionReason",
-                    hiddenChildren ? "hidden" :
-                    builtInChildren ? "built_in_implementation" :
-                    depthLimitedChildren ? depthOmissionReason ?? "dynamic_depth_limit" :
-                    "similar_children");
+
+                // The depth limit needs no reason on the element: it is stated once in the header,
+                // and there can be a great many elements at that depth. The other three reasons are
+                // per element and nothing else would reveal them.
+                if (!depthLimitedChildren)
+                    AppendStringProperty(builder, "omissionReason",
+                        hiddenChildren ? "hidden" :
+                        builtInChildren ? "built_in_implementation" :
+                        "similar_children");
             }
             builder.Append(" [ref=");
             builder.Append(GetOrCreateRef(element));
             builder.Append(']');
 
-            if (children.Count == 0)
+            // Omitted children are already described by the properties on this line, so no comment
+            // repeats them below it.
+            if (children.Count == 0 || hiddenChildren || builtInChildren || depthLimitedChildren)
             {
                 builder.Append('\n');
-            }
-            else if (hiddenChildren || builtInChildren)
-            {
-                // Compact snapshots intentionally omit implementation/hidden descendants
-                // without protocol metadata. UiHierarchy is the surface that explains omissions.
-                builder.Append('\n');
-            }
-            else if (depthLimitedChildren)
-            {
-                builder.Append(":\n");
-                builder.Append(' ', (depth + 1) * 2);
-                builder.Append("# ");
-                builder.Append(children.Count);
-                builder.Append(" child elements omitted (");
-                builder.Append(hiddenChildren ? "element is hidden" :
-                    builtInChildren ? "built-in implementation" :
-                    depthOmissionReason == "requested_depth_limit"
-                        ? $"requested depth limit {detailedMaximumDepth} reached"
-                        : $"dynamic depth limit {detailedMaximumDepth} reached");
-                builder.Append(")\n");
             }
             else
             {
                 builder.Append(":\n");
                 AppendChildren(builder, element, depth + 1, liveElements, detailed,
-                    detailedMaximumDepth, depthOmissionReason);
+                    detailedMaximumDepth);
             }
         }
 
@@ -2026,114 +1997,8 @@ namespace Hackerzhuli.Code.Editor
             builder.Append("  ");
             builder.Append(name);
             builder.Append(": ");
-            builder.Append(FormatInspectionValue(value));
+            builder.Append(FormatValue(value));
             builder.Append('\n');
-        }
-
-        private static string FormatInspectionValue(object value)
-        {
-            if (value == null)
-                return "null";
-
-            switch (value)
-            {
-                case string text:
-                    return QuoteYamlString(text);
-                case char character:
-                    return QuoteYamlString(character.ToString());
-                case bool boolean:
-                    return boolean ? "true" : "false";
-                case Enum enumeration:
-                    return enumeration.ToString();
-                case byte or sbyte or short or ushort or int or uint or long or ulong or float or double or decimal:
-                    return Convert.ToString(value, CultureInfo.InvariantCulture);
-                case Vector2 vector2:
-                    return FormatVector2(vector2);
-                case Vector3 vector3:
-                    return FormatVector3(vector3);
-                case Vector4 vector4:
-                    return FormatVector4(vector4);
-                case Rect rect:
-                    return FormatRect(rect);
-                case Color color:
-                    return FormatColor(color);
-                case System.Collections.IEnumerable enumerable:
-                    return FormatEnumerable(enumerable);
-                case VisualElement visualElement:
-                    return QuoteYamlString(
-                        $"{visualElement.GetType().Name}(name={visualElement.name})");
-                case UnityEngine.Object unityObject:
-                    return QuoteYamlString(
-                        $"{unityObject.GetType().Name}(name={unityObject.name},instanceId={unityObject.GetInstanceID()})");
-                case IFormattable formattable:
-                    return QuoteYamlString(formattable.ToString(null, CultureInfo.InvariantCulture));
-                default:
-                    return QuoteYamlString(value.ToString());
-            }
-        }
-
-        private static string QuoteYamlString(string value)
-        {
-            return string.Concat("\"", AutomationProtocol.EscapeYamlString(value ?? string.Empty), "\"");
-        }
-
-        private static string FormatStringCollection(IEnumerable<string> values)
-        {
-            return string.Concat("[", string.Join(",",
-                values.Select(value => $"\"{AutomationProtocol.EscapeYamlString(value ?? string.Empty)}\"")), "]");
-        }
-
-        private static string FormatEnumerable(System.Collections.IEnumerable values)
-        {
-            var items = new List<string>();
-            foreach (var value in values)
-            {
-                if (value == null)
-                    items.Add("null");
-                else if (value is string text)
-                    items.Add($"\"{AutomationProtocol.EscapeYamlString(text)}\"");
-                else if (value is bool boolean)
-                    items.Add(boolean ? "true" : "false");
-                else if (value is Enum ||
-                         value is byte or sbyte or short or ushort or int or uint or long or ulong or float or double or decimal)
-                    items.Add(Convert.ToString(value, CultureInfo.InvariantCulture));
-                else
-                    items.Add($"\"{AutomationProtocol.EscapeYamlString(value.ToString())}\"");
-            }
-
-            return string.Concat("[", string.Join(",", items), "]");
-        }
-
-        private static string FormatVector3(Vector3 value)
-        {
-            return string.Concat("[", value.x.ToString("R", CultureInfo.InvariantCulture), ",",
-                value.y.ToString("R", CultureInfo.InvariantCulture), ",",
-                value.z.ToString("R", CultureInfo.InvariantCulture), "]");
-        }
-
-        private static string FormatVector4(Vector4 value)
-        {
-            return string.Concat("[", value.x.ToString("R", CultureInfo.InvariantCulture), ",",
-                value.y.ToString("R", CultureInfo.InvariantCulture), ",",
-                value.z.ToString("R", CultureInfo.InvariantCulture), ",",
-                value.w.ToString("R", CultureInfo.InvariantCulture), "]");
-        }
-
-        private static string FormatRect(Rect value)
-        {
-            return string.Concat("[", value.x.ToString("R", CultureInfo.InvariantCulture), ",",
-                value.y.ToString("R", CultureInfo.InvariantCulture), ",",
-                value.width.ToString("R", CultureInfo.InvariantCulture), ",",
-                value.height.ToString("R", CultureInfo.InvariantCulture), "]");
-        }
-
-        private static string FormatColor(Color value)
-        {
-            var rgba = ColorUtility.ToHtmlStringRGBA(value);
-            var hex = rgba.EndsWith("FF", StringComparison.Ordinal)
-                ? rgba.Substring(0, 6)
-                : rgba;
-            return QuoteYamlString(string.Concat("#", hex));
         }
 
         private static bool IsPopupField(VisualElement element)
@@ -2191,12 +2056,6 @@ namespace Hackerzhuli.Code.Editor
             builder.Append('=');
             builder.Append(value);
             builder.Append(']');
-        }
-
-        private static string FormatVector2(Vector2 value)
-        {
-            return string.Concat("[", value.x.ToString("R", CultureInfo.InvariantCulture), ",",
-                value.y.ToString("R", CultureInfo.InvariantCulture), "]");
         }
 
         private string GetOrCreateRef(VisualElement element)

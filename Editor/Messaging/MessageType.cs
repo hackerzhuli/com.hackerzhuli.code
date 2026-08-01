@@ -252,6 +252,26 @@ namespace Hackerzhuli.Code.Editor.Messaging
         /// <summary>
         ///     Change the selected locale. Only available in Play Mode.
         /// </summary>
-        LocaleSelect = 117
+        LocaleSelect = 117,
+
+        /// <summary>
+        ///     Request a name/instance id GameObject tree for one open scene. Available in Edit and Play Mode.
+        /// </summary>
+        SceneHierarchy = 118,
+
+        /// <summary>
+        ///     Request a name/instance id descendant tree for one GameObject. Available in Edit and Play Mode.
+        /// </summary>
+        GameObjectHierarchy = 119,
+
+        /// <summary>
+        ///     Find GameObjects by name or by exact path. Available in Edit and Play Mode.
+        /// </summary>
+        GameObjectFind = 120,
+
+        /// <summary>
+        ///     Get the main properties and component members of one GameObject. Available in Edit and Play Mode.
+        /// </summary>
+        GameObjectInspect = 121
     }
 }

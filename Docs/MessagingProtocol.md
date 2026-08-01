@@ -90,6 +90,10 @@ All available message types:
 | `SceneOpen` | 115 | Open a scene asset (Edit Mode only) | JSON request / JSON response containing YAML |
 | `LocaleList` | 116 | List the available locales and the selected one (Play Mode only) | JSON request / JSON response containing YAML |
 | `LocaleSelect` | 117 | Change the selected locale (Play Mode only) | JSON request / JSON response containing YAML |
+| `SceneHierarchy` | 118 | Request the GameObject tree of one open scene | JSON request / JSON response containing YAML |
+| `GameObjectHierarchy` | 119 | Request the descendant tree of one GameObject | JSON request / JSON response containing YAML |
+| `GameObjectFind` | 120 | Find GameObjects by name or by exact path | JSON request / JSON response containing YAML |
+| `GameObjectInspect` | 121 | Get the properties and component members of one GameObject | JSON request / JSON response containing YAML |
 
 Note:
 - Message value greater than or equal to 100 means it does not exist in the official package but was added in this package.
@@ -422,14 +426,24 @@ not just its content items. Each normal node contains only:
 Protocol omission metadata may additionally appear on a parent:
 
 ```yaml
-- VisualElement [name="items"] [childrenOmitted=true] [omittedChildCount=12] [omissionReason="similar_children"] [ref=e1]:
+- VisualElement [name="items"] [omittedChildCount=12] [omissionReason="similar_children"] [ref=e1]:
   - Label [ussClasses=["unity-label"]] [ref=e2]
-  # 12 more Label children omitted (22 same-type children total)
 ```
 
 The same-type sibling rule applies when a parent has at least 20 direct children of exactly the same
-runtime type: only the first 10 are emitted. Depth-limited parents are also marked with
-`childrenOmitted`, `omittedChildCount`, and an `omissionReason`.
+runtime type: only the first 10 are emitted. `omissionReason` is one of `similar_children`, `hidden`
+or `built_in_implementation`, and is **absent when the depth limit is what stopped the element**,
+because that reason is the same for every element at that depth and is already stated in the header.
+
+When the depth limit actually cuts something off, the document starts with a single comment line
+naming the effective depth and where it came from, and nothing repeats it further down:
+
+```yaml
+# maxDepth 3 (dynamic, 200 element budget); elements cut off by it carry omittedChildCount without a reason
+```
+
+A requested limit reads `# maxDepth 3 (requested); ...` instead. No other comments are emitted:
+everything else an element omits is stated by the properties on that element's own line.
 
 The runtime panel root and a `UIDocument` root cannot be used as the hierarchy target because their
 trees may be unbounded. Such requests return `forbidden`; select one of their descendants instead.
@@ -744,6 +758,244 @@ In addition to the shared `invalid_request`, `forbidden` and `internal_error` co
 | `not_playing` | A locale message was requested outside of Play Mode |
 | `localization_unavailable` | com.unity.localization is not installed, or the project has no Localization Settings asset |
 | `unknown_locale` | No available locale matches the requested code or name |
+
+### Scene and GameObject Inspection (Values: 118-121)
+
+These messages report what is inside the open scenes. They use the same request and response envelope
+as Game View automation (loopback only, opaque `requestId`, response reuses the request message type,
+automatic TCP fallback), and the same error shape. All four work in both Edit Mode and Play Mode,
+because reading the hierarchy never changes it.
+
+**Addressing a GameObject.** Every GameObject is reported with its instance `id`, and every message
+that targets one accepts either `id` or `path`:
+
+- `id` is a signed integer that is stable for as long as the object lives in the current session, and
+  is the only unambiguous way to name an object. It does **not** survive a domain reload (script
+  recompilation) or entering and leaving Play Mode; after either, look the object up again. The
+  instance id of a component is accepted too and resolves to the GameObject it is attached to.
+- `path` is the slash separated chain of names from the scene root down, for example
+  `Canvas/Panel/Button`. A leading slash is tolerated. **A path is always matched in full and case
+  sensitively** - there is no partial or fuzzy form of it. A GameObject whose name contains a slash
+  cannot be addressed by path at all, which is one reason ids exist.
+- When a path matches more than one object the request fails with `ambiguous_path`, and the error
+  message lists the candidates with their ids so the next call can be exact:
+
+  ```
+  3 GameObjects match path 'Canvas/Panel/Button'. Retry with one of these ids:
+    id=-4312 scene="Assets/Scenes/Main.unity" path="Canvas/Panel/Button"
+    id=-5108 scene="Assets/Scenes/Main.unity" path="Canvas/Panel/Button"
+    id=-6002 scene="Assets/Scenes/UI.unity" path="Canvas/Panel/Button"
+  ```
+
+  At most 20 candidates are named.
+- An optional `scene` narrows the search to one scene, matched case sensitively against the scene's
+  asset path or its name.
+
+**What is searched.** Every open and loaded scene, plus, in Play Mode, the `DontDestroyOnLoad` scene,
+which holds the objects that survive scene loads and which `SceneList` never reports. Objects flagged
+`HideFlags.HideInHierarchy` are editor internals and are skipped everywhere.
+
+**Response size.** Hierarchies are capped on three axes: at most 20 children are listed per object, at
+most 50 root objects per scene, and at most 200 objects in total. The total budget is enforced by
+lowering the depth *before* anything is written, so the answer is a shallower complete tree rather
+than a truncated deep one.
+
+#### SceneHierarchy (Value: 118)
+
+Request:
+
+```json
+{"requestId":"go-1","scene":"Assets/Scenes/Main.unity","depth":3}
+```
+
+- `scene` is optional and defaults to the active scene.
+- `depth` is optional and must be a non-negative integer. `0` returns only the root objects, `1` adds
+  their direct children, and so on. The effective depth is the lower of the requested one and the one
+  the 200 object budget allows.
+
+Success returns the `hierarchy` property:
+
+```yaml
+scene: "Assets/Scenes/Main.unity"
+mode: Edit
+maxDepth: 3
+depthLimit: "dynamic"
+rootCount: 87
+rootsOmitted: 37
+gameObjects:
+  - "Main Camera" [id=-4312]
+  - "Canvas" [id=-4320]:
+    - "Panel" [id=-4330] [active=false] [omittedChildCount=63]:
+      - "Button 01" [id=-4340]
+    - "Overlay" [id=-4331] [omittedChildCount=8]
+```
+
+- `scene` is the asset path, falling back to the name for a scene that was never saved and for
+  `DontDestroyOnLoad`.
+- `maxDepth` is the depth that was actually written.
+- `depthLimit` is `dynamic` or `requested`, and **appears only when the depth actually cut something
+  off**. It is the single place the depth limit is explained; individual objects only carry
+  `omissionReason="depth_limit"`.
+- `rootsOmitted` appears only when the scene has more than 50 root objects.
+- Each object carries its name and `id`. `active` appears only when the object is inactive, and
+  reports its own state rather than the resolved one.
+- `omittedChildCount` is the only thing an object says about its missing children, and appears only
+  when some are missing. It needs no accompanying reason: an object stopped by the depth limit lists
+  no children at all, while one stopped by the child limit lists the first 20 and counts the rest,
+  and the depth itself is stated once in the header. No comments are ever emitted.
+- A scene with no visible roots emits `gameObjects: []`.
+
+#### GameObjectHierarchy (Value: 119)
+
+Request:
+
+```json
+{"requestId":"go-2","id":-4320,"depth":2}
+```
+
+Exactly one of `id` or `path` is required; `scene` and `depth` behave as above.
+
+Success returns the same `hierarchy` YAML, with the requested object as the single root, `path` added
+after `scene`, and `rootCount` and `rootsOmitted` omitted:
+
+```yaml
+scene: "Assets/Scenes/Main.unity"
+path: "Canvas/Panel"
+mode: Edit
+maxDepth: 2
+gameObjects:
+  - "Panel" [id=-4330]:
+    - "Button" [id=-4331]
+```
+
+#### GameObjectFind (Value: 120)
+
+Request:
+
+```json
+{"requestId":"go-3","name":"Button","match":"contains","scene":"Assets/Scenes/Main.unity"}
+```
+
+- Exactly one of `name` or `path` is required.
+- `match` is optional and defaults to `exact`. `contains` matches a substring and **applies to `name`
+  only**; combining it with `path` returns `invalid_request`, because a path that is not matched in
+  full is not a path. Both modes are case sensitive.
+- `scene` is optional and narrows the search to one scene.
+
+Success returns the `gameObjects` property:
+
+```yaml
+query: "Button"
+queryKind: "name"
+match: "contains"
+count: 3
+gameObjects:
+  - name: "Button"
+    id: -4312
+    scene: "Assets/Scenes/Main.unity"
+    path: "Canvas/Panel/Button"
+    active: true
+    activeInHierarchy: true
+    componentCount: 4
+```
+
+- `count` is the real number of matches. At most 100 are listed, and `matchesOmitted` appears when
+  some were left out.
+- No match is not an error: `count: 0` and `gameObjects: []` are returned.
+
+#### GameObjectInspect (Value: 121)
+
+Request:
+
+```json
+{"requestId":"go-4","path":"Level/Player","fullDetailComponents":["Camera"]}
+```
+
+Exactly one of `id` or `path` is required, and `scene` narrows a path lookup.
+
+`fullDetailComponents` is an optional array of component type names, matched case sensitively against
+either the short type name (`Camera`) or the full one (`UnityEngine.Camera`). Those components report
+every instance member they have, public and non-public, instead of the default selection described
+below.
+
+Success returns the `gameObject` property:
+
+```yaml
+name: "Player"
+id: -4312
+scene: "Assets/Scenes/Main.unity"
+path: "Level/Player"
+mode: Edit
+active: true
+activeInHierarchy: true
+tag: "Player"
+layer: 8
+layerName: "Player"
+isStatic: false
+parentId: -4300
+childCount: 3
+prefab:
+  status: Connected
+  assetPath: "Assets/Prefabs/Player.prefab"
+components:
+  - type: "Transform"
+    id: -4314
+    detail: "common"
+    members:
+      eulerAngles: [0,0,0]
+      localEulerAngles: [0,0,0]
+      localPosition: [0,1,0]
+      localScale: [1,1,1]
+      lossyScale: [1,1,1]
+      position: [0,1,0]
+  - type: "MeshRenderer"
+    id: -4315
+    detail: "common"
+    members:
+      receiveShadows: true
+      sharedMaterial: "Material(name=Rock,instanceId=-8801)"
+  - type: "PlayerController"
+    id: -4316
+    enabled: true
+    members:
+      speed: 5
+```
+
+- `parentId` is omitted for a root object.
+- `prefab` is omitted entirely unless the object is part of a prefab instance.
+- The transform is a component like any other and is listed first, as Unity always returns it first.
+- Each component reports `type`, its own instance `id`, `enabled` when it is a `Behaviour`, `members`,
+  and sometimes `detail`.
+- `members` is sorted by name and holds instance fields and readable properties. Members declared by
+  `Component`, `Behaviour`, `MonoBehaviour` and `UnityEngine.Object` are always left out, because they
+  are identical noise on every component. Which of the rest are reported depends on `detail`:
+
+  | `detail` | Meaning |
+  |----------|---------|
+  | absent | Every public instance member. This is what user scripts and less common components get. |
+  | `common` | A curated selection for a well known built-in component, roughly what the inspector shows. Reflecting over `Camera`, for example, yields around sixty members including several matrices, which buries the dozen values that describe how the camera is set up. Ask for the component in `fullDetailComponents` to see the rest. |
+  | `full` | Every instance member, public and non-public, because `fullDetailComponents` named this component. |
+
+  Curated lists exist for the transforms, renderers, colliders, rigidbodies, `Camera`, `Light`,
+  `MeshFilter`, `Animator`, `AudioSource`, `Canvas`, `CanvasGroup`, `UIDocument` and the common uGUI
+  components, and a type inherits the lists of its base types.
+- Members that Unity marks obsolete are skipped, and so are the getters that create an object as a
+  side effect (`material`, `materials`, `mesh`); their `shared` counterparts carry the same
+  information without dirtying the scene.
+- A value that references another Unity object is written as
+  `"Type(name=X,instanceId=N)"`, so an id from an inspection can be fed straight back into a request.
+  Collections list at most 20 items and then summarize the rest.
+- A member whose getter throws is reported as `"<error: ExceptionType: message>"` rather than failing
+  the request, and a component whose script is missing appears as `type: "<missing script>"`.
+
+#### Scene and GameObject Inspection Error Codes
+
+In addition to the shared `invalid_request`, `forbidden` and `internal_error` codes:
+
+| Code | Meaning |
+|------|---------|
+| `not_found` | No open scene, GameObject or instance id matches the request |
+| `ambiguous_path` | The path matches more than one GameObject; the message lists the candidate ids |
 
 #### RetrieveTestList (Value: 23)
 - **Format**: Test mode string ("EditMode" or "PlayMode")
