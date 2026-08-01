@@ -621,16 +621,25 @@ Supported input forms include:
 | `float`, `double`, `decimal` | `0.25`, `1.5e2`, `25%`, optional `f`/`d`/`m` suffix |
 | Enum and flags | Case-insensitive names, numeric values, and names separated by `,`, `|`, or `+`; spaces, hyphens, and underscores in names are ignored |
 | `Color`, `Color32` | `#RGB`, `#RGBA`, `#RRGGBB`, `#RRGGBBAA`, `rgb(...)`, `rgba(...)`, numeric component lists, and common color names |
-| `Vector2/3/4`, `Vector2Int/3Int` | `[1,2]`, `(1, 2, 3)`, `x=1; y=2; z=3` |
-| `Rect`, `RectInt` | `[x,y,width,height]` or a labeled four-component form |
+| `Vector2/3/4`, `Vector2Int/3Int` | `(1, 2)`, `(1, 2, 3)`, `x=1; y=2; z=3` |
+| `Rect`, `RectInt` | `(x, y, width, height)` or a labeled four-component form |
 | `Bounds`, `BoundsInt` | Six components: center/position followed by size |
 | `Quaternion` | Four numeric components |
 | `LayerMask` | Any supported integer form |
 | `Guid` | Standard GUID strings |
 | Other types | A public static `Parse(string, IFormatProvider)`, `Parse(string)`, or public string constructor, when available |
 
+Multi-component types are written as a component list. The separators are not significant, only the
+numbers are read in order, so `(1, 2, 3)`, `1 2 3` and `[1,2,3]` are all the same `Vector3`. Prefer
+the tuple form when writing a value by hand, because a bracketed list reads as a collection and
+these types are not collections. The bracketed form stays accepted, which is what makes a value
+read back from an inspection, where vectors are printed as `[1,2,3]`, usable as an argument
+unchanged.
+
 Null is accepted only for reference types and nullable value types. Unity object references are not
-resolved from strings.
+resolved from strings. Collection types such as `int[]` and `List<string>` have no string
+conversion at all and are rejected with `unsupported_value_type`; take a component list into a
+`Vector3`, or a single string the method splits itself.
 
 The same conversion is used by [InvokeMethod](#invokemethod-value-123) for its arguments, so the
 accepted forms are identical in both messages.
@@ -1251,7 +1260,7 @@ because one would be trivial to work around and would only suggest a guarantee t
 | `unsupported_method` | Every matching overload has a signature that cannot be invoked |
 | `invalid_value` | An argument cannot be converted to its parameter type |
 | `unsupported_value_type` | A parameter has a type with no string conversion |
-| `invocation_failed` | The method itself threw. The message carries the exception type and message, the full stack trace goes to the package log |
+| `invocation_failed` | The method itself threw. The message carries the exception type and message of the cause |
 | `forbidden` | Non-loopback caller |
 | `internal_error` | An unexpected automation exception occurred |
 

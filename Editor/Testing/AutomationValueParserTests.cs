@@ -21,6 +21,7 @@ namespace Hackerzhuli.Code.Editor.Testing
             AssertConverted(typeof(double), "1.5e2", 150d);
             AssertConverted(typeof(SampleMode), "multi-line", SampleMode.MultiLine);
             AssertConverted(typeof(Vector2Int), "[4, -5]", new Vector2Int(4, -5));
+            AssertConverted(typeof(Vector3), "(1, -2.5, 3e1)", new Vector3(1f, -2.5f, 30f));
             AssertConverted(typeof(Vector3), "x=1; y=-2.5; z=3e1",
                 new Vector3(1f, -2.5f, 30f));
             AssertConverted(typeof(Rect), "{x:1,y:2,width:3,height:4}",
