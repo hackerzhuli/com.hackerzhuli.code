@@ -10,6 +10,9 @@ The protocol uses UDP as the primary transport with automatic fallback to TCP fo
 
 ## Network Configuration
 
+### Availability
+The service runs in every main Unity Editor process that has this package installed, whether or not the package is the current external script editor in Preferences > External Tools. Asset import worker processes and secondary processes do not run it, so the port stays tied to the main editor process.
+
 ### Port Calculation
 - **Messaging Port**: `58000 + (ProcessId % 1000)`
 - **Protocol**: UDP (primary), TCP (fallback for large messages)
@@ -129,13 +132,15 @@ Detailed value formats for some of the types:
 - **Description**: Requests Unity to refresh the asset database. Unity will respond with a Refresh message to the original client when the refresh operation is complete or if it could not be started.
 - **Response Values**:
   - **Empty string**: Refresh was successfully started and completed
-  - **Error message**: Refresh was not started, with reason (e.g., "Refresh not started: Unity is in play mode", "Refresh not started: Unity is in safe mode")
+  - **Error message**: Refresh was not started, with reason (e.g., "Refresh not started: Unity is in safe mode", or a message explaining that Unity is in play mode with a `Script Changes While Playing` setting that would recompile immediately)
 - **Important Notes**:
   - **Refresh vs Compilation**: A refresh finished notification does NOT mean compilation has finished. These are separate operations:
     - If compilation is needed after refresh, the refresh will finish BEFORE compilation starts
     - If no compilation is needed, the refresh will finish after all asset database operations are complete (including importing assets, etc.)
   - This behavior follows Unity Editor's standard asset refresh workflow
   - For compilation completion notifications, use the `CompilationFinished` message type (Value: 100)
+  - **Play Mode**: A refresh in play mode is only started when Unity's `Script Changes While Playing` preference (Preferences > General) is set to `Recompile After Finished Playing`. With the other two options the refresh would recompile immediately, which either reloads the domain under the running game or stops play mode, so it is refused instead.
+    - When a refresh in play mode is started, Unity holds off compiling scripts until play mode ends. The refresh imports assets and finishes normally, but no `CompilationStarted` or `CompilationFinished` message will follow and no compile errors can be reported for it. Clients should not wait for compilation events after a refresh that succeeded in play mode.
 - **Usage**: Clients can use this to trigger asset database refresh and get notified when the refresh operation specifically is complete, allowing them to proceed with operations that depend on the asset database being up-to-date. Clients should check if the response is empty to determine if the refresh was successful.
 
 #### CompilationStarted (Value: 105)

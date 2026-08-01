@@ -42,9 +42,6 @@ namespace Hackerzhuli.Code.Editor
                 AsyncOperation<Dictionary<string, ICodeEditorInstallation>>.Run(DiscoverInstallations);
         }
 
-        internal static bool IsEnabled => Unity.CodeEditor.CodeEditor.CurrentEditor is CodeEditor &&
-                                          UnityInstallation.IsMainUnityEditorProcess;
-
         Unity.CodeEditor.CodeEditor.Installation[] IExternalCodeEditor.Installations => _discoverInstallations
             .Result
             .Values

@@ -1,5 +1,10 @@
 # Code Editor Package for Visual Studio
 
+## [1.3.1] - 2026-08-01
+Change:
+- The messaging service now runs in every Unity Editor it is installed in, instead of only when this package is the current external script editor; extensions and MCP servers can talk to Unity without the user having to change that preference, while script opening and project file generation stay tied to the editor Unity is actually configured with
+- A refresh of the asset database is no longer refused outright in play mode: when Unity's `Script Changes While Playing` preference is set to `Recompile After Finished Playing`, compilation is held off until play mode ends, so the refresh cannot lose the play session and is allowed to run; the other two settings would recompile immediately and are still refused, now with a message that says which setting is in the way
+
 ## [1.3.0] - 2026-08-01
 Feature:
 - Added scene and GameObject messages to see what is inside the open scenes: the GameObject tree of a scene, the descendant tree of one GameObject, a search for GameObjects by name or by exact path, and the properties and component members of one GameObject

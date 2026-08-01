@@ -56,6 +56,8 @@ For pull requests:
 ## Installation
 This package can be installed alongside the official Visual Studio Editor package without conflicts. Simply install this package through the Package Manager by git url or through open upm.
 
+Installing it is enough for extensions and MCP servers to talk to Unity Editor, you don't have to select this package as the external script editor. That preference only decides which editor Unity opens your scripts with and which project files get generated.
+
 ## Screenshots
 VS Code and its popular forks detected by Unity Editor:
 ![image](./Images/Discover%20VS%20Code%20and%20forks.png)

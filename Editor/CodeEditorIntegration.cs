@@ -21,7 +21,10 @@ namespace Hackerzhuli.Code.Editor
 
         static CodeEditorIntegration()
         {
-            if (!CodeEditor.IsEnabled)
+            // The messaging service is not tied to being the current external code editor:
+            // MCP servers and extensions talk to it regardless of that preference.
+            // Only worker and secondary processes must stay out, they would fight over the port.
+            if (!UnityInstallation.IsMainUnityEditorProcess)
                 return;
 
             // Create or find the core ScriptableObject instance
@@ -61,7 +64,7 @@ namespace Hackerzhuli.Code.Editor
         /// </summary>
         internal static void BroadcastMessage(MessageType type, string value)
         {
-            _core.BroadcastMessage(type, value);
+            _core?.BroadcastMessage(type, value);
         }
     }
 }

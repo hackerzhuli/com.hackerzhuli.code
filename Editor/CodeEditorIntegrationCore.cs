@@ -383,17 +383,17 @@ namespace Hackerzhuli.Code.Editor
         /// </returns>
         private string RefreshAssetDatabase()
         {
-            // Handle auto-refresh based on kAutoRefreshMode: 0=disabled, 1=enabled, 2=enabled outside play mode
-            // var autoRefreshMode = EditorPrefs.GetInt("kAutoRefreshMode", 1);
-
-            // if we are playing, we don't force a refresh
-            // We will ignore the setting `autoRefreshMode` because this is not auto refresh, this is refresh requested explicitly
-            if (EditorApplication.isPlaying)
-                return "Refresh not started: Unity is in play mode";
-            
             if (UnityInstallation.IsInSafeMode)
                 return "Refresh not started: Unity is in safe mode";
-            
+
+            // A refresh in play mode is only safe when Unity holds off compiling scripts until play mode ends.
+            // With the other two options the refresh would recompile right away, which either reloads the domain
+            // under the running game or stops play mode, in both cases losing the play session.
+            if ((EditorApplication.isPlaying || EditorApplication.isPlayingOrWillChangePlaymode) &&
+                !ScriptChangesDuringPlay.IsCompilationDeferred)
+                return
+                    "Refresh not started: Unity is in play mode and 'Script Changes While Playing' (Preferences > General) is not set to 'Recompile After Finished Playing', so a refresh would reload the domain or stop play mode. Stop play mode and try again, or ask the user to change that setting.";
+
             AssetDatabase.Refresh();
             return ""; // Empty string indicates successful refresh
         }
@@ -547,7 +547,7 @@ namespace Hackerzhuli.Code.Editor
      
         private void EnsureMessengerInitialized()
         {
-            if (_messenger != null || !CodeEditor.IsEnabled)
+            if (_messenger != null || !UnityInstallation.IsMainUnityEditorProcess)
                 return;
 
             var messagingPort = MessagingPort();

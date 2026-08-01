@@ -17,7 +17,7 @@ namespace Hackerzhuli.Code.Editor.Testing
 
         static TestRunnerApiListener()
         {
-            if (!CodeEditor.IsEnabled)
+            if (!UnityInstallation.IsMainUnityEditorProcess)
                 return;
 
             _testRunnerApi = ScriptableObject.CreateInstance<TestRunnerApi>();
