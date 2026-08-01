@@ -1,5 +1,15 @@
 # Code Editor Package for Visual Studio
 
+## [1.5.0] - 2026-08-01
+Feature:
+- Added an invoke message that calls a public static method of the project by name, in both edit and play mode, so a client can trigger game logic instead of only observing it; arguments are passed as strings and converted to the parameter types the same way a UI field value is, and a return value comes back as a string in the invariant culture
+- Overloads are resolved without the client having to spell out parameter types: the candidates taking the right number of arguments are tried in a fixed order and the first one that accepts them is used, so the same request always reaches the same method
+- A UI click can now use the right or middle mouse button through a new `button` property, whose values are Unity's own
+
+Change:
+- A click is now one implementation for every element and every button. A `Button` used to be activated through a submit event instead of pointer events, which was a second path that behaved differently and could not express a button at all; it now receives the same synthetic move, down and up as anything else, and its `Clickable` fires `clicked` exactly once for a left click
+- Contextual menus still do not open on a runtime panel, because Unity only assigns a contextual menu manager to editor panels, so a right click delivers the pointer events and nothing more; this is documented in the protocol rather than worked around
+
 ## [1.4.0] - 2026-08-01
 Feature:
 - Added a visual snapshot message that reports what a camera is actually drawing: the 2D and 3D GameObjects that can be seen, each with the rectangle it covers on screen, as a hierarchy that also carries the ancestors those objects live under, so a client learns both what is on screen and where it sits in the scene

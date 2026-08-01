@@ -60,9 +60,21 @@ namespace Hackerzhuli.Code.PlayModeTests
                 var pointerDowns = 0;
                 var pointerUps = 0;
                 var enters = 0;
+                var lastDownButton = -1;
+                var lastUpButton = -1;
                 button.clicked += () => clicks++;
-                button.RegisterCallback<PointerDownEvent>(_ => pointerDowns++);
-                button.RegisterCallback<PointerUpEvent>(_ => pointerUps++);
+                // Clickable handles these in the target phase and stops immediate propagation, so a
+                // callback registered after it would never run. Trickle down happens first.
+                button.RegisterCallback<PointerDownEvent>(evt =>
+                {
+                    pointerDowns++;
+                    lastDownButton = evt.button;
+                }, TrickleDown.TrickleDown);
+                button.RegisterCallback<PointerUpEvent>(evt =>
+                {
+                    pointerUps++;
+                    lastUpButton = evt.button;
+                }, TrickleDown.TrickleDown);
                 button.RegisterCallback<PointerEnterEvent>(_ => enters++);
 
                 yield return null;
@@ -206,11 +218,38 @@ namespace Hackerzhuli.Code.PlayModeTests
                 InvokeRequest(serviceType, service, "UiClick",
                     $"{{\"requestId\":\"click\",\"ref\":\"{reference}\"}}");
                 Assert.That(Responses[^1], Does.Contain("\"ok\":true"));
+                Assert.That(clicks, Is.EqualTo(1),
+                    "A synthetic left button down and up must drive the Button's Clickable exactly once.");
+                Assert.That(pointerDowns, Is.EqualTo(1),
+                    "Every element and every button takes the same synthetic pointer path.");
+                Assert.That(pointerUps, Is.EqualTo(1));
+                Assert.That(lastDownButton, Is.EqualTo(0));
+                Assert.That(lastUpButton, Is.EqualTo(0));
+
+                InvokeRequest(serviceType, service, "UiClick",
+                    $"{{\"requestId\":\"right-click\",\"ref\":\"{reference}\",\"button\":1}}");
+                Assert.That(Responses[^1], Does.Contain("\"ok\":true"));
+                Assert.That(pointerDowns, Is.EqualTo(2));
+                Assert.That(pointerUps, Is.EqualTo(2));
+                Assert.That(lastDownButton, Is.EqualTo(1));
+                Assert.That(lastUpButton, Is.EqualTo(1));
+                Assert.That(clicks, Is.EqualTo(1),
+                    "Clickable only activates on the left button, so a right click is not a click.");
+
+                InvokeRequest(serviceType, service, "UiClick",
+                    $"{{\"requestId\":\"middle-click\",\"ref\":\"{reference}\",\"button\":2}}");
+                Assert.That(Responses[^1], Does.Contain("\"ok\":true"));
+                Assert.That(pointerDowns, Is.EqualTo(3));
+                Assert.That(lastDownButton, Is.EqualTo(2));
                 Assert.That(clicks, Is.EqualTo(1));
-                Assert.That(pointerDowns, Is.EqualTo(0),
-                    "Button refs should use submit activation, not synthetic pointer down.");
-                Assert.That(pointerUps, Is.EqualTo(0),
-                    "Button refs should use submit activation, not synthetic pointer up.");
+
+                InvokeRequest(serviceType, service, "UiClick",
+                    $"{{\"requestId\":\"bad-button\",\"ref\":\"{reference}\",\"button\":3}}");
+                Assert.That(Responses[^1], Does.Contain("\"code\":\"invalid_request\""));
+                InvokeRequest(serviceType, service, "UiClick",
+                    $"{{\"requestId\":\"bad-button-type\",\"ref\":\"{reference}\",\"button\":\"right\"}}");
+                Assert.That(Responses[^1], Does.Contain("\"code\":\"invalid_request\""));
+                Assert.That(pointerDowns, Is.EqualTo(3), "A rejected request must not send events.");
 
                 var responseCount = Responses.Count;
                 InvokeRequest(serviceType, service, "GameViewScreenshot",
@@ -229,6 +268,79 @@ namespace Hackerzhuli.Code.PlayModeTests
                 Assert.That(screenshot.ok, Is.True, Responses[^1]);
                 Assert.That(File.Exists(screenshot.path), Is.True);
                 Assert.That(new FileInfo(screenshot.path).Length, Is.GreaterThan(20));
+            }
+            finally
+            {
+                if (service != null)
+                    serviceType.GetMethod("Dispose", BindingFlags.Instance | BindingFlags.Public)
+                        ?.Invoke(service, null);
+                UnityEngine.Object.Destroy(gameObject);
+                UnityEngine.Object.Destroy(panelSettings);
+            }
+        }
+
+        /// <summary>
+        ///     Pins the Unity behaviour that decides how far right click support can go: a right click
+        ///     reaches the element, but no contextual menu can open on a runtime panel.
+        /// </summary>
+        /// <remarks>
+        ///     <c>ContextualMenuManipulator</c> activates on a right button PointerUp, then asks
+        ///     <c>panel.contextualMenuManager</c> to display the menu. <c>Panel</c>'s constructor leaves
+        ///     that null and only <c>EditorPanel</c> assigns one, so on a runtime panel the manipulator
+        ///     runs and silently displays nothing. Sending a <c>ContextClickEvent</c> would not change
+        ///     this, nothing on a runtime panel listens for it.
+        /// </remarks>
+        [UnityTest]
+        public IEnumerator RightClick_ReachesTheElementButOpensNoContextualMenu()
+        {
+            Responses.Clear();
+            var panelSettings = ScriptableObject.CreateInstance<PanelSettings>();
+            var gameObject = new GameObject("Context Menu Test UIDocument");
+            object service = null;
+            Type serviceType = null;
+            try
+            {
+                var document = gameObject.AddComponent<UIDocument>();
+                document.panelSettings = panelSettings;
+                var target = new VisualElement { name = "context-target" };
+                target.style.width = 200;
+                target.style.height = 100;
+                document.rootVisualElement.Add(target);
+
+                var menuPopulated = 0;
+                var rightUps = 0;
+                target.AddManipulator(new ContextualMenuManipulator(populate =>
+                    menuPopulated++));
+                target.RegisterCallback<PointerUpEvent>(evt =>
+                {
+                    if (evt.button == 1)
+                        rightUps++;
+                });
+
+                yield return null;
+                yield return null;
+                Assert.That(document.rootVisualElement.panel, Is.Not.Null);
+
+                serviceType = AppDomain.CurrentDomain.GetAssemblies()
+                    .Select(assembly => assembly.GetType(
+                        "Hackerzhuli.Code.Editor.GameViewAutomationService", false))
+                    .FirstOrDefault(type => type != null);
+                Assert.That(serviceType, Is.Not.Null, "The Editor automation service assembly was not loaded.");
+                service = CreateService(serviceType);
+
+                InvokeRequest(serviceType, service, "UiSnapshot", "{\"requestId\":\"context-snapshot\"}");
+                var response = JsonUtility.FromJson<SnapshotResponse>(Responses[^1]);
+                Assert.That(response.ok, Is.True, Responses[^1]);
+                var reference = FindRef(response.snapshot, "VisualElement", "context-target");
+
+                InvokeRequest(serviceType, service, "UiClick",
+                    $"{{\"requestId\":\"context-click\",\"ref\":\"{reference}\",\"button\":1}}");
+                Assert.That(Responses[^1], Does.Contain("\"ok\":true"));
+
+                Assert.That(rightUps, Is.EqualTo(1),
+                    "The element must receive the right button release.");
+                Assert.That(menuPopulated, Is.EqualTo(0),
+                    "A runtime panel has no ContextualMenuManager, so no menu can be built.");
             }
             finally
             {

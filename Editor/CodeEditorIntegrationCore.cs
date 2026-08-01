@@ -477,6 +477,9 @@ namespace Hackerzhuli.Code.Editor
                 case MessageType.GameObjectVisualSnapshot:
                     VisualSnapshotAutomation.Process(message, Answer);
                     break;
+                case MessageType.InvokeMethod:
+                    MethodAutomation.Process(message, Answer);
+                    break;
             }
         }
 

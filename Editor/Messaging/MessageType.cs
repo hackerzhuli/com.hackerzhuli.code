@@ -278,6 +278,17 @@ namespace Hackerzhuli.Code.Editor.Messaging
         ///     Request the screen space bounds of the GameObjects a camera actually renders, as a hierarchy.
         ///     Only available in Play Mode.
         /// </summary>
-        GameObjectVisualSnapshot = 122
+        GameObjectVisualSnapshot = 122,
+
+        /// <summary>
+        ///     Invoke a public static method, converting the string arguments and the return value.
+        ///     Available in Edit and Play Mode.
+        /// </summary>
+        /// <remarks>
+        ///     This runs arbitrary project code inside the Editor. Like every other automation message
+        ///     its only trust boundary is the loopback check, which is what makes that acceptable: a
+        ///     caller that can reach this port can already run code on the machine.
+        /// </remarks>
+        InvokeMethod = 123
     }
 }

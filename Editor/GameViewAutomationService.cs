@@ -6,7 +6,6 @@ using System.Linq;
 using System.Net;
 using System.Reflection;
 using System.Text;
-using System.Text.RegularExpressions;
 using Hackerzhuli.Code.Editor.Messaging;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
@@ -15,6 +14,7 @@ using UnityEngine;
 using UnityEngine.UIElements;
 using MessageType = Hackerzhuli.Code.Editor.Messaging.MessageType;
 using static Hackerzhuli.Code.Editor.AutomationValueFormatter;
+using static Hackerzhuli.Code.Editor.AutomationValueParser;
 
 namespace Hackerzhuli.Code.Editor
 {
@@ -27,9 +27,6 @@ namespace Hackerzhuli.Code.Editor
         private const double ScreenshotTimeoutSeconds = 10.0;
         private const int HierarchyElementLimit = 200;
         private static readonly byte[] PngSignature = { 137, 80, 78, 71, 13, 10, 26, 10 };
-        private static readonly Regex NumericComponentPattern = new(
-            @"[-+]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][-+]?\d+)?",
-            RegexOptions.Compiled | RegexOptions.CultureInvariant);
         // These CreateProperty members are declared by VisualElement or one of its base types.
         // They are either
         // represented more clearly in the debugger-style sections below, duplicate other
@@ -219,12 +216,33 @@ namespace Hackerzhuli.Code.Editor
             _refElements.Clear();
         }
 
+        /// <summary>
+        ///     Moves the synthetic pointer onto an element, and optionally presses and releases a
+        ///     mouse button on it.
+        /// </summary>
+        /// <param name="message">The incoming message.</param>
+        /// <param name="request">The parsed request.</param>
+        /// <param name="requestId">The request id to echo back.</param>
+        /// <param name="click">True to press and release, false to only move.</param>
+        /// <remarks>
+        ///     Every element and every mouse button takes this one path. Activating a
+        ///     <see cref="Button" /> through its <c>NavigationSubmitEvent</c> instead would be a
+        ///     second, differently behaving implementation of the same request, and it could not
+        ///     express a button at all.
+        /// </remarks>
         private void ProcessPointerAction(Message message, JObject request, JToken requestId, bool click)
         {
             var reference = request.Value<string>("ref");
             if (string.IsNullOrEmpty(reference))
             {
                 ReplyError(message, requestId, "invalid_request", "A non-empty ref is required.");
+                return;
+            }
+
+            var mouseButton = 0;
+            if (click && !TryReadMouseButton(request, out mouseButton, out var buttonError))
+            {
+                ReplyError(message, requestId, "invalid_request", buttonError);
                 return;
             }
 
@@ -260,28 +278,55 @@ namespace Hackerzhuli.Code.Editor
                 return;
             }
 
-            if (click && element is Button button)
-            {
-                SendButtonSubmit(button);
-                ReplySuccess(message, requestId);
-                return;
-            }
-
-            SendMouseEvent(element.panel, EventType.MouseMove, point);
+            // A move never carries a button, Unity forces it to -1.
+            SendMouseEvent(element.panel, EventType.MouseMove, point, 0);
             if (click)
-            {
-                SendMouseEvent(element.panel, EventType.MouseDown, point);
-                SendMouseEvent(element.panel, EventType.MouseUp, point);
-            }
+                try
+                {
+                    SendMouseEvent(element.panel, EventType.MouseDown, point, mouseButton);
+                }
+                finally
+                {
+                    // PointerDownEvent presses the button in the process wide PointerDeviceState.
+                    // Without the release a throw in between would leave it pressed for every later
+                    // event, synthetic or real.
+                    SendMouseEvent(element.panel, EventType.MouseUp, point, mouseButton);
+                }
 
             ReplySuccess(message, requestId);
         }
 
-        private static void SendButtonSubmit(Button button)
+        /// <summary>
+        ///     Reads the optional mouse button of a click request.
+        /// </summary>
+        /// <param name="request">The parsed request.</param>
+        /// <param name="mouseButton">The button index, 0 when the property is absent.</param>
+        /// <param name="error">A human readable reason when the property is not a valid button.</param>
+        /// <returns>True when the request carries no button or a valid one.</returns>
+        /// <remarks>
+        ///     The indices are Unity's own, as used by <see cref="Event.button" />: 0 is the left
+        ///     button, 1 the right one and 2 the middle one.
+        /// </remarks>
+        private static bool TryReadMouseButton(JObject request, out int mouseButton, out string error)
         {
-            using var submit = NavigationSubmitEvent.GetPooled();
-            submit.target = button;
-            button.SendEvent(submit);
+            mouseButton = 0;
+            error = null;
+            var token = request["button"];
+            if (token == null || token.Type == JTokenType.Null)
+                return true;
+
+            if (token.Type != JTokenType.Integer)
+            {
+                error = "button must be an integer: 0 for left, 1 for right, 2 for middle.";
+                return false;
+            }
+
+            mouseButton = token.Value<int>();
+            if (mouseButton is >= 0 and <= 2)
+                return true;
+
+            error = $"button {mouseButton} is not supported, use 0 for left, 1 for right, 2 for middle.";
+            return false;
         }
 
         private void ProcessHierarchy(Message message, JObject request, JToken requestId)
@@ -437,7 +482,7 @@ namespace Hackerzhuli.Code.Editor
                 return;
             }
 
-            if (!TryConvertFieldValue(valueType, input, currentValue, out var converted,
+            if (!TryConvertValue(valueType, input, currentValue, out var converted,
                     out var errorCode, out var conversionError))
             {
                 ReplyError(message, requestId, errorCode, conversionError);
@@ -487,506 +532,6 @@ namespace Hackerzhuli.Code.Editor
             valueType = null;
             valueProperty = null;
             return false;
-        }
-
-        internal static bool TryConvertFieldValue(Type declaredType, string input, object currentValue,
-            out object converted, out string errorCode, out string errorMessage)
-        {
-            converted = null;
-            errorCode = "invalid_value";
-            errorMessage = null;
-            if (declaredType == null)
-            {
-                errorCode = "unsupported_value_type";
-                errorMessage = "The field does not expose a value type.";
-                return false;
-            }
-
-            var nullableType = Nullable.GetUnderlyingType(declaredType);
-            var valueType = nullableType ?? declaredType;
-            if (input == null)
-            {
-                if (!declaredType.IsValueType || nullableType != null)
-                    return true;
-
-                errorMessage = $"A null value cannot be assigned to {GetFriendlyTypeName(declaredType)}.";
-                return false;
-            }
-
-            if (valueType == typeof(string) || valueType == typeof(object))
-            {
-                converted = input;
-                return true;
-            }
-
-            var text = input.Trim();
-            if (nullableType != null &&
-                (text.Length == 0 || string.Equals(text, "null", StringComparison.OrdinalIgnoreCase)))
-                return true;
-
-            if (valueType == typeof(char))
-            {
-                var unquoted = text.Length == 3 &&
-                               (text[0] == '\'' && text[2] == '\'' ||
-                                text[0] == '"' && text[2] == '"')
-                    ? text.Substring(1, 1)
-                    : text;
-                if (unquoted.Length == 1)
-                {
-                    converted = unquoted[0];
-                    return true;
-                }
-
-                return InvalidConversion(declaredType, input, out errorMessage);
-            }
-
-            if (valueType == typeof(bool))
-            {
-                switch (text.ToLowerInvariant())
-                {
-                    case "true":
-                    case "1":
-                    case "yes":
-                    case "y":
-                    case "on":
-                    case "checked":
-                    case "enabled":
-                        converted = true;
-                        return true;
-                    case "false":
-                    case "0":
-                    case "no":
-                    case "n":
-                    case "off":
-                    case "unchecked":
-                    case "disabled":
-                        converted = false;
-                        return true;
-                    default:
-                        return InvalidConversion(declaredType, input, out errorMessage,
-                            "Use true/false, 1/0, yes/no, on/off, or checked/unchecked.");
-                }
-            }
-
-            if (IsIntegerType(valueType))
-            {
-                if (TryParseInteger(text, valueType, out converted))
-                    return true;
-                return InvalidConversion(declaredType, input, out errorMessage,
-                    "Decimal, 0x hexadecimal, and 0b binary forms are supported.");
-            }
-
-            if (valueType == typeof(float) || valueType == typeof(double) ||
-                valueType == typeof(decimal))
-            {
-                if (TryParseFloatingPoint(text, valueType, out converted))
-                    return true;
-                return InvalidConversion(declaredType, input, out errorMessage,
-                    "Invariant decimal, scientific notation, and percentages are supported.");
-            }
-
-            var enumType = valueType == typeof(Enum) && currentValue is Enum currentEnum
-                ? currentEnum.GetType()
-                : valueType;
-            if (enumType.IsEnum)
-            {
-                if (TryParseEnum(enumType, text, out converted))
-                    return true;
-                return InvalidConversion(enumType, input, out errorMessage,
-                    $"Expected one of: {string.Join(", ", Enum.GetNames(enumType))}.");
-            }
-
-            if (TryConvertUnityValue(valueType, text, out converted, out var unityTypeSupported))
-                return true;
-            if (unityTypeSupported)
-                return InvalidConversion(declaredType, input, out errorMessage);
-
-            if (valueType == typeof(Guid) && Guid.TryParse(text, out var guid))
-            {
-                converted = guid;
-                return true;
-            }
-
-            if (typeof(UnityEngine.Object).IsAssignableFrom(valueType))
-            {
-                errorCode = "unsupported_value_type";
-                errorMessage =
-                    $"UiSetValue cannot resolve Unity object references for {GetFriendlyTypeName(valueType)}.";
-                return false;
-            }
-
-            if (TryInvokeStringParser(valueType, text, out converted, out var parserFound))
-                return true;
-            if (parserFound)
-                return InvalidConversion(declaredType, input, out errorMessage);
-
-            errorCode = "unsupported_value_type";
-            errorMessage =
-                $"UiSetValue does not have a string converter for {GetFriendlyTypeName(valueType)}.";
-            return false;
-        }
-
-        private static bool TryConvertUnityValue(Type type, string input, out object converted,
-            out bool supported)
-        {
-            converted = null;
-            supported = type == typeof(Color) || type == typeof(Color32) ||
-                        type == typeof(LayerMask) ||
-                        type == typeof(Vector2) || type == typeof(Vector2Int) ||
-                        type == typeof(Vector3) || type == typeof(Vector3Int) ||
-                        type == typeof(Vector4) || type == typeof(Quaternion) ||
-                        type == typeof(Rect) || type == typeof(RectInt) ||
-                        type == typeof(Bounds) || type == typeof(BoundsInt);
-            if (!supported)
-                return false;
-
-            if (type == typeof(Color) || type == typeof(Color32))
-            {
-                if (!TryParseColor(input, out var color))
-                    return false;
-                converted = type == typeof(Color) ? (object)color : (Color32)color;
-                return true;
-            }
-
-            if (type == typeof(LayerMask))
-            {
-                if (!TryParseInteger(input, typeof(int), out var layerValue))
-                    return false;
-                converted = new LayerMask { value = (int)layerValue };
-                return true;
-            }
-
-            var expectedComponents = type == typeof(Vector2) || type == typeof(Vector2Int) ? 2 :
-                type == typeof(Vector3) || type == typeof(Vector3Int) ? 3 :
-                type == typeof(Vector4) || type == typeof(Quaternion) ||
-                type == typeof(Rect) || type == typeof(RectInt) ? 4 :
-                type == typeof(Bounds) || type == typeof(BoundsInt) ? 6 : 0;
-            if (expectedComponents == 0 ||
-                !TryExtractNumericComponents(input, expectedComponents, out var values))
-                return false;
-
-            if (type == typeof(Vector2))
-                converted = new Vector2(values[0], values[1]);
-            else if (type == typeof(Vector3))
-                converted = new Vector3(values[0], values[1], values[2]);
-            else if (type == typeof(Vector4))
-                converted = new Vector4(values[0], values[1], values[2], values[3]);
-            else if (type == typeof(Quaternion))
-                converted = new Quaternion(values[0], values[1], values[2], values[3]);
-            else if (type == typeof(Rect))
-                converted = new Rect(values[0], values[1], values[2], values[3]);
-            else if (type == typeof(Bounds))
-                converted = new Bounds(
-                    new Vector3(values[0], values[1], values[2]),
-                    new Vector3(values[3], values[4], values[5]));
-            else if (!TryConvertToIntComponents(values, out var integers))
-                return false;
-            else if (type == typeof(Vector2Int))
-                converted = new Vector2Int(integers[0], integers[1]);
-            else if (type == typeof(Vector3Int))
-                converted = new Vector3Int(integers[0], integers[1], integers[2]);
-            else if (type == typeof(RectInt))
-                converted = new RectInt(integers[0], integers[1], integers[2], integers[3]);
-            else if (type == typeof(BoundsInt))
-                converted = new BoundsInt(
-                    new Vector3Int(integers[0], integers[1], integers[2]),
-                    new Vector3Int(integers[3], integers[4], integers[5]));
-            return converted != null;
-        }
-
-        private static bool TryParseInteger(string input, Type type, out object converted)
-        {
-            converted = null;
-            var text = input.Replace("_", string.Empty).Trim();
-            try
-            {
-                decimal number;
-                var negative = text.StartsWith("-", StringComparison.Ordinal);
-                var unsignedText = negative ? text.Substring(1) : text;
-                if (unsignedText.StartsWith("0x", StringComparison.OrdinalIgnoreCase))
-                {
-                    number = Convert.ToUInt64(unsignedText.Substring(2), 16);
-                    if (negative)
-                        number = -number;
-                }
-                else if (unsignedText.StartsWith("0b", StringComparison.OrdinalIgnoreCase))
-                {
-                    number = Convert.ToUInt64(unsignedText.Substring(2), 2);
-                    if (negative)
-                        number = -number;
-                }
-                else if (!decimal.TryParse(text, NumberStyles.Integer,
-                             CultureInfo.InvariantCulture, out number))
-                {
-                    return false;
-                }
-
-                if (decimal.Truncate(number) != number)
-                    return false;
-                if (type == typeof(byte))
-                    converted = checked((byte)number);
-                else if (type == typeof(sbyte))
-                    converted = checked((sbyte)number);
-                else if (type == typeof(short))
-                    converted = checked((short)number);
-                else if (type == typeof(ushort))
-                    converted = checked((ushort)number);
-                else if (type == typeof(int))
-                    converted = checked((int)number);
-                else if (type == typeof(uint))
-                    converted = checked((uint)number);
-                else if (type == typeof(long))
-                    converted = checked((long)number);
-                else if (type == typeof(ulong))
-                    converted = checked((ulong)number);
-                return converted != null && decimal.Truncate(number) == number;
-            }
-            catch (Exception exception) when (exception is FormatException or OverflowException)
-            {
-                return false;
-            }
-        }
-
-        private static bool TryParseFloatingPoint(string input, Type type, out object converted)
-        {
-            converted = null;
-            var text = input.Replace("_", string.Empty).Trim();
-            var percentage = text.EndsWith("%", StringComparison.Ordinal);
-            if (percentage)
-                text = text.Substring(0, text.Length - 1).Trim();
-            if (text.EndsWith("f", StringComparison.OrdinalIgnoreCase) ||
-                text.EndsWith("d", StringComparison.OrdinalIgnoreCase) ||
-                text.EndsWith("m", StringComparison.OrdinalIgnoreCase))
-                text = text.Substring(0, text.Length - 1);
-
-            const NumberStyles styles = NumberStyles.Float | NumberStyles.AllowThousands;
-            if (type == typeof(float) &&
-                float.TryParse(text, styles, CultureInfo.InvariantCulture, out var single))
-            {
-                converted = percentage ? single / 100f : single;
-                return true;
-            }
-
-            if (type == typeof(double) &&
-                double.TryParse(text, styles, CultureInfo.InvariantCulture, out var doubleValue))
-            {
-                converted = percentage ? doubleValue / 100d : doubleValue;
-                return true;
-            }
-
-            if (type == typeof(decimal) &&
-                decimal.TryParse(text, styles, CultureInfo.InvariantCulture, out var decimalValue))
-            {
-                converted = percentage ? decimalValue / 100m : decimalValue;
-                return true;
-            }
-
-            return false;
-        }
-
-        private static bool TryParseEnum(Type enumType, string input, out object converted)
-        {
-            converted = null;
-            if (TryParseInteger(input, Enum.GetUnderlyingType(enumType), out var numeric))
-            {
-                converted = Enum.ToObject(enumType, numeric);
-                return true;
-            }
-
-            var requestedParts = Regex.Split(input, @"\s*[,|+]\s*")
-                .Where(part => !string.IsNullOrWhiteSpace(part))
-                .ToArray();
-            if (requestedParts.Length == 0)
-                return false;
-
-            var names = Enum.GetNames(enumType);
-            var resolvedNames = new List<string>();
-            foreach (var requestedPart in requestedParts)
-            {
-                var normalized = NormalizeIdentifier(requestedPart);
-                var match = names.FirstOrDefault(name =>
-                    string.Equals(NormalizeIdentifier(name), normalized,
-                        StringComparison.OrdinalIgnoreCase));
-                if (match == null)
-                    return false;
-                resolvedNames.Add(match);
-            }
-
-            try
-            {
-                converted = Enum.Parse(enumType, string.Join(",", resolvedNames), true);
-                return true;
-            }
-            catch (ArgumentException)
-            {
-                return false;
-            }
-        }
-
-        private static string NormalizeIdentifier(string value)
-        {
-            return new string(value.Where(char.IsLetterOrDigit)
-                .Select(char.ToLowerInvariant).ToArray());
-        }
-
-        private static bool TryParseColor(string input, out Color color)
-        {
-            var text = input.Trim();
-            var lower = text.ToLowerInvariant();
-            switch (lower)
-            {
-                case "transparent": color = Color.clear; return true;
-                case "black": color = Color.black; return true;
-                case "white": color = Color.white; return true;
-                case "red": color = Color.red; return true;
-                case "green": color = Color.green; return true;
-                case "blue": color = Color.blue; return true;
-                case "yellow": color = Color.yellow; return true;
-                case "cyan": color = Color.cyan; return true;
-                case "magenta": color = Color.magenta; return true;
-                case "gray":
-                case "grey": color = Color.gray; return true;
-            }
-
-            if (Regex.IsMatch(text, @"^[0-9a-fA-F]{3,4}$|^[0-9a-fA-F]{6}$|^[0-9a-fA-F]{8}$"))
-                text = string.Concat("#", text);
-            if (ColorUtility.TryParseHtmlString(text, out color))
-                return true;
-
-            if (!TryExtractNumericComponents(text, 3, 4, out var values))
-            {
-                color = default;
-                return false;
-            }
-
-            var byteRgb = values.Take(3).Any(component => component > 1f);
-            var red = byteRgb ? values[0] / 255f : values[0];
-            var green = byteRgb ? values[1] / 255f : values[1];
-            var blue = byteRgb ? values[2] / 255f : values[2];
-            var alpha = values.Length == 4
-                ? values[3] > 1f ? values[3] / 255f : values[3]
-                : 1f;
-            if (new[] { red, green, blue, alpha }.Any(component => component < 0f || component > 1f))
-            {
-                color = default;
-                return false;
-            }
-
-            color = new Color(red, green, blue, alpha);
-            return true;
-        }
-
-        private static bool TryExtractNumericComponents(string input, int expectedCount,
-            out float[] values)
-        {
-            return TryExtractNumericComponents(input, expectedCount, expectedCount, out values);
-        }
-
-        private static bool TryExtractNumericComponents(string input, int minimumCount,
-            int maximumCount, out float[] values)
-        {
-            var matches = NumericComponentPattern.Matches(input);
-            if (matches.Count < minimumCount || matches.Count > maximumCount)
-            {
-                values = null;
-                return false;
-            }
-
-            values = new float[matches.Count];
-            for (var index = 0; index < matches.Count; index++)
-                if (!float.TryParse(matches[index].Value, NumberStyles.Float,
-                        CultureInfo.InvariantCulture, out values[index]))
-                {
-                    values = null;
-                    return false;
-                }
-            return true;
-        }
-
-        private static bool TryConvertToIntComponents(float[] values, out int[] integers)
-        {
-            integers = new int[values.Length];
-            for (var index = 0; index < values.Length; index++)
-            {
-                if (values[index] < int.MinValue || values[index] > int.MaxValue ||
-                    !Mathf.Approximately(values[index], Mathf.Round(values[index])))
-                {
-                    integers = null;
-                    return false;
-                }
-                integers[index] = Mathf.RoundToInt(values[index]);
-            }
-            return true;
-        }
-
-        private static bool TryInvokeStringParser(Type type, string input, out object converted,
-            out bool parserFound)
-        {
-            converted = null;
-            parserFound = false;
-            try
-            {
-                var parseWithProvider = type.GetMethod("Parse",
-                    BindingFlags.Public | BindingFlags.Static, null,
-                    new[] { typeof(string), typeof(IFormatProvider) }, null);
-                if (parseWithProvider != null)
-                {
-                    parserFound = true;
-                    converted = parseWithProvider.Invoke(null,
-                        new object[] { input, CultureInfo.InvariantCulture });
-                    return true;
-                }
-
-                var parse = type.GetMethod("Parse", BindingFlags.Public | BindingFlags.Static,
-                    null, new[] { typeof(string) }, null);
-                if (parse != null)
-                {
-                    parserFound = true;
-                    converted = parse.Invoke(null, new object[] { input });
-                    return true;
-                }
-
-                var constructor = type.GetConstructor(new[] { typeof(string) });
-                if (constructor == null)
-                    return false;
-                parserFound = true;
-                converted = constructor.Invoke(new object[] { input });
-                return true;
-            }
-            catch (Exception)
-            {
-                return false;
-            }
-        }
-
-        private static bool IsIntegerType(Type type)
-        {
-            return type == typeof(byte) || type == typeof(sbyte) ||
-                   type == typeof(short) || type == typeof(ushort) ||
-                   type == typeof(int) || type == typeof(uint) ||
-                   type == typeof(long) || type == typeof(ulong);
-        }
-
-        private static bool InvalidConversion(Type type, string input, out string errorMessage,
-            string hint = null)
-        {
-            errorMessage =
-                $"Could not convert {QuoteYamlString(input)} to {GetFriendlyTypeName(type)}.";
-            if (!string.IsNullOrEmpty(hint))
-                errorMessage = string.Concat(errorMessage, " ", hint);
-            return false;
-        }
-
-        private static string GetFriendlyTypeName(Type type)
-        {
-            return type.FullName ?? type.Name;
-        }
-
-        private static Exception UnwrapReflectionException(Exception exception)
-        {
-            return exception is TargetInvocationException { InnerException: not null }
-                ? exception.InnerException
-                : exception;
         }
 
         private string BuildRuntimeSnapshot()
@@ -2145,14 +1690,25 @@ namespace Hackerzhuli.Code.Editor
             return false;
         }
 
-        private static void SendMouseEvent(IPanel panel, EventType type, Vector2 point)
+        /// <summary>
+        ///     Sends one step of a pointer interaction through a panel.
+        /// </summary>
+        /// <param name="panel">The runtime panel to dispatch through.</param>
+        /// <param name="type">The step: a move, a button press, or a button release.</param>
+        /// <param name="point">The panel space point to act on.</param>
+        /// <param name="button">The mouse button index, as used by <see cref="Event.button" />.</param>
+        /// <remarks>
+        ///     Both the pointer event and the legacy mouse event are sent, because controls in the
+        ///     wild listen for either one.
+        /// </remarks>
+        private static void SendMouseEvent(IPanel panel, EventType type, Vector2 point, int button)
         {
             var target = panel.Pick(point) ?? panel.visualTree;
             var systemEvent = new Event
             {
                 type = type,
                 mousePosition = point,
-                button = 0,
+                button = button,
                 clickCount = 1
             };
 

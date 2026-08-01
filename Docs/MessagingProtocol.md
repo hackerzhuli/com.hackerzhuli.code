@@ -83,7 +83,7 @@ All available message types:
 | `CompilationStarted` | 105 | Notification that compilation has started | Empty string |
 | `GetCompileErrors` | 106 | Auto-sent after CompilationFinished, or manual request/response for compile error information | Empty string (request) / JSON serialized LogContainer (response) |
 | `UiSnapshot` | 107 | Request a compact snapshot of runtime UI Toolkit documents in the Game View | JSON request / JSON response containing YAML |
-| `UiClick` | 108 | Click a button element | JSON request / JSON success or error response |
+| `UiClick` | 108 | Click an element with the left, right, or middle mouse button | JSON request / JSON success or error response |
 | `UiHover` | 109 | Move the mouse pointer over an element | JSON request / JSON success or error response |
 | `GameViewScreenshot` | 110 | Capture the currently rendered Game View to the project's Temp directory | JSON request / JSON response containing an absolute PNG path |
 | `UiHierarchy` | 111 | Request a type/name/USS-class descendant hierarchy for one element | JSON request / JSON response containing YAML |
@@ -98,6 +98,7 @@ All available message types:
 | `GameObjectFind` | 120 | Find GameObjects by name or by exact path | JSON request / JSON response containing YAML |
 | `GameObjectInspect` | 121 | Get the properties and component members of one GameObject | JSON request / JSON response containing YAML |
 | `GameObjectVisualSnapshot` | 122 | Request the screen space bounds of what a camera draws, as a hierarchy (Play Mode only) | JSON request / JSON response containing YAML |
+| `InvokeMethod` | 123 | Invoke a public static method by name | JSON request / JSON response containing the result as a string |
 
 Note:
 - Message value greater than or equal to 100 means it does not exist in the official package but was added in this package.
@@ -334,22 +335,47 @@ Strings use deterministic YAML escaping and numbers use invariant culture.
 Request:
 
 ```json
-{"requestId":"click-1","ref":"e1"}
+{"requestId":"click-1","ref":"e1","button":1}
 ```
+
+`button` is optional and defaults to `0`. Its values are Unity's own, as used by `Event.button`:
+
+| Value | Button |
+|-------|--------|
+| `0`   | Left   |
+| `1`   | Right  |
+| `2`   | Middle |
+
+Any other value, or a non-integer such as `"right"`, is rejected with `invalid_request` and no event
+is sent.
 
 Before activation, Unity validates that the element is attached, visible, enabled, and has a point
 inside its clipped bounds that is not covered by another element.
 
-Activation depends on the target:
+Every element and every button then takes the same path. Through the runtime panel Unity sends a
+move, a button down, and a button up, each as both the pointer event and the legacy mouse event:
 
-- `Button` and custom `Button` subclasses receive `NavigationSubmitEvent`. Unity's own Button
-  handler invokes its `Clickable`, fires `Button.clicked` once, and manages the temporary
-  `:active` state. Synthetic PointerDown/PointerUp events are not sent for this path.
-- Other elements receive synthetic move, primary-button down, and primary-button up events through
-  the runtime panel. This preserves the normal UI Toolkit event pipeline for controls such as
-  `Toggle`.
+```
+PointerMoveEvent + MouseMoveEvent    (a move never carries a button, Unity forces it to -1)
+PointerDownEvent + MouseDownEvent    (button as requested)
+PointerUpEvent   + MouseUpEvent      (button as requested)
+```
+
+There is no separate path for `Button`. It is activated the way a real click activates it, through
+its `Clickable` manipulator, which fires `Button.clicked` once for a left click and ignores the other
+buttons because its activation filter is the left button. `Clickable` handles these events in the
+target phase and stops immediate propagation, so a callback registered on a `Button` after its
+manipulator only observes them if it registers for the trickle-down phase.
 
 The request does not call user callbacks through reflection.
+
+**Contextual menus do not open on a runtime panel.** `ContextualMenuManipulator` does activate on a
+right-button `PointerUpEvent`, but it then asks `panel.contextualMenuManager` to display the menu,
+and only `EditorPanel` ever assigns one. On the runtime panels this message operates on it is null,
+so the manipulator runs and displays nothing. Sending a `ContextClickEvent` would not change this,
+since nothing on a runtime panel listens for it. A right click therefore delivers the pointer events
+and nothing more, which is enough for UI that handles the right button itself. Verified against
+Unity 6000.0.
 
 #### UiHover (Value: 109)
 
@@ -606,6 +632,9 @@ Supported input forms include:
 Null is accepted only for reference types and nullable value types. Unity object references are not
 resolved from strings.
 
+The same conversion is used by [InvokeMethod](#invokemethod-value-123) for its arguments, so the
+accepted forms are identical in both messages.
+
 `UiSetValue` requires an attached and enabled element but does not require geometric visibility or a
 hittable screen point. A public `isReadOnly=true` property causes `read_only`.
 
@@ -613,7 +642,7 @@ hittable screen point. A public `isReadOnly=true` property causes `read_only`.
 
 | Code | Meaning |
 |------|---------|
-| `invalid_request` | Malformed JSON, missing/invalid fields, invalid `depth`, forbidden screenshot path input, or a non-`BaseField<T>` set-value target |
+| `invalid_request` | Malformed JSON, missing/invalid fields, an invalid `depth` or `button`, forbidden screenshot path input, or a non-`BaseField<T>` set-value target |
 | `not_playing` | The Editor is not in Play Mode, or Play Mode ended before queued capture |
 | `unknown_ref` | The ref is not present in the current automation mapping |
 | `stale_ref` | The mapped element is detached from its runtime panel |
@@ -1121,6 +1150,110 @@ In addition to the shared `invalid_request`, `forbidden` and `internal_error` co
 | `not_playing` | The Editor is not in Play Mode |
 | `not_found` | No enabled camera with the requested name draws to the screen |
 | `no_camera` | No enabled camera draws to the screen at all |
+
+### Method Invocation (Value: 123)
+
+#### InvokeMethod (Value: 123)
+
+Invokes a public static method of the project. It uses the same request and response envelope as the
+other automation messages (loopback only, opaque `requestId`, the response reuses the request message
+type, automatic TCP fallback), and works in **both Edit and Play Mode**, because a static method does
+not depend on anything the player loop provides.
+
+Request:
+
+```json
+{"requestId":"inv-1","typeName":"MyGame.Cheats","methodName":"GiveGold","args":["100"]}
+```
+
+| Property | Required | Meaning |
+|----------|----------|---------|
+| `typeName` | yes | The type declaring the method |
+| `methodName` | yes | The method name |
+| `args` | no | The arguments, **always as strings**. Absent means none. A `null` item passes null |
+
+An argument that is a JSON number or boolean rather than a string is rejected with
+`invalid_request`, because the type of the literal never decides the conversion: the parameter type
+does.
+
+Response:
+
+```json
+{"requestId":"inv-1","ok":true,"result":"100"}
+```
+
+`result` is the return value as a string. A `void` method answers **without** a `result` property at
+all, which is what separates "returned nothing" from a method that returned `null`, reported as
+`"result":null`. A very long result is truncated with a trailing `…(truncated)`.
+
+The value is formatted with `Convert.ToString` in the **invariant culture**, so a float comes back as
+`1.5` and not as `1,5` when the Editor runs in a locale that uses a decimal comma.
+
+##### Resolving the type
+
+`typeName` is looked up in every loaded assembly. Use the full namespace, and `+` before a nested
+type, as in `MyGame.Systems+Debug`. When more than one loaded assembly declares the same name the
+request fails with `ambiguous_type`, and the message lists the assembly qualified names; passing one
+of those as `typeName` resolves it.
+
+##### Resolving the method
+
+Only `public static` methods are considered, including those inherited from a base type. Property,
+event and operator accessors are not. Candidates are then filtered to those taking exactly as many
+parameters as there are arguments.
+
+These signatures cannot be invoked and are reported as `unsupported_method`:
+
+| Rejected | Why |
+|----------|-----|
+| Generic methods | The type arguments cannot be inferred from strings |
+| `ref`, `out`, `in` parameters | There is nothing to write a result back to |
+| Pointer parameters | Not expressible |
+| `params` parameters | The argument count is not the parameter count |
+
+Optional parameters are not filled in, so every parameter needs an argument.
+
+When several overloads take the same number of parameters, the winner is decided **deterministically**
+rather than left to reflection order:
+
+1. Candidates are sorted by their parameter type names.
+2. The first one whose parameters all accept the given arguments wins.
+
+Because the converter is deliberately forgiving, this is predictable but not always the most natural
+choice. Given `Add(int, int)` and `Add(float, float)`, the arguments `["1", "2"]` select the `int`
+overload, since `System.Int32` sorts before `System.Single` and both accept whole numbers, while
+`["1.5", "2.5"]` select the `float` one, since the `int` conversion fails. To pin an overload
+exactly, write an argument the other overload cannot accept, or avoid overloading the method.
+
+##### Converting the arguments
+
+Each argument is converted to its parameter type by the same converter `UiSetValue` uses, so the
+accepted forms are identical, see [UiSetValue](#uisetvalue-value-113). A failure reports which
+argument failed, by index and parameter name.
+
+##### Security
+
+This runs arbitrary project code inside the Editor. Its only trust boundary is the loopback check
+that every automation message shares, which is what makes it acceptable: a caller that can already
+reach this port can run code on the machine anyway. There is no method allow-list or block-list,
+because one would be trivial to work around and would only suggest a guarantee that is not there.
+
+##### Method Invocation Error Codes
+
+| Code | Meaning |
+|------|---------|
+| `invalid_request` | Malformed JSON, a missing `typeName` or `methodName`, or an `args` entry that is not a string |
+| `busy` | Unity is compiling, and a domain reload would drop the response |
+| `unknown_type` | No loaded assembly declares that type |
+| `ambiguous_type` | More than one loaded assembly declares that type |
+| `unsupported_type` | The type is an open generic type |
+| `unknown_method` | No public static method of that name, or none taking that many arguments |
+| `unsupported_method` | Every matching overload has a signature that cannot be invoked |
+| `invalid_value` | An argument cannot be converted to its parameter type |
+| `unsupported_value_type` | A parameter has a type with no string conversion |
+| `invocation_failed` | The method itself threw. The message carries the exception type and message, the full stack trace goes to the package log |
+| `forbidden` | Non-loopback caller |
+| `internal_error` | An unexpected automation exception occurred |
 
 #### RetrieveTestList (Value: 23)
 - **Format**: Test mode string ("EditMode" or "PlayMode")
