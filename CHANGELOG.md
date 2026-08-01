@@ -1,5 +1,11 @@
 # Code Editor Package for Visual Studio
 
+## [1.4.0] - 2026-08-01
+Feature:
+- Added a visual snapshot message that reports what a camera is actually drawing: the 2D and 3D GameObjects that can be seen, each with the rectangle it covers on screen, as a hierarchy that also carries the ancestors those objects live under, so a client learns both what is on screen and where it sits in the scene
+- Coordinates are whole pixels with the origin in the top left corner, matching both the `worldBound` of a UI inspection and the pixels of a Game View screenshot, and depth is expressed in the same unit through a single factor per camera, so an object's distance can be compared to its size
+- Only the renderers that draw content are reported by default, since particles, trails, tilemaps and the like are decoration whose bounds say nothing about what the game is showing; asking for `renderers: "all"` brings them back
+
 ## [1.3.1] - 2026-08-01
 Change:
 - The messaging service now runs in every Unity Editor it is installed in, instead of only when this package is the current external script editor; extensions and MCP servers can talk to Unity without the user having to change that preference, while script opening and project file generation stay tied to the editor Unity is actually configured with

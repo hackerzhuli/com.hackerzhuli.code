@@ -132,8 +132,7 @@ namespace Hackerzhuli.Code.PlayModeTests
                 Assert.That(Regex.IsMatch(hierarchyResponse.hierarchy,
                         @"VisualElement \[name=""display-none-panel""\][^\r\n]*:\r?\n\s+- Label [^\r\n]*\[ref=e\d+\]"),
                     Is.True, hierarchyResponse.hierarchy);
-                Assert.That(hierarchyResponse.hierarchy,
-                    Does.Contain("# 12 more Label children omitted (22 same-type children total)"));
+                Assert.That(hierarchyResponse.hierarchy, Does.Contain("[omittedChildCount=12]"));
                 Assert.That(hierarchyResponse.hierarchy,
                     Does.Contain("[omissionReason=\"similar_children\"]"));
                 Assert.That(Regex.Matches(hierarchyResponse.hierarchy, @"(?m)^\s*- ").Count,

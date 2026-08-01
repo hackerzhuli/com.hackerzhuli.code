@@ -97,6 +97,7 @@ All available message types:
 | `GameObjectHierarchy` | 119 | Request the descendant tree of one GameObject | JSON request / JSON response containing YAML |
 | `GameObjectFind` | 120 | Find GameObjects by name or by exact path | JSON request / JSON response containing YAML |
 | `GameObjectInspect` | 121 | Get the properties and component members of one GameObject | JSON request / JSON response containing YAML |
+| `GameObjectVisualSnapshot` | 122 | Request the screen space bounds of what a camera draws, as a hierarchy (Play Mode only) | JSON request / JSON response containing YAML |
 
 Note:
 - Message value greater than or equal to 100 means it does not exist in the official package but was added in this package.
@@ -1001,6 +1002,125 @@ In addition to the shared `invalid_request`, `forbidden` and `internal_error` co
 |------|---------|
 | `not_found` | No open scene, GameObject or instance id matches the request |
 | `ambiguous_path` | The path matches more than one GameObject; the message lists the candidate ids |
+
+#### GameObjectVisualSnapshot (Value: 122)
+
+Reports what a camera is actually drawing: the 2D and 3D GameObjects that can be seen, with the
+rectangle each covers on screen. This is the scene counterpart of `UiSnapshot`, which only ever sees
+UI Toolkit. uGUI is covered by neither, and needs no filtering, because it draws through
+`CanvasRenderer`, which is not a `Renderer`.
+
+Only available in Play Mode. Outside it there is no Game View to be a screen, and `Screen.width`
+reports the size of whichever editor window happens to be focused.
+
+Request:
+
+```json
+{"requestId":"vis-1","camera":"Main Camera","renderers":"core"}
+```
+
+Both fields are optional.
+
+- `camera` names the camera to describe. Only a camera that draws to the screen can be described in
+  screen coordinates, so one rendering into a `RenderTexture` is never a candidate, not even by name.
+  The default is `Camera.main` when it draws to the screen, otherwise the enabled screen camera with
+  the lowest `depth`, which is the one that draws the scene rather than an overlay.
+- `renderers` is `core` (the default) or `all`, see the renderer table below.
+
+Success returns the `visualSnapshot` property:
+
+```yaml
+screen: [1920,1080]
+camera: "Main Camera" [id=-14562] [projection=Perspective] [depth=0] [pxPerUnit=1039.23]
+count: 12
+gameObjects:
+  - "Level" [id=100]:
+    - "Ground" [id=101] [rect=[-40,700,2000,400]] [z=[648,702]] [renderer=MeshRenderer] [clipped=true]
+    - "Enemies" [id=200]:
+      - "Enemy" [id=201] [rect=[1200,380,120,200]] [z=[610,640]] [renderer=SkinnedMeshRenderer]
+  - "Player" [id=1234] [rect=[820,410,180,240]] [z=[540,594]] [renderer=SpriteRenderer] [sortingLayer="Characters"] [sortingOrder=3]:
+    - "Weapon" [id=1235] [rect=[960,470,60,40]] [z=[538,545]] [renderer=SpriteRenderer] [sortingLayer="Characters"] [sortingOrder=4]
+```
+
+The answer is a hierarchy rather than a flat list: every visible object is reported together with its
+ancestors up to the scene root, so a client learns both what is on screen and where it sits in the
+scene. **A node carries `rect` exactly when it can be seen**; a node without one is an ancestor that
+merely holds visible objects. Siblings are written in Hierarchy window order, so occlusion is read
+from `z` and the sorting properties, never from the order of the document.
+
+##### Coordinates
+
+All coordinates are whole pixels with **the origin in the top left corner and y growing downwards**,
+the convention used by the `worldBound` of `UiInspect` and by the pixels of a `GameViewScreenshot`
+capture, so the three can be compared directly.
+
+- `rect` is `[x, y, width, height]`, the full projected box. It is **not** clipped to the screen, so
+  it can be negative or reach past `screen`, which is how a client learns an object's real size and
+  position. `clipped` says that this happened. An object whose rectangle does not overlap the screen
+  at all is not reported.
+- `z` is `[near, far]`, the depth range the object spans, in the same pixel unit as `rect`:
+  `z = pxPerUnit × distance in front of the camera`. **A smaller `z` is closer to the camera.**
+  `pxPerUnit` is stated once in the header:
+
+  | Projection | `pxPerUnit` | Meaning |
+  |------------|-------------|---------|
+  | Orthographic | `pixelHeight / (2 × orthographicSize)` | Exact: the very factor that scales x and y, so the box has the proportions of the real one |
+  | Perspective | `pixelHeight / (2 × tan(fieldOfView / 2))` | The focal length. A perspective camera has no single scale, since its scale falls off with distance, so depths stay comparable and correctly ordered between objects at the price of stretching a far away box along z |
+
+- A box that straddles the near plane is clipped against it first, so `near` never drops below the
+  camera's near clip distance and nothing behind the camera is ever mirrored onto the screen.
+
+##### Which renderers are reported
+
+`renderers: "core"`, the default, reports only what a client would call an object:
+
+| Renderer | Draws |
+|----------|-------|
+| `MeshRenderer` | 3D content, including world space TextMeshPro text |
+| `SkinnedMeshRenderer` | Animated characters |
+| `SpriteRenderer` | 2D content |
+
+Everything else is left out, because it would spend the response on decoration:
+
+| Left out | Why |
+|----------|-----|
+| `ParticleSystemRenderer`, `TrailRenderer`, `LineRenderer`, `BillboardRenderer`, VFX Graph | Motion rather than objects: the bounds change every frame and say nothing about what the game is showing |
+| `TilemapRenderer`, `SpriteShapeRenderer` | A single box covering a whole level, which is just as uninformative |
+| `SpriteMask` | A mask is not content |
+| Any other `Renderer`, including custom ones | Not on the whitelist |
+
+`renderers: "all"` reports every `Renderer` instead, which is the way to find out why something did
+not show up. The Canvas rule is not part of this: a `Renderer` parented under a `Canvas` belongs to
+the UI and is left out either way.
+
+An object is reported when it is active, its renderer is enabled and not forced off, its layer passes
+the camera's `cullingMask`, and its bounds land inside both the frustum and the screen.
+`Renderer.isVisible` is deliberately not used, because in the Editor it is true as soon as *any*
+camera sees the object, including the Scene View one.
+
+##### Other properties
+
+| Property | Written when |
+|----------|--------------|
+| `sortingLayer`, `sortingOrder` | The object is a sprite, or its sorting was changed from the default. In a 2D game every sprite sits at nearly the same `z`, and these, not depth, decide which object hides which |
+| `rendererCount` | The object itself has more than one renderer, whose bounds were merged into one box |
+| `clipped` | Part of the object lies outside the screen |
+| `scene` | More than one scene is open, in which case each root says which it is in |
+| `omitted` (header) | The limit left visible objects out |
+
+`count` is the real number of visible objects. At most 200 are reported, the nearest and topmost
+first, and `omitted` appears when some were left out. Ancestors do not count against the limit, so
+structure can never crowd out content.
+
+##### Visual Snapshot Error Codes
+
+In addition to the shared `invalid_request`, `forbidden` and `internal_error` codes:
+
+| Code | Meaning |
+|------|---------|
+| `not_playing` | The Editor is not in Play Mode |
+| `not_found` | No enabled camera with the requested name draws to the screen |
+| `no_camera` | No enabled camera draws to the screen at all |
 
 #### RetrieveTestList (Value: 23)
 - **Format**: Test mode string ("EditMode" or "PlayMode")

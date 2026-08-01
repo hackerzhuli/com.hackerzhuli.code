@@ -272,6 +272,12 @@ namespace Hackerzhuli.Code.Editor.Messaging
         /// <summary>
         ///     Get the main properties and component members of one GameObject. Available in Edit and Play Mode.
         /// </summary>
-        GameObjectInspect = 121
+        GameObjectInspect = 121,
+
+        /// <summary>
+        ///     Request the screen space bounds of the GameObjects a camera actually renders, as a hierarchy.
+        ///     Only available in Play Mode.
+        /// </summary>
+        GameObjectVisualSnapshot = 122
     }
 }
