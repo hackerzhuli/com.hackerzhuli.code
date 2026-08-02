@@ -21,7 +21,9 @@ namespace Hackerzhuli.Code.Editor
     ///     match context and stack up their style sheets. The editor once had a debugger helper for
     ///     exactly that, <c>UnityEditor.UIElements.Debugger.MatchedRulesExtractor</c>, but it was removed
     ///     in Unity 6000.2, while everything used here is unchanged across 6000.0 to 6000.3.
-    ///     Every reflection step is still optional: when a Unity version renames or moves one of the
+    ///     Unity 6000.5 moved the matcher into the generic
+    ///     <c>StyleSelectorHelper&lt;TProfilerType&gt;</c>; both layouts are supported here. Every reflection
+    ///     step is still optional: when a Unity version renames or moves one of the
     ///     members, <see cref="TryGetMatchedRules" /> reports why instead of throwing, so an inspection
     ///     keeps all of its other sections.
     /// </remarks>
@@ -52,6 +54,9 @@ namespace Hackerzhuli.Code.Editor
         private static FieldInfo _recordSheet;
         private static FieldInfo _recordComplexSelector;
         private static PropertyInfo _complexSelectorSpecificity;
+        private static PropertyInfo _specificityIdScore;
+        private static PropertyInfo _specificityClassScore;
+        private static PropertyInfo _specificityTypeScore;
         private static PropertyInfo _complexSelectorRule;
         private static PropertyInfo _complexSelectorSelectors;
         private static PropertyInfo _selectorParts;
@@ -239,8 +244,21 @@ namespace Hackerzhuli.Code.Editor
             return new UssMatchedRule(
                 BuildSelectorText(complexSelector),
                 BuildSource(sheet, line),
-                (int)_complexSelectorSpecificity.GetValue(complexSelector),
+                GetSpecificity(complexSelector),
                 BuildDeclarations(sheet, rule));
+        }
+
+        private static int GetSpecificity(object complexSelector)
+        {
+            var specificity = _complexSelectorSpecificity.GetValue(complexSelector);
+            // Up to Unity 6000.4 specificity is an int. Unity 6000.5 wraps it in the
+            // Specificity value type, whose implicit int conversion exposes a new packed bit layout.
+            // Rebuild the previous public value so inspections stay stable across Unity versions.
+            return specificity is int value
+                ? value
+                : 1 + (byte)_specificityIdScore.GetValue(specificity) * 100 +
+                (byte)_specificityClassScore.GetValue(specificity) * 10 +
+                (byte)_specificityTypeScore.GetValue(specificity);
         }
 
         /// <summary>
@@ -416,6 +434,15 @@ namespace Hackerzhuli.Code.Editor
                 var contextType = uiElements.GetType("UnityEngine.UIElements.StyleMatchingContext", false);
                 var filterType = uiElements.GetType("UnityEngine.UIElements.AncestorFilter", false);
                 var helperType = uiElements.GetType("UnityEngine.UIElements.StyleSheets.StyleSelectorHelper", false);
+                var genericHelperType = uiElements.GetType(
+                    "UnityEngine.UIElements.StyleSheets.StyleSelectorHelper`1", false);
+                var noOpProfilerType = uiElements.GetType(
+                    "UnityEngine.UIElements.StyleSheets.NoOpStyleProfiler", false);
+                // Unity 6000.5 left a non-generic StyleSelectorHelper shell in place, but moved all
+                // matching methods to StyleSelectorHelper<TProfilerType>. Use the same no-op profiler
+                // specialization as Unity's own MatchedRulesExtractor when that layout is available.
+                if (genericHelperType != null && noOpProfilerType != null)
+                    helperType = genericHelperType.MakeGenericType(noOpProfilerType);
                 var resultType = uiElements.GetType("UnityEngine.UIElements.StyleSheets.MatchResultInfo", false);
                 var extensionsType = uiElements.GetType(ExtensionsTypeName, false);
                 var recordType = uiElements.GetType("UnityEngine.UIElements.StyleSheets.SelectorMatchRecord", false);
@@ -457,6 +484,14 @@ namespace Hackerzhuli.Code.Editor
                 _recordSheet = recordType.GetField("sheet", AnyInstance);
                 _recordComplexSelector = recordType.GetField("complexSelector", AnyInstance);
                 _complexSelectorSpecificity = complexSelectorType.GetProperty("specificity", AnyInstance);
+                if (_complexSelectorSpecificity != null &&
+                    _complexSelectorSpecificity.PropertyType != typeof(int))
+                {
+                    var specificityType = _complexSelectorSpecificity.PropertyType;
+                    _specificityIdScore = specificityType.GetProperty("idScore", AnyInstance);
+                    _specificityClassScore = specificityType.GetProperty("classScore", AnyInstance);
+                    _specificityTypeScore = specificityType.GetProperty("typeScore", AnyInstance);
+                }
                 _complexSelectorRule = complexSelectorType.GetProperty("rule", AnyInstance);
                 _complexSelectorSelectors = complexSelectorType.GetProperty("selectors", AnyInstance);
                 _selectorParts = selectorType.GetProperty("parts", AnyInstance);
@@ -499,6 +534,10 @@ namespace Hackerzhuli.Code.Editor
             if (_recordSheet == null) return "SelectorMatchRecord.sheet";
             if (_recordComplexSelector == null) return "SelectorMatchRecord.complexSelector";
             if (_complexSelectorSpecificity == null) return "StyleComplexSelector.specificity";
+            if (_complexSelectorSpecificity.PropertyType != typeof(int) &&
+                (_specificityIdScore == null || _specificityClassScore == null ||
+                 _specificityTypeScore == null))
+                return "Specificity scores";
             if (_complexSelectorRule == null) return "StyleComplexSelector.rule";
             if (_complexSelectorSelectors == null) return "StyleComplexSelector.selectors";
             if (_selectorParts == null) return "StyleSelector.parts";

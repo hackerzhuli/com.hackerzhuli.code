@@ -1,5 +1,10 @@
 # Code Editor Package for Visual Studio
 
+## [1.5.3] - 2026-08-02
+Fix:
+- Restored UI inspection `matchedSelectors` on Unity 6.5 by supporting its generic selector matcher and new specificity representation while keeping protocol output stable across Unity versions
+- Updated runtime theme coverage for Unity 6.5's built-in theme resource and its renamed `UIDocumentRootElement`
+
 ## [1.5.2] - 2026-08-02
 Fix:
 - Fixed the Unity 6.5 object id conversion to call `EntityId.ToULong` with its required `EntityId` argument

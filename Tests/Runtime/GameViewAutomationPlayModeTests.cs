@@ -120,7 +120,7 @@ namespace Hackerzhuli.Code.PlayModeTests
                     DumpTree(document.rootVisualElement));
 
                 var documentRootMatch = Regex.Match(response.snapshot,
-                    @"TemplateContainer[^\r\n]*\[ref=(e\d+)\]");
+                    @"(?:TemplateContainer|UIDocumentRootElement)[^\r\n]*\[ref=(e\d+)\]");
                 Assert.That(documentRootMatch.Success, Is.True, response.snapshot);
                 InvokeRequest(serviceType, service, "UiHierarchy",
                     $"{{\"requestId\":\"root-hierarchy\",\"ref\":\"{documentRootMatch.Groups[1].Value}\"}}");
@@ -162,6 +162,10 @@ namespace Hackerzhuli.Code.PlayModeTests
                 Assert.That(inspectionResponse.inspection, Does.Contain("geometry:\n"));
                 Assert.That(inspectionResponse.inspection, Does.Contain("element:\n"));
                 Assert.That(inspectionResponse.inspection, Does.Contain("uss:\n"));
+                Assert.That(inspectionResponse.inspection,
+                    Does.Contain("    - selector: \".demo-root\"\n"));
+                Assert.That(inspectionResponse.inspection,
+                    Does.Not.Contain("matchedSelectors: \"<unavailable:"));
                 Assert.That(inspectionResponse.inspection, Does.Contain("  resolvedStyles:\n"));
                 Assert.That(inspectionResponse.inspection, Does.Contain("properties:\n"));
                 Assert.That(inspectionResponse.inspection, Does.Not.Contain("\n  panel: "));

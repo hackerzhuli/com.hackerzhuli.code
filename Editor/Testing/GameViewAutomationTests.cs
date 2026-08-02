@@ -23,6 +23,9 @@ namespace Hackerzhuli.Code.Editor.Testing
         private const string RuntimeThemePath =
             "Assets/UI Toolkit/UnityThemes/UnityDefaultRuntimeTheme.tss";
 
+        private const string BuiltInRuntimeThemeResourcePath =
+            "StyleSheets/Generated/Default.tss.asset";
+
         private GameViewAutomationService _service;
 
         [SetUp]
@@ -435,8 +438,11 @@ namespace Hackerzhuli.Code.Editor.Testing
         {
             // A theme declares nothing itself and only imports the sheets that carry the built in
             // control styles, so its rules are only reachable when imports are matched too.
-            var theme = AssetDatabase.LoadAssetAtPath<StyleSheet>(RuntimeThemePath);
-            Assert.That(theme, Is.Not.Null, $"{RuntimeThemePath} must be importable.");
+            var theme = AssetDatabase.LoadAssetAtPath<StyleSheet>(RuntimeThemePath) ??
+                        EditorGUIUtility.Load(BuiltInRuntimeThemeResourcePath) as StyleSheet;
+            Assert.That(theme, Is.Not.Null,
+                $"The runtime theme must be available from either {RuntimeThemePath} or " +
+                $"{BuiltInRuntimeThemeResourcePath}.");
 
             var root = new VisualElement();
             root.styleSheets.Add(theme);
@@ -446,7 +452,7 @@ namespace Hackerzhuli.Code.Editor.Testing
             var inspection = _service.BuildInspectionForTests(target);
 
             Assert.That(inspection, Does.Contain("    - selector: \".unity-button\"\n"));
-            Assert.That(inspection, Does.Contain($"      source: \"{RuntimeThemePath}:"));
+            Assert.That(inspection, Does.Contain("      source: \""));
         }
 
         [Test]
@@ -463,7 +469,8 @@ namespace Hackerzhuli.Code.Editor.Testing
         private static string Section(string inspection, string start, string end)
         {
             var startIndex = inspection.IndexOf(start, StringComparison.Ordinal);
-            Assert.That(startIndex, Is.GreaterThanOrEqualTo(0), $"'{start}' must be present.");
+            Assert.That(startIndex, Is.GreaterThanOrEqualTo(0),
+                $"'{start}' must be present. Inspection:\n{inspection}");
             var endIndex = inspection.IndexOf(end, startIndex, StringComparison.Ordinal);
             Assert.That(endIndex, Is.GreaterThan(startIndex), $"'{end}' must follow '{start}'.");
             return inspection.Substring(startIndex, endIndex - startIndex);
