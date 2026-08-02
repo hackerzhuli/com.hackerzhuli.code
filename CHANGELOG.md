@@ -1,5 +1,10 @@
 # Code Editor Package for Visual Studio
 
+## [1.6.2] - 2026-08-02
+Fix:
+- Prevented test run requests from silently stalling when test discovery times out or Unity reports an error before the run starts
+- Added a dedicated test run failure notification and detailed file logging for failed tests and test runs without changing existing test messages
+
 ## [1.6.1] - 2026-08-02
 Feature:
 - Added `EcsVisualSnapshot` (129), a loopback-only Play Mode view of visible Entities Graphics bounds and `Parent` hierarchy using the same camera, pixel and depth semantics as the GameObject visual snapshot

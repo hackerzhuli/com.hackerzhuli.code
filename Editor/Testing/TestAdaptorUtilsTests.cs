@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
+using Hackerzhuli.Code.Editor.Messaging;
 using NUnit.Framework;
 using UnityEditor.TestTools.TestRunner.Api;
 using UnityEngine;
@@ -50,6 +51,13 @@ namespace Hackerzhuli.Code.Editor.Testing
     //[TestFixture]
     public class TestAdaptorUtilsTests
     {
+        [Test]
+        public void TestRunFailedMessage_HasStableValueAndErrorCallbackIsRegistered()
+        {
+            Assert.That((int)MessageType.TestRunFailed, Is.EqualTo(130));
+            Assert.That(new TestRunnerCallbacks(), Is.InstanceOf<IErrorCallbacks>());
+        }
+
         [SetUp]
         public void SetUp()
         {

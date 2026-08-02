@@ -105,6 +105,7 @@ All available message types:
 | `EcsEntityQuery` | 127 | Find ECS entities by components and name (Play Mode only) | JSON request / JSON response containing YAML |
 | `EcsEntityInspect` | 128 | Inspect one ECS entity and its component values (Play Mode only) | JSON request / JSON response containing YAML |
 | `EcsVisualSnapshot` | 129 | Report visible Entities and their Transform hierarchy for one camera (Play Mode only) | JSON request / JSON response containing YAML |
+| `TestRunFailed` | 130 | Notification that a test run could not be scheduled or failed before normal completion | Human-readable failure reason |
 
 Note:
 - Message value greater than or equal to 100 means it does not exist in the official package but was added in this package.
@@ -1431,6 +1432,11 @@ the limit. Siblings are sorted deterministically by name and Entity index/versio
 
 Response:
 - A response that is empty is sent to the original client to confirm that the message is received and already processed.
+
+#### TestRunFailed (Value: 130)
+
+- **Format**: Human-readable failure reason.
+- **Description**: Sent when Unity Test Framework reports a run-level error, or when the package cannot parse, discover, or schedule the requested tests. It is a separate terminal failure notification; the payloads and values of the existing test messages are unchanged.
 
 #### TestStarted (Value: 20)
 - **Format**: JSON serialized TestAdaptorContainer

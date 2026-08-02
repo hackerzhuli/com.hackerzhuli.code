@@ -6,21 +6,61 @@ using UnityEngine;
 
 namespace Hackerzhuli.Code.Editor.Testing
 {
-    internal class TestRunnerCallbacks : ICallbacks
+    internal class TestRunnerCallbacks : IErrorCallbacks
     {
+        public void OnError(string message)
+        {
+            ReportRunFailed(message);
+        }
+
+        internal static void ReportRunFailed(string message)
+        {
+            var failureMessage = string.IsNullOrWhiteSpace(message)
+                ? "Unity Test Framework reported an unspecified test run failure."
+                : message;
+
+            FileLogger.LogError($"Test run failed: {failureMessage}");
+            CodeEditorIntegration.BroadcastMessage(MessageType.TestRunFailed, failureMessage);
+        }
+
         public void RunFinished(ITestResultAdaptor testResultAdaptor)
         {
+            if (testResultAdaptor.FailCount > 0)
+            {
+                FileLogger.LogError(
+                    $"Test run finished with failures: {testResultAdaptor.FullName}, state={testResultAdaptor.ResultState}, " +
+                    $"passed={testResultAdaptor.PassCount}, failed={testResultAdaptor.FailCount}, " +
+                    $"skipped={testResultAdaptor.SkipCount}, duration={testResultAdaptor.Duration:F3}s.");
+            }
+            else
+            {
+                FileLogger.Log(
+                    $"Test run finished: {testResultAdaptor.FullName}, state={testResultAdaptor.ResultState}, duration={testResultAdaptor.Duration:F3}s.");
+            }
+
             CodeEditorIntegration.BroadcastMessage(MessageType.TestRunFinished, Serialize(testResultAdaptor));
         }
 
         public void RunStarted(ITestAdaptor testAdaptor)
         {
+            FileLogger.Log(
+                $"Test run started: {testAdaptor.FullName}, id={testAdaptor.Id}, tests={testAdaptor.TestCaseCount}.");
             CodeEditorIntegration.BroadcastMessage(MessageType.TestRunStarted,
                 SerializeTopLevelOnlyWithNoSource(testAdaptor));
         }  
 
         public void TestFinished(ITestResultAdaptor testResultAdaptor)
         {
+            if (testResultAdaptor.TestStatus == TestStatus.Failed)
+            {
+                FileLogger.LogError(
+                    $"Test failed: {testResultAdaptor.FullName}\n" +
+                    $"Result: {testResultAdaptor.ResultState}\n" +
+                    $"Message: {testResultAdaptor.Message}\n" +
+                    $"Stack trace: {testResultAdaptor.StackTrace}\n" +
+                    $"Output: {testResultAdaptor.Output}");
+            }
+
             CodeEditorIntegration.BroadcastMessage(MessageType.TestFinished, Serialize(testResultAdaptor));
         }
 

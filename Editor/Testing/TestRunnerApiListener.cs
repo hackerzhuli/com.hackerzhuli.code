@@ -11,6 +11,7 @@ namespace Hackerzhuli.Code.Editor.Testing
     [InitializeOnLoad]
     internal class TestRunnerApiListener
     {
+        private const double TestListRetrievalTimeoutSeconds = 10;
         private static readonly TestRunnerApi _testRunnerApi;
         private static readonly TestRunnerCallbacks _testRunnerCallbacks;
         private static readonly Dictionary<TestMode, ITestAdaptor> _testCache = new Dictionary<TestMode, ITestAdaptor>();
@@ -28,31 +29,88 @@ namespace Hackerzhuli.Code.Editor.Testing
 
         public static void RetrieveTestList(string mode, Action<TestMode, ITestAdaptor> callback)
         {
-            RetrieveTestList((TestMode)Enum.Parse(typeof(TestMode), mode), callback);
+            if (!Enum.TryParse(mode, out TestMode testMode))
+            {
+                TestRunnerCallbacks.ReportRunFailed($"Could not parse test mode '{mode}'.");
+                return;
+            }
+
+            RetrieveTestList(testMode, callback, TestRunnerCallbacks.ReportRunFailed);
         }
 
-        private static void RetrieveTestList(TestMode mode, System.Action<TestMode, ITestAdaptor> callback)
+        private static void RetrieveTestList(TestMode mode, Action<TestMode, ITestAdaptor> callback,
+            Action<string> failure)
         {
             // If we already have cached test list for this mode, use it directly
             if (_testCache.ContainsKey(mode))
             {
                 // Use cached root test adaptor and respond directly to the specific client
                 var rootTest = _testCache[mode];
-                callback?.Invoke(mode, rootTest);
+                try
+                {
+                    callback?.Invoke(mode, rootTest);
+                }
+                catch (Exception exception)
+                {
+                    failure?.Invoke($"Failed to process the cached {mode} test list: {exception}");
+                }
                 //Debug.Log($"Using cached test list for mode {mode}");
                 return;
             }
 
-            //Debug.Log($"Retrieving test list for mode {mode}");
-            
-            // No cached data available, retrieve from API
-            if(_testRunnerApi != null){
-                _testRunnerApi.RetrieveTestList(mode, ta => 
+            if (_testRunnerApi == null)
+            {
+                failure?.Invoke("Unity TestRunnerApi is not initialized.");
+                return;
+            }
+
+            var completed = false;
+            var timeoutAt = EditorApplication.timeSinceStartup + TestListRetrievalTimeoutSeconds;
+            EditorApplication.CallbackFunction timeoutCallback = null;
+
+            void Complete(ITestAdaptor testAdaptor)
+            {
+                if (completed)
+                    return;
+
+                completed = true;
+                EditorApplication.update -= timeoutCallback;
+
+                if (testAdaptor != null)
+                    _testCache[mode] = testAdaptor;
+
+                try
                 {
-                    // Cache the test list for fuzzy matching
-                    _testCache[mode] = ta;
-                    callback?.Invoke(mode, ta);
-                });
+                    callback?.Invoke(mode, testAdaptor);
+                }
+                catch (Exception exception)
+                {
+                    failure?.Invoke($"Failed to process the {mode} test list: {exception}");
+                }
+            }
+
+            timeoutCallback = () =>
+            {
+                if (completed || EditorApplication.timeSinceStartup < timeoutAt)
+                    return;
+
+                completed = true;
+                EditorApplication.update -= timeoutCallback;
+                failure?.Invoke(
+                    $"Timed out retrieving the {mode} test list after {TestListRetrievalTimeoutSeconds} seconds.");
+            };
+
+            EditorApplication.update += timeoutCallback;
+
+            try
+            {
+                _testRunnerApi.RetrieveTestList(mode, Complete);
+            }
+            catch (Exception exception)
+            {
+                completed = true;
+                EditorApplication.update -= timeoutCallback;
+                failure?.Invoke($"Failed to retrieve the {mode} test list: {exception}");
             }
         }
 
@@ -89,6 +147,8 @@ namespace Hackerzhuli.Code.Editor.Testing
 
         public static void ExecuteTests(string command)
         {
+            FileLogger.Log($"Received test execution command: {command}");
+
             string filter = null;
             var index = command.IndexOf(':');
             // ExecuteTests format:
@@ -107,7 +167,7 @@ namespace Hackerzhuli.Code.Editor.Testing
             // use try parse instead
             if (!Enum.TryParse(mode, out TestMode testMode))
             {
-                Debug.LogError($"Could not parse test mode {mode}");
+                TestRunnerCallbacks.ReportRunFailed($"Could not parse test mode '{mode}'.");
                 return;
             }
 
@@ -128,22 +188,23 @@ namespace Hackerzhuli.Code.Editor.Testing
             {
                 var searchTerm = filter[..^1];
 
-                RetrieveTestList(mode, (_, rootTest) =>
-                {
-                    var matchedTests = FindFuzzyMatches(rootTest, searchTerm);
-                    
-                    if (matchedTests.Length > 0)
+                RetrieveTestList(testMode, (_, rootTest) =>
                     {
-                        // cannot assign to actualFilter, that will cause tests to run twice
-                        var filter = new Filter { testMode = testMode, testNames = matchedTests };
-                        ExecuteTests(filter);
-                    }else{
-                        // Run it as is, and let Unity Editor decide
-                        // Some clients may wait for a test run to start, so we run anyway
-                        var filter = new Filter { testMode = testMode, testNames = new[] { searchTerm } };
-                        ExecuteTests(filter);
-                    }
-                });
+                        var matchedTests = FindFuzzyMatches(rootTest, searchTerm);
+
+                        ExecuteTests(new Filter
+                        {
+                            testMode = testMode,
+                            testNames = matchedTests.Length > 0 ? matchedTests : new[] { searchTerm }
+                        });
+                    }, error =>
+                    {
+                        FileLogger.LogWarning($"{error} Falling back to the original test name.");
+
+                        // Test discovery is only needed for fuzzy expansion. Let Unity try the original
+                        // name so a transient discovery failure does not silently discard the run request.
+                        ExecuteTests(new Filter { testMode = testMode, testNames = new[] { searchTerm } });
+                    });
             }
             // otherwise look for the individual test
             else
@@ -164,7 +225,21 @@ namespace Hackerzhuli.Code.Editor.Testing
 
         private static void ExecuteTests(Filter filter)
         {
-            _testRunnerApi?.Execute(new ExecutionSettings(filter));
+            if (_testRunnerApi == null)
+            {
+                TestRunnerCallbacks.ReportRunFailed("Unity TestRunnerApi is not initialized.");
+                return;
+            }
+
+            try
+            {
+                var runId = _testRunnerApi.Execute(new ExecutionSettings(filter));
+                FileLogger.Log($"Scheduled test run {runId} in mode {filter.testMode}.");
+            }
+            catch (Exception exception)
+            {
+                TestRunnerCallbacks.ReportRunFailed($"Failed to schedule the test run: {exception}");
+            }
         }
     }
 }

@@ -307,6 +307,12 @@ namespace Hackerzhuli.Code.Editor.Messaging
         EcsEntityInspect = 128,
 
         /// <summary>Report visible Entities and their Transform parent hierarchy for one camera.</summary>
-        EcsVisualSnapshot = 129
+        EcsVisualSnapshot = 129,
+
+        /// <summary>
+        ///     Notification that a test run could not be scheduled or failed before producing a normal
+        ///     TestRunFinished notification. Value contains a human-readable failure reason.
+        /// </summary>
+        TestRunFailed = 130
     }
 }
