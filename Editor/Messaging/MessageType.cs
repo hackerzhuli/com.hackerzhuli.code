@@ -289,6 +289,21 @@ namespace Hackerzhuli.Code.Editor.Messaging
         ///     its only trust boundary is the loopback check, which is what makes that acceptable: a
         ///     caller that can reach this port can already run code on the machine.
         /// </remarks>
-        InvokeMethod = 123
+        InvokeMethod = 123,
+
+        /// <summary>List the valid ECS worlds in the current Play Mode session.</summary>
+        EcsWorldList = 124,
+
+        /// <summary>List the systems in an ECS world as a group tree.</summary>
+        EcsSystemList = 125,
+
+        /// <summary>Inspect one ECS system and, when available, its entity queries.</summary>
+        EcsSystemInspect = 126,
+
+        /// <summary>Run a read-only entity query in an ECS world.</summary>
+        EcsEntityQuery = 127,
+
+        /// <summary>Inspect the components and public field values of one ECS entity.</summary>
+        EcsEntityInspect = 128
     }
 }

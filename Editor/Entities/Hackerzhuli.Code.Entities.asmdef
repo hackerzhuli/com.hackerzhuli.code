@@ -1,0 +1,29 @@
+{
+  "name": "Hackerzhuli.Code.Entities",
+  "rootNamespace": "Hackerzhuli.Code.Editor.Entities",
+  "references": [
+    "Hackerzhuli.Code",
+    "Unity.Entities",
+    "Unity.Collections"
+  ],
+  "includePlatforms": [
+    "Editor"
+  ],
+  "allowUnsafeCode": false,
+  "overrideReferences": true,
+  "precompiledReferences": [
+    "Newtonsoft.Json.dll"
+  ],
+  "autoReferenced": true,
+  "defineConstraints": [
+    "CODE_ENTITIES_ENABLED"
+  ],
+  "versionDefines": [
+    {
+      "name": "com.unity.entities",
+      "expression": "[1.4.0,999.0.0)",
+      "define": "CODE_ENTITIES_ENABLED"
+    }
+  ],
+  "noEngineReferences": false
+}

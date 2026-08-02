@@ -1,5 +1,10 @@
 # Code Editor Package for Visual Studio
 
+## [1.6.0] - 2026-08-02
+Feature:
+- Added loopback-only, read-only Play Mode ECS messages for listing Worlds and system trees, inspecting managed/unmanaged systems, querying entities by component/name, and inspecting component values with bounded recursive formatting
+- Added an optional Entities integration assembly enabled by `com.unity.entities` 1.4 or newer through `CODE_ENTITIES_ENABLED`; the package keeps no hard Entities dependency and returns `entities_unavailable` when the integration is absent
+
 ## [1.5.3] - 2026-08-02
 Fix:
 - Restored UI inspection `matchedSelectors` on Unity 6.5 by supporting its generic selector matcher and new specificity representation while keeping protocol output stable across Unity versions

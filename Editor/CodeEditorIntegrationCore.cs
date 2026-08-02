@@ -480,6 +480,13 @@ namespace Hackerzhuli.Code.Editor
                 case MessageType.InvokeMethod:
                     MethodAutomation.Process(message, Answer);
                     break;
+                case MessageType.EcsWorldList:
+                case MessageType.EcsSystemList:
+                case MessageType.EcsSystemInspect:
+                case MessageType.EcsEntityQuery:
+                case MessageType.EcsEntityInspect:
+                    EcsAutomation.Process(message, Answer);
+                    break;
             }
         }
 
