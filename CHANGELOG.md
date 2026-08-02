@@ -1,9 +1,12 @@
 # Code Editor Package for Visual Studio
 
-## [1.6.0] - 2026-08-02
+## [1.6.1] - 2026-08-02
 Feature:
 - Added `EcsVisualSnapshot` (129), a loopback-only Play Mode view of visible Entities Graphics bounds and `Parent` hierarchy using the same camera, pixel and depth semantics as the GameObject visual snapshot
 - ECS integration now requires both Entities and Entities Graphics 1.4 or newer, and visual snapshots filter disabled, prefab, hidden, shadows-only and camera-layer-incompatible render Entities before returning at most 200 nearest matches
+
+## [1.6.0] - 2026-08-02
+Feature:
 - Added loopback-only, read-only Play Mode ECS messages for listing Worlds and system trees, inspecting managed/unmanaged systems, querying entities by component/name, and inspecting component values with bounded recursive formatting
 - Added an optional Entities integration assembly enabled by `com.unity.entities` 1.4 or newer through `CODE_ENTITIES_ENABLED`; the package keeps no hard Entities dependency and returns `entities_unavailable` when the integration is absent
 
