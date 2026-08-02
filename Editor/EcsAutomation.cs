@@ -62,7 +62,7 @@ namespace Hackerzhuli.Code.Editor
             if (_handler == null)
             {
                 Reply(answer, message, AutomationProtocol.Error(requestId, "entities_unavailable",
-                    "Install com.unity.entities 1.4.0 or newer to enable ECS debugging."));
+                    "Install com.unity.entities and com.unity.entities.graphics 1.4.0 or newer to enable ECS debugging."));
                 return;
             }
 

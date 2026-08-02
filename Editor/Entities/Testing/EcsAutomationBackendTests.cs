@@ -1,6 +1,11 @@
 using Newtonsoft.Json.Linq;
 using NUnit.Framework;
 using Unity.Entities;
+using Unity.Entities.Graphics;
+using Unity.Mathematics;
+using Unity.Rendering;
+using Unity.Transforms;
+using UnityEngine;
 using MessageType = Hackerzhuli.Code.Editor.Messaging.MessageType;
 
 namespace Hackerzhuli.Code.Editor.Entities.Testing
@@ -135,6 +140,138 @@ namespace Hackerzhuli.Code.Editor.Entities.Testing
             var included = Run(MessageType.EcsEntityQuery,
                 "{\"requestId\":2,\"world\":\"EcsAutomationTests\",\"all\":[\"TestPosition\"],\"includeDisabled\":true,\"includePrefabs\":true}");
             Assert.That(included.Value, Does.Contain("count: 3"));
+        }
+
+        [Test]
+        public void VisualSnapshot_ReportsVisibleChildAndStructuralParent()
+        {
+            var cameraObject = new GameObject("ECS Test Camera");
+            try
+            {
+                var camera = cameraObject.AddComponent<Camera>();
+                camera.pixelRect = new Rect(0, 0, Mathf.Max(1, Screen.width), Mathf.Max(1, Screen.height));
+                camera.cullingMask = 1;
+                var manager = _world.EntityManager;
+                var root = manager.CreateEntity();
+                manager.SetName(root, "Visual Root");
+                var child = CreateRenderEntity(manager, "Visual Child", new float3(0, 0, 10), 0);
+                manager.AddComponentData(child, new Parent { Value = root });
+                CreateRenderEntity(manager, "Wrong Layer", new float3(0, 0, 10), 2);
+                CreateRenderEntity(manager, "Off Screen", new float3(10000, 0, 10), 0);
+                var zeroBounds = CreateRenderEntity(manager, "Zero Bounds", new float3(0, 0, 10), 0);
+                manager.SetComponentData(zeroBounds, new WorldRenderBounds { Value = default });
+                var disabled = CreateRenderEntity(manager, "Disabled Render", new float3(0, 0, 10), 0);
+                manager.AddComponent<Disabled>(disabled);
+                var prefab = CreateRenderEntity(manager, "Prefab Render", new float3(0, 0, 10), 0);
+                manager.AddComponent<Prefab>(prefab);
+                var hidden = CreateRenderEntity(manager, "Rendering Disabled", new float3(0, 0, 10), 0);
+                manager.AddComponent<DisableRendering>(hidden);
+                var meshDisabled = CreateRenderEntity(manager, "Mesh Disabled", new float3(0, 0, 10), 0);
+                manager.SetComponentEnabled<MaterialMeshInfo>(meshDisabled, false);
+                var shadowsOnly = CreateRenderEntity(manager, "Shadows Only", new float3(0, 0, 10), 0);
+                var shadowSettings = RenderFilterSettings.Default;
+                shadowSettings.ShadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.ShadowsOnly;
+                manager.SetSharedComponent(shadowsOnly, shadowSettings);
+
+                var result = Run(MessageType.EcsVisualSnapshot,
+                    "{\"requestId\":1,\"world\":\"EcsAutomationTests\",\"camera\":\"ECS Test Camera\"}");
+                Assert.That(result.Ok, Is.True, result.ErrorMessage);
+                Assert.That(result.Value, Does.Contain("world: \"EcsAutomationTests\""));
+                Assert.That(result.Value, Does.Contain("- \"Visual Root\" [id="));
+                Assert.That(result.Value, Does.Contain("- \"Visual Child\" [id="));
+                Assert.That(result.Value, Does.Contain("[rect=["));
+                Assert.That(result.Value, Does.Not.Match("\\\"Visual Root\\\"[^\\n]*\\[rect="));
+                Assert.That(result.Value, Does.Match("\\\"Visual Child\\\"[^\\n]*\\[rect="));
+                Assert.That(result.Value, Does.Not.Contain("Wrong Layer"));
+                Assert.That(result.Value, Does.Not.Contain("Off Screen"));
+                Assert.That(result.Value, Does.Not.Contain("Zero Bounds"));
+                Assert.That(result.Value, Does.Not.Contain("Disabled Render"));
+                Assert.That(result.Value, Does.Not.Contain("Prefab Render"));
+                Assert.That(result.Value, Does.Not.Contain("Rendering Disabled"));
+                Assert.That(result.Value, Does.Not.Contain("Mesh Disabled"));
+                Assert.That(result.Value, Does.Not.Contain("Shadows Only"));
+            }
+            finally { Object.DestroyImmediate(cameraObject); }
+        }
+
+        [Test]
+        public void VisualSnapshot_LimitsVisibleEntitiesAndReportsOmitted()
+        {
+            var cameraObject = new GameObject("ECS Limit Camera");
+            try
+            {
+                var camera = cameraObject.AddComponent<Camera>();
+                camera.pixelRect = new Rect(0, 0, Mathf.Max(1, Screen.width), Mathf.Max(1, Screen.height));
+                var manager = _world.EntityManager;
+                for (var index = 0; index < 201; index++)
+                    CreateRenderEntity(manager, "Limited " + index, new float3(0, 0, 10 + index * 0.001f), 0);
+                var result = Run(MessageType.EcsVisualSnapshot,
+                    "{\"requestId\":1,\"world\":\"EcsAutomationTests\",\"camera\":\"ECS Limit Camera\"}");
+                Assert.That(result.Ok, Is.True, result.ErrorMessage);
+                Assert.That(result.Value, Does.Contain("count: 201"));
+                Assert.That(result.Value, Does.Contain("omitted: 1"));
+            }
+            finally { Object.DestroyImmediate(cameraObject); }
+        }
+
+        [Test]
+        public void VisualSnapshot_ValidatesCameraAndRequestFields()
+        {
+            var unknownCamera = Run(MessageType.EcsVisualSnapshot,
+                "{\"requestId\":1,\"world\":\"EcsAutomationTests\",\"camera\":\"Missing ECS Camera\"}");
+            Assert.That(unknownCamera.Ok, Is.False);
+            Assert.That(unknownCamera.ErrorCode, Is.EqualTo("no_camera").Or.EqualTo("not_found"));
+            var unknownField = Run(MessageType.EcsVisualSnapshot,
+                "{\"requestId\":1,\"world\":\"EcsAutomationTests\",\"limit\":1}");
+            Assert.That(unknownField.Ok, Is.False);
+            Assert.That(unknownField.ErrorCode, Is.EqualTo("invalid_request"));
+        }
+
+        [Test]
+        public void VisualSnapshot_BrokenAndCyclicParentsBecomeFiniteRoots()
+        {
+            var cameraObject = new GameObject("ECS Parent Camera");
+            try
+            {
+                var camera = cameraObject.AddComponent<Camera>();
+                camera.pixelRect = new Rect(0, 0, Mathf.Max(1, Screen.width), Mathf.Max(1, Screen.height));
+                var manager = _world.EntityManager;
+                var expiredParent = manager.CreateEntity();
+                var broken = CreateRenderEntity(manager, "Broken Parent Child", new float3(-1, 0, 10), 0);
+                manager.AddComponentData(broken, new Parent { Value = expiredParent });
+                manager.DestroyEntity(expiredParent);
+
+                var cycleVisible = CreateRenderEntity(manager, "Cycle Visible", new float3(1, 0, 10), 0);
+                var cycleParent = manager.CreateEntity(typeof(Parent));
+                manager.SetName(cycleParent, "Cycle Parent");
+                manager.SetComponentData(cycleParent, new Parent { Value = cycleVisible });
+                manager.AddComponentData(cycleVisible, new Parent { Value = cycleParent });
+
+                var result = Run(MessageType.EcsVisualSnapshot,
+                    "{\"requestId\":1,\"world\":\"EcsAutomationTests\",\"camera\":\"ECS Parent Camera\"}");
+                Assert.That(result.Ok, Is.True, result.ErrorMessage);
+                Assert.That(result.Value, Does.Contain("Broken Parent Child"));
+                Assert.That(result.Value, Does.Contain("Cycle Visible"));
+                Assert.That(result.Value, Does.Contain("Cycle Parent"));
+                Assert.That(result.Value.Length, Is.LessThan(5000));
+            }
+            finally { Object.DestroyImmediate(cameraObject); }
+        }
+
+        private static Entity CreateRenderEntity(EntityManager manager, string name, float3 center, int layer)
+        {
+            var entity = manager.CreateEntity(typeof(WorldRenderBounds), typeof(LocalToWorld),
+                typeof(MaterialMeshInfo), typeof(RenderFilterSettings));
+            manager.SetName(entity, name);
+            manager.SetComponentData(entity, new WorldRenderBounds
+            {
+                Value = new AABB { Center = center, Extents = new float3(0.5f) }
+            });
+            manager.SetComponentData(entity, new LocalToWorld { Value = float4x4.Translate(center) });
+            var settings = RenderFilterSettings.Default;
+            settings.Layer = layer;
+            manager.SetSharedComponent(entity, settings);
+            return entity;
         }
 
         private static EcsAutomation.Result Run(MessageType type, string json) =>

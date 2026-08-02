@@ -17,6 +17,7 @@ namespace Hackerzhuli.Code.Editor.Testing
             Assert.That((int)MessageType.EcsSystemInspect, Is.EqualTo(126));
             Assert.That((int)MessageType.EcsEntityQuery, Is.EqualTo(127));
             Assert.That((int)MessageType.EcsEntityInspect, Is.EqualTo(128));
+            Assert.That((int)MessageType.EcsVisualSnapshot, Is.EqualTo(129));
         }
 
         [Test]

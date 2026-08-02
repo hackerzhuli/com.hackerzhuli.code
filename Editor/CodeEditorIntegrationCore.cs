@@ -485,6 +485,7 @@ namespace Hackerzhuli.Code.Editor
                 case MessageType.EcsSystemInspect:
                 case MessageType.EcsEntityQuery:
                 case MessageType.EcsEntityInspect:
+                case MessageType.EcsVisualSnapshot:
                     EcsAutomation.Process(message, Answer);
                     break;
             }

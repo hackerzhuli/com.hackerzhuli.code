@@ -304,6 +304,9 @@ namespace Hackerzhuli.Code.Editor.Messaging
         EcsEntityQuery = 127,
 
         /// <summary>Inspect the components and public field values of one ECS entity.</summary>
-        EcsEntityInspect = 128
+        EcsEntityInspect = 128,
+
+        /// <summary>Report visible Entities and their Transform parent hierarchy for one camera.</summary>
+        EcsVisualSnapshot = 129
     }
 }

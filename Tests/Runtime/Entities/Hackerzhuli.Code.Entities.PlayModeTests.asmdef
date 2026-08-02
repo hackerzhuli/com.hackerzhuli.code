@@ -1,17 +1,14 @@
 {
-  "name": "Hackerzhuli.Code.Entities.Tests",
-  "rootNamespace": "Hackerzhuli.Code.Editor.Entities.Testing",
+  "name": "Hackerzhuli.Code.Entities.PlayModeTests",
+  "rootNamespace": "Hackerzhuli.Code.Entities.PlayModeTests",
   "references": [
-    "Hackerzhuli.Code",
-    "Hackerzhuli.Code.Entities",
     "Unity.Entities",
-    "Unity.Collections",
     "Unity.Entities.Graphics",
+    "Unity.Transforms",
+    "Unity.Collections",
     "Unity.Mathematics",
-    "Unity.Mathematics.Extensions",
-    "Unity.Transforms"
+    "Unity.Mathematics.Extensions"
   ],
-  "includePlatforms": ["Editor"],
   "optionalUnityReferences": ["TestAssemblies"],
   "overrideReferences": true,
   "precompiledReferences": ["Newtonsoft.Json.dll"],

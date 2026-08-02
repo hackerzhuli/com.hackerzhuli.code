@@ -10,8 +10,12 @@ using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using Unity.Collections;
 using Unity.Entities;
+using Unity.Entities.Graphics;
 using UnityEditor;
 using UnityEngine;
+using UnityEngine.Rendering;
+using Unity.Rendering;
+using Unity.Transforms;
 using MessageType = Hackerzhuli.Code.Editor.Messaging.MessageType;
 using Object = UnityEngine.Object;
 
@@ -28,6 +32,7 @@ namespace Hackerzhuli.Code.Editor.Entities
         private const int MaxValueDepth = 4;
         private const int MaxFields = 64;
         private const int MaxItems = 20;
+        private const int VisualEntityLimit = 200;
 
         static EcsAutomationBackend()
         {
@@ -43,6 +48,7 @@ namespace Hackerzhuli.Code.Editor.Entities
                 MessageType.EcsSystemInspect => SystemInspect(request),
                 MessageType.EcsEntityQuery => EntityQuery(request),
                 MessageType.EcsEntityInspect => EntityInspect(request),
+                MessageType.EcsVisualSnapshot => VisualSnapshot(request),
                 _ => EcsAutomation.Result.Error("invalid_request", "Unknown ECS message type.")
             };
         }
@@ -353,6 +359,192 @@ namespace Hackerzhuli.Code.Editor.Entities
                 }
             }
             return EcsAutomation.Result.Success(yaml.ToString());
+        }
+
+        #endregion
+
+        #region Visual snapshot
+
+        private static EcsAutomation.Result VisualSnapshot(JObject request)
+        {
+            if (!OnlyFields(request, out var fieldError, "requestId", "world", "camera"))
+                return Invalid(fieldError);
+            if (!TryWorld(request, out var world, out var worldError)) return worldError;
+            if (!TryOptionalString(request, "camera", out var requestedCamera, out var cameraFieldError))
+                return Invalid(cameraFieldError);
+            if (!VisualSnapshotUtility.TryResolveCamera(requestedCamera, out var camera, out var cameraErrorCode,
+                    out var cameraError))
+                return EcsAutomation.Result.Error(cameraErrorCode, cameraError);
+
+            var visible = CollectVisibleEntities(world, camera);
+            var totalCount = visible.Count;
+            visible.Sort(CompareVisualProminence);
+            if (visible.Count > VisualEntityLimit)
+                visible.RemoveRange(VisualEntityLimit, visible.Count - VisualEntityLimit);
+            var roots = BuildVisualTree(world, visible);
+            return EcsAutomation.Result.Success(BuildVisualSnapshotYaml(world, camera, roots, totalCount,
+                Math.Max(0, totalCount - visible.Count)));
+        }
+
+        private static List<EcsVisualNode> CollectVisibleEntities(World world, Camera camera)
+        {
+            var result = new List<EcsVisualNode>();
+            var manager = world.EntityManager;
+            var planes = GeometryUtility.CalculateFrustumPlanes(camera);
+            var screen = new Rect(0f, 0f, Screen.width, Screen.height);
+            var pixelsPerUnit = VisualSnapshotUtility.ComputePixelsPerUnit(camera);
+            using var query = manager.CreateEntityQuery(
+                ComponentType.ReadOnly<WorldRenderBounds>(),
+                ComponentType.ReadOnly<LocalToWorld>(),
+                ComponentType.ReadOnly<MaterialMeshInfo>(),
+                ComponentType.ReadOnly<RenderFilterSettings>());
+            using var entities = query.ToEntityArray(Allocator.TempJob);
+            foreach (var entity in entities)
+            {
+                if (!manager.Exists(entity) || !manager.IsEnabled(entity) ||
+                    manager.HasComponent<Disabled>(entity) || manager.HasComponent<Prefab>(entity) ||
+                    manager.HasComponent<DisableRendering>(entity) ||
+                    !manager.IsComponentEnabled<MaterialMeshInfo>(entity))
+                    continue;
+
+                var filter = manager.GetSharedComponent<RenderFilterSettings>(entity);
+                if (filter.Layer < 0 || filter.Layer > 31 || (camera.cullingMask & (1 << filter.Layer)) == 0 ||
+                    filter.ShadowCastingMode == ShadowCastingMode.ShadowsOnly)
+                    continue;
+
+                var worldBounds = manager.GetComponentData<WorldRenderBounds>(entity).Value;
+                var bounds = new Bounds(
+                    new Vector3(worldBounds.Center.x, worldBounds.Center.y, worldBounds.Center.z),
+                    new Vector3(worldBounds.Extents.x * 2f, worldBounds.Extents.y * 2f,
+                        worldBounds.Extents.z * 2f));
+                if (bounds.size == Vector3.zero || !GeometryUtility.TestPlanesAABB(planes, bounds)) continue;
+                if (!VisualSnapshotUtility.TryProjectBounds(bounds, camera.worldToCameraMatrix,
+                        camera.projectionMatrix, camera.pixelRect, screen.height, camera.nearClipPlane,
+                        out var rect, out var depthNear, out var depthFar))
+                    continue;
+                var intersection = VisualSnapshotUtility.Intersect(rect, screen);
+                if (intersection.width <= 0f || intersection.height <= 0f) continue;
+
+                result.Add(new EcsVisualNode(entity, manager.GetName(entity), EntityId(world, entity))
+                {
+                    Visible = true,
+                    Rect = VisualSnapshotUtility.ToPixelRect(rect),
+                    ZNear = Mathf.RoundToInt(depthNear * pixelsPerUnit),
+                    ZFar = Mathf.RoundToInt(depthFar * pixelsPerUnit)
+                });
+            }
+            return result;
+        }
+
+        private static int CompareVisualProminence(EcsVisualNode first, EcsVisualNode second)
+        {
+            var depth = first.ZNear.CompareTo(second.ZNear);
+            return depth != 0 ? depth : CompareVisualHierarchy(first, second);
+        }
+
+        private static List<EcsVisualNode> BuildVisualTree(World world, IReadOnlyList<EcsVisualNode> visible)
+        {
+            var manager = world.EntityManager;
+            var nodes = visible.ToDictionary(node => node.Entity);
+            var parentByChild = new Dictionary<Entity, Entity>();
+            foreach (var visibleNode in visible)
+            {
+                var current = visibleNode.Entity;
+                var visited = new HashSet<Entity>();
+                while (manager.Exists(current) && visited.Add(current) && manager.HasComponent<Parent>(current))
+                {
+                    var parent = manager.GetComponentData<Parent>(current).Value;
+                    if (parent == Entity.Null || !manager.Exists(parent) || visited.Contains(parent) ||
+                        WouldCreateVisualCycle(current, parent, parentByChild))
+                        break;
+                    if (!nodes.ContainsKey(parent))
+                        nodes.Add(parent, new EcsVisualNode(parent, manager.GetName(parent), EntityId(world, parent)));
+                    if (!parentByChild.ContainsKey(current)) parentByChild.Add(current, parent);
+                    current = parent;
+                }
+            }
+
+            foreach (var relation in parentByChild)
+                if (nodes.TryGetValue(relation.Key, out var child) && nodes.TryGetValue(relation.Value, out var parent))
+                    parent.Children.Add(child);
+            var roots = nodes.Values.Where(node => !parentByChild.ContainsKey(node.Entity)).ToList();
+            SortVisualTree(roots);
+            return roots;
+        }
+
+        private static bool WouldCreateVisualCycle(Entity child, Entity parent,
+            IReadOnlyDictionary<Entity, Entity> parentByChild)
+        {
+            var visited = new HashSet<Entity>();
+            var current = parent;
+            while (visited.Add(current) && parentByChild.TryGetValue(current, out var next))
+            {
+                if (next == child) return true;
+                current = next;
+            }
+            return false;
+        }
+
+        private static void SortVisualTree(List<EcsVisualNode> nodes)
+        {
+            nodes.Sort(CompareVisualHierarchy);
+            foreach (var node in nodes) SortVisualTree(node.Children);
+        }
+
+        private static int CompareVisualHierarchy(EcsVisualNode first, EcsVisualNode second)
+        {
+            var name = string.CompareOrdinal(first.Name, second.Name);
+            if (name != 0) return name;
+            var index = first.Entity.Index.CompareTo(second.Entity.Index);
+            return index != 0 ? index : first.Entity.Version.CompareTo(second.Entity.Version);
+        }
+
+        private static string BuildVisualSnapshotYaml(World world, Camera camera, IReadOnlyList<EcsVisualNode> roots,
+            int totalCount, int omitted)
+        {
+            var yaml = new StringBuilder().Append("screen: [").Append(Screen.width).Append(',').Append(Screen.height)
+                .Append("]\ncamera: ").Append(Q(camera.name))
+                .Append(" [id=").Append(Q(UnityObjectId.Get(camera))).Append(']')
+                .Append(" [projection=").Append(camera.orthographic ? "Orthographic" : "Perspective").Append(']')
+                .Append(" [depth=").Append(camera.depth.ToString("0.##", CultureInfo.InvariantCulture)).Append(']')
+                .Append(" [pxPerUnit=").Append(VisualSnapshotUtility.ComputePixelsPerUnit(camera)
+                    .ToString("0.##", CultureInfo.InvariantCulture)).Append(']')
+                .Append("\nworld: ").Append(Q(world.Name)).Append(" [id=").Append(Q(WorldId(world))).Append(']')
+                .Append("\ncount: ").Append(totalCount);
+            if (omitted > 0) yaml.Append("\nomitted: ").Append(omitted);
+            if (roots.Count == 0) return yaml.Append("\nentities: []").ToString();
+            yaml.Append("\nentities:\n");
+            foreach (var root in roots) AppendVisualNode(yaml, root, 1);
+            return yaml.ToString().TrimEnd();
+        }
+
+        private static void AppendVisualNode(StringBuilder yaml, EcsVisualNode node, int indent)
+        {
+            yaml.Append(' ', indent * 2).Append("- ").Append(Q(node.Name)).Append(" [id=").Append(Q(node.Id))
+                .Append(']');
+            if (node.Visible)
+                yaml.Append(" [rect=[").Append(node.Rect.x).Append(',').Append(node.Rect.y).Append(',')
+                    .Append(node.Rect.width).Append(',').Append(node.Rect.height).Append("]] [z=[")
+                    .Append(node.ZNear).Append(',').Append(node.ZFar).Append("]]");
+            if (node.Children.Count == 0) { yaml.Append('\n'); return; }
+            yaml.Append(":\n");
+            foreach (var child in node.Children) AppendVisualNode(yaml, child, indent + 1);
+        }
+
+        internal sealed class EcsVisualNode
+        {
+            internal EcsVisualNode(Entity entity, string name, string id)
+            {
+                Entity = entity; Name = name; Id = id;
+            }
+            internal Entity Entity { get; }
+            internal string Name { get; }
+            internal string Id { get; }
+            internal bool Visible { get; set; }
+            internal RectInt Rect { get; set; }
+            internal int ZNear { get; set; }
+            internal int ZFar { get; set; }
+            internal List<EcsVisualNode> Children { get; } = new();
         }
 
         #endregion

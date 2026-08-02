@@ -104,6 +104,7 @@ All available message types:
 | `EcsSystemInspect` | 126 | Inspect one ECS system and its public query information (Play Mode only) | JSON request / JSON response containing YAML |
 | `EcsEntityQuery` | 127 | Find ECS entities by components and name (Play Mode only) | JSON request / JSON response containing YAML |
 | `EcsEntityInspect` | 128 | Inspect one ECS entity and its component values (Play Mode only) | JSON request / JSON response containing YAML |
+| `EcsVisualSnapshot` | 129 | Report visible Entities and their Transform hierarchy for one camera (Play Mode only) | JSON request / JSON response containing YAML |
 
 Note:
 - Message value greater than or equal to 100 means it does not exist in the official package but was added in this package.
@@ -1271,11 +1272,12 @@ because one would be trivial to work around and would only suggest a guarantee t
 | `forbidden` | Non-loopback caller |
 | `internal_error` | An unexpected automation exception occurred |
 
-### ECS debugging (Values: 124-128)
+### ECS debugging (Values: 124-129)
 
 These messages form a read-only Play Mode workflow:
 
-`EcsWorldList` → `EcsSystemList` / `EcsSystemInspect` → `EcsEntityQuery` → `EcsEntityInspect`.
+`EcsWorldList` → `EcsSystemList` / `EcsSystemInspect` → `EcsEntityQuery` → `EcsEntityInspect`,
+with `EcsVisualSnapshot` as the camera-oriented entry point.
 
 They use the shared loopback-only JSON envelope and return compact YAML in the response's `result`
 property:
@@ -1284,10 +1286,9 @@ property:
 {"requestId":"ecs-1","ok":true,"result":"count: 1\nworlds:\n  - ..."}
 ```
 
-The optional integration assembly is compiled when `com.unity.entities` 1.4.0 or newer is installed;
-its asmdef supplies `CODE_ENTITIES_ENABLED`. The Code package does not declare an Entities dependency.
-Without a compatible Entities package, the message values and routes still exist and answer with
-`entities_unavailable`.
+The optional integration assembly is compiled only when both `com.unity.entities` and
+`com.unity.entities.graphics` 1.4.0 or newer are installed. Without either compatible package, all
+ECS message values and routes still exist and answer with `entities_unavailable`.
 
 All ECS work runs on Unity's main thread. Counting or reading entities, chunks and query results can
 complete outstanding ECS jobs and therefore create a sync point. These endpoints are intended for
@@ -1359,14 +1360,33 @@ condition. No matches is a successful empty result.
 {"requestId":"entity-1","entity":"<entity-id>","components":["Position","InventoryItem"]}
 ```
 
-`components` is optional; without it the complete archetype is inspected. The result includes the
-World/entity identity, enabled state, complete archetype, and each selected component's full type,
+`components` is optional; without it all components on the Entity are inspected. The result includes
+the World/entity identity, enabled state, all component types, and each selected component's full type,
 kind, enableable/enabled state and value. Tags, shared and managed components, Unity object components,
 dynamic buffers and ordinary data are supported. Only public instance fields are read; property
 getters are never called. Values stop after four nested levels, 64 fields per object, and 20 items per
 buffer or collection, with omitted counts. An `Entity` field becomes another inspectable id in the
 same World. If one component cannot be boxed or read, that component gets an `error` and the rest of
 the Entity is still returned.
+
+#### EcsVisualSnapshot (Value: 129)
+
+```json
+{"requestId":"ecs-vis-1","world":"<world-id-or-name>","camera":"Main Camera"}
+```
+
+`world` and `camera` are optional and use the same defaults as `EcsWorldList` and
+`GameObjectVisualSnapshot`. The `result` YAML reports the screen, camera, World, visible count and an
+`entities` tree. A node with `[rect=[x,y,width,height]] [z=[near,far]]` is a visible Entities Graphics
+Mesh Entity; a node without bounds is a `Unity.Transforms.Parent` ancestor added only for structure.
+Every id can be passed directly to `EcsEntityInspect`.
+
+The query requires `WorldRenderBounds`, `LocalToWorld`, `MaterialMeshInfo` and
+`RenderFilterSettings`. Disabled Entities, prefabs, `DisableRendering`, disabled `MaterialMeshInfo`,
+`ShadowsOnly`, and layers outside the camera culling mask are excluded. Bounds are tested against the
+frustum and screen, but pixel occlusion and final GPU LOD are not inferred. At most 200 visible
+Entities are returned, nearest first; `omitted` reports the rest, and structural ancestors do not use
+the limit. Siblings are sorted deterministically by name and Entity index/version.
 
 #### ECS error codes
 
@@ -1375,7 +1395,7 @@ the Entity is still returned.
 | `forbidden` | The request did not originate from loopback |
 | `invalid_request` | Malformed JSON, field, value, or stale system id |
 | `not_playing` | The Editor is not in Play Mode |
-| `entities_unavailable` | A compatible Entities package did not enable the optional integration assembly |
+| `entities_unavailable` | Compatible Entities and Entities Graphics packages did not enable the optional integration assembly |
 | `world_not_found` | No valid World matches the id/name, or a referenced World expired |
 | `ambiguous_world` | More than one valid World has that name; use an id |
 | `unknown_component_type` | No registered component has that name |

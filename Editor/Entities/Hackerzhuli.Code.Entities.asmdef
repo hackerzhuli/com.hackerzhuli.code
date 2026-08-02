@@ -4,7 +4,11 @@
   "references": [
     "Hackerzhuli.Code",
     "Unity.Entities",
-    "Unity.Collections"
+    "Unity.Collections",
+    "Unity.Entities.Graphics",
+    "Unity.Mathematics",
+    "Unity.Mathematics.Extensions",
+    "Unity.Transforms"
   ],
   "includePlatforms": [
     "Editor"
@@ -16,13 +20,19 @@
   ],
   "autoReferenced": true,
   "defineConstraints": [
-    "CODE_ENTITIES_ENABLED"
+    "CODE_ENTITIES_ENABLED",
+    "CODE_ENTITIES_GRAPHICS_ENABLED"
   ],
   "versionDefines": [
     {
       "name": "com.unity.entities",
       "expression": "[1.4.0,999.0.0)",
       "define": "CODE_ENTITIES_ENABLED"
+    },
+    {
+      "name": "com.unity.entities.graphics",
+      "expression": "[1.4.0,999.0.0)",
+      "define": "CODE_ENTITIES_GRAPHICS_ENABLED"
     }
   ],
   "noEngineReferences": false
