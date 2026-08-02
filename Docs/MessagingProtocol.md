@@ -810,13 +810,15 @@ as Game View automation (loopback only, opaque `requestId`, response reuses the 
 automatic TCP fallback), and the same error shape. All four work in both Edit Mode and Play Mode,
 because reading the hierarchy never changes it.
 
-**Addressing a GameObject.** Every GameObject is reported with its instance `id`, and every message
+**Addressing a GameObject.** Every GameObject is reported with an opaque `id`, and every message
 that targets one accepts either `id` or `path`:
 
-- `id` is a signed integer that is stable for as long as the object lives in the current session, and
-  is the only unambiguous way to name an object. It does **not** survive a domain reload (script
-  recompilation) or entering and leaving Play Mode; after either, look the object up again. The
-  instance id of a component is accepted too and resolves to the GameObject it is attached to.
+- `id` is a compact hexadecimal string that is stable for as long as the object lives in the current
+  Unity session, and is the only unambiguous way to name an object. Its source and representation are
+  implementation details; clients must treat it as an opaque, case-sensitive string. It does **not**
+  survive a domain reload (script recompilation) or entering and leaving Play Mode; after either,
+  look the object up again. A component's id is accepted too and resolves to the GameObject it is
+  attached to.
 - `path` is the slash separated chain of names from the scene root down, for example
   `Canvas/Panel/Button`. A leading slash is tolerated. **A path is always matched in full and case
   sensitively** - there is no partial or fuzzy form of it. A GameObject whose name contains a slash
@@ -826,9 +828,9 @@ that targets one accepts either `id` or `path`:
 
   ```
   3 GameObjects match path 'Canvas/Panel/Button'. Retry with one of these ids:
-    id=-4312 scene="Assets/Scenes/Main.unity" path="Canvas/Panel/Button"
-    id=-5108 scene="Assets/Scenes/Main.unity" path="Canvas/Panel/Button"
-    id=-6002 scene="Assets/Scenes/UI.unity" path="Canvas/Panel/Button"
+    id="a8d1" scene="Assets/Scenes/Main.unity" path="Canvas/Panel/Button"
+    id="a92c" scene="Assets/Scenes/Main.unity" path="Canvas/Panel/Button"
+    id="b104" scene="Assets/Scenes/UI.unity" path="Canvas/Panel/Button"
   ```
 
   At most 20 candidates are named.
@@ -867,11 +869,11 @@ depthLimit: "dynamic"
 rootCount: 87
 rootsOmitted: 37
 gameObjects:
-  - "Main Camera" [id=-4312]
-  - "Canvas" [id=-4320]:
-    - "Panel" [id=-4330] [active=false] [omittedChildCount=63]:
-      - "Button 01" [id=-4340]
-    - "Overlay" [id=-4331] [omittedChildCount=8]
+  - "Main Camera" [id="a8d1"]
+  - "Canvas" [id="a8d9"]:
+    - "Panel" [id="a8e3"] [active=false] [omittedChildCount=63]:
+      - "Button 01" [id="a8ed"]
+    - "Overlay" [id="a8e4"] [omittedChildCount=8]
 ```
 
 - `scene` is the asset path, falling back to the name for a scene that was never saved and for
@@ -894,7 +896,7 @@ gameObjects:
 Request:
 
 ```json
-{"requestId":"go-2","id":-4320,"depth":2}
+{"requestId":"go-2","id":"a8d9","depth":2}
 ```
 
 Exactly one of `id` or `path` is required; `scene` and `depth` behave as above.
@@ -908,8 +910,8 @@ path: "Canvas/Panel"
 mode: Edit
 maxDepth: 2
 gameObjects:
-  - "Panel" [id=-4330]:
-    - "Button" [id=-4331]
+  - "Panel" [id="a8e3"]:
+    - "Button" [id="a8e4"]
 ```
 
 #### GameObjectFind (Value: 120)
@@ -935,7 +937,7 @@ match: "contains"
 count: 3
 gameObjects:
   - name: "Button"
-    id: -4312
+    id: "a8d1"
     scene: "Assets/Scenes/Main.unity"
     path: "Canvas/Panel/Button"
     active: true
@@ -966,7 +968,7 @@ Success returns the `gameObject` property:
 
 ```yaml
 name: "Player"
-id: -4312
+id: "a8d1"
 scene: "Assets/Scenes/Main.unity"
 path: "Level/Player"
 mode: Edit
@@ -976,14 +978,14 @@ tag: "Player"
 layer: 8
 layerName: "Player"
 isStatic: false
-parentId: -4300
+parentId: "a8c5"
 childCount: 3
 prefab:
   status: Connected
   assetPath: "Assets/Prefabs/Player.prefab"
 components:
   - type: "Transform"
-    id: -4314
+    id: "a8d3"
     detail: "common"
     members:
       eulerAngles: [0,0,0]
@@ -993,13 +995,13 @@ components:
       lossyScale: [1,1,1]
       position: [0,1,0]
   - type: "MeshRenderer"
-    id: -4315
+    id: "a8d4"
     detail: "common"
     members:
       receiveShadows: true
-      sharedMaterial: "Material(name=Rock,instanceId=-8801)"
+      sharedMaterial: "Material(name=Rock,id=2261)"
   - type: "PlayerController"
-    id: -4316
+    id: "a8d5"
     enabled: true
     members:
       speed: 5
@@ -1008,7 +1010,7 @@ components:
 - `parentId` is omitted for a root object.
 - `prefab` is omitted entirely unless the object is part of a prefab instance.
 - The transform is a component like any other and is listed first, as Unity always returns it first.
-- Each component reports `type`, its own instance `id`, `enabled` when it is a `Behaviour`, `members`,
+- Each component reports `type`, its own opaque `id`, `enabled` when it is a `Behaviour`, `members`,
   and sometimes `detail`.
 - `members` is sorted by name and holds instance fields and readable properties. Members declared by
   `Component`, `Behaviour`, `MonoBehaviour` and `UnityEngine.Object` are always left out, because they
@@ -1027,7 +1029,7 @@ components:
   side effect (`material`, `materials`, `mesh`); their `shared` counterparts carry the same
   information without dirtying the scene.
 - A value that references another Unity object is written as
-  `"Type(name=X,instanceId=N)"`, so an id from an inspection can be fed straight back into a request.
+  `"Type(name=X,id=N)"`, so an id from an inspection can be fed straight back into a request.
   Collections list at most 20 items and then summarize the rest.
 - A member whose getter throws is reported as `"<error: ExceptionType: message>"` rather than failing
   the request, and a component whose script is missing appears as `type: "<missing script>"`.
@@ -1038,7 +1040,7 @@ In addition to the shared `invalid_request`, `forbidden` and `internal_error` co
 
 | Code | Meaning |
 |------|---------|
-| `not_found` | No open scene, GameObject or instance id matches the request |
+| `not_found` | No open scene, GameObject or object id matches the request |
 | `ambiguous_path` | The path matches more than one GameObject; the message lists the candidate ids |
 
 #### GameObjectVisualSnapshot (Value: 122)
@@ -1069,15 +1071,15 @@ Success returns the `visualSnapshot` property:
 
 ```yaml
 screen: [1920,1080]
-camera: "Main Camera" [id=-14562] [projection=Perspective] [depth=0] [pxPerUnit=1039.23]
+camera: "Main Camera" [id="c71e"] [projection=Perspective] [depth=0] [pxPerUnit=1039.23]
 count: 12
 gameObjects:
-  - "Level" [id=100]:
-    - "Ground" [id=101] [rect=[-40,700,2000,400]] [z=[648,702]] [renderer=MeshRenderer] [clipped=true]
-    - "Enemies" [id=200]:
-      - "Enemy" [id=201] [rect=[1200,380,120,200]] [z=[610,640]] [renderer=SkinnedMeshRenderer]
-  - "Player" [id=1234] [rect=[820,410,180,240]] [z=[540,594]] [renderer=SpriteRenderer] [sortingLayer="Characters"] [sortingOrder=3]:
-    - "Weapon" [id=1235] [rect=[960,470,60,40]] [z=[538,545]] [renderer=SpriteRenderer] [sortingLayer="Characters"] [sortingOrder=4]
+  - "Level" [id="64"]:
+    - "Ground" [id="65"] [rect=[-40,700,2000,400]] [z=[648,702]] [renderer=MeshRenderer] [clipped=true]
+    - "Enemies" [id="c8"]:
+      - "Enemy" [id="c9"] [rect=[1200,380,120,200]] [z=[610,640]] [renderer=SkinnedMeshRenderer]
+  - "Player" [id="4d2"] [rect=[820,410,180,240]] [z=[540,594]] [renderer=SpriteRenderer] [sortingLayer="Characters"] [sortingOrder=3]:
+    - "Weapon" [id="4d3"] [rect=[960,470,60,40]] [z=[538,545]] [renderer=SpriteRenderer] [sortingLayer="Characters"] [sortingOrder=4]
 ```
 
 The answer is a hierarchy rather than a flat list: every visible object is reported together with its

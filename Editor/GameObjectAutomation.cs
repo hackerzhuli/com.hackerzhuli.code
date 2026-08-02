@@ -25,7 +25,7 @@ namespace Hackerzhuli.Code.Editor
     ///     Stateless, and called from the editor main thread by <see cref="CodeEditorIntegrationCore" />.
     ///     All four messages work in both Edit and Play Mode, because inspecting the scene never changes it.
     ///     <para>
-    ///         Every GameObject is reported with its instance id, which is stable for as long as the object
+    ///         Every GameObject is reported with an opaque id, which is stable for as long as the object
     ///         lives in the current session and is the only unambiguous way to address one. A <c>path</c> is
     ///         accepted everywhere as a convenience, but two objects can share one, in which case the request
     ///         fails with <c>ambiguous_path</c> and lists the candidate ids so the next call can be precise.
@@ -226,7 +226,7 @@ namespace Hackerzhuli.Code.Editor
         /// </summary>
         internal sealed class GameObjectNode
         {
-            internal GameObjectNode(string name, int id, bool isActive, int totalChildCount,
+            internal GameObjectNode(string name, string id, bool isActive, int totalChildCount,
                 IReadOnlyList<GameObjectNode> children, bool depthLimited)
             {
                 Name = name;
@@ -240,9 +240,9 @@ namespace Hackerzhuli.Code.Editor
             internal string Name { get; }
 
             /// <summary>
-            ///     The instance id, usable to address this object in a later request.
+            ///     The opaque id, usable to address this object in a later request.
             /// </summary>
-            internal int Id { get; }
+            internal string Id { get; }
 
             /// <summary>
             ///     The object's own active state, not the resolved one.
@@ -319,7 +319,7 @@ namespace Hackerzhuli.Code.Editor
         /// </summary>
         internal readonly struct FindEntry
         {
-            internal FindEntry(string name, int id, string scene, string path, bool isActive,
+            internal FindEntry(string name, string id, string scene, string path, bool isActive,
                 bool isActiveInHierarchy, int componentCount)
             {
                 Name = name;
@@ -332,7 +332,7 @@ namespace Hackerzhuli.Code.Editor
             }
 
             internal string Name { get; }
-            internal int Id { get; }
+            internal string Id { get; }
             internal string Scene { get; }
             internal string Path { get; }
             internal bool IsActive { get; }
@@ -688,7 +688,7 @@ namespace Hackerzhuli.Code.Editor
         /// <returns>True when the path could be split.</returns>
         /// <remarks>
         ///     A GameObject whose name contains a slash cannot be addressed this way, which is one of the
-        ///     reasons every response also carries an instance id.
+        ///     reasons every response also carries an opaque id.
         /// </remarks>
         internal static bool TryParsePath(string raw, out string[] segments, out string error)
         {
@@ -721,7 +721,7 @@ namespace Hackerzhuli.Code.Editor
         #region Target resolution
 
         /// <summary>
-        ///     Resolves the GameObject a request is about, from either an instance id or an exact path.
+        ///     Resolves the GameObject a request is about, from either an opaque id or an exact path.
         /// </summary>
         /// <param name="request">The parsed request.</param>
         /// <param name="target">The resolved GameObject.</param>
@@ -788,7 +788,7 @@ namespace Hackerzhuli.Code.Editor
         }
 
         /// <summary>
-        ///     Resolves an instance id, accepting a component's id as a reference to its GameObject.
+        ///     Resolves an opaque object id, accepting a component's id as a reference to its GameObject.
         /// </summary>
         private static bool TryResolveById(JToken idToken, out GameObject target, out string errorCode,
             out string error)
@@ -797,15 +797,15 @@ namespace Hackerzhuli.Code.Editor
             errorCode = null;
             error = null;
 
-            if (idToken.Type != JTokenType.Integer || !int.TryParse(idToken.ToString(),
-                    NumberStyles.Integer, CultureInfo.InvariantCulture, out var id))
+            if (idToken.Type != JTokenType.String ||
+                !UnityObjectId.TryResolve(idToken.Value<string>(), out var resolved))
             {
                 errorCode = "invalid_request";
-                error = "id must be an integer instance id.";
+                error = "id must be a non-empty hexadecimal string.";
                 return false;
             }
 
-            var resolved = EditorUtility.InstanceIDToObject(id);
+            var id = idToken.Value<string>();
             switch (resolved)
             {
                 case GameObject gameObject:
@@ -816,13 +816,13 @@ namespace Hackerzhuli.Code.Editor
                     return true;
                 case null:
                     errorCode = "not_found";
-                    error = $"No object has instance id {id.ToString(CultureInfo.InvariantCulture)}. " +
-                            "Instance ids do not survive a domain reload or entering and leaving Play Mode, " +
+                    error = $"No object has id '{id}'. " +
+                            "Object ids do not survive a domain reload or entering and leaving Play Mode, " +
                             "so look the object up by path again.";
                     return false;
                 default:
                     errorCode = "not_found";
-                    error = $"Instance id {id.ToString(CultureInfo.InvariantCulture)} is a " +
+                    error = $"Object id '{id}' identifies a " +
                             $"{resolved.GetType().Name}, not a GameObject or a component.";
                     return false;
             }
@@ -842,7 +842,7 @@ namespace Hackerzhuli.Code.Editor
             for (var index = 0; index < shown; index++)
             {
                 var match = matches[index];
-                builder.Append("\n  id=").Append(match.GetInstanceID().ToString(CultureInfo.InvariantCulture));
+                builder.Append("\n  id=").Append(QuoteYamlString(UnityObjectId.Get(match)));
                 builder.Append(" scene=\"").Append(DescribeScene(match.scene)).Append('"');
                 builder.Append(" path=\"").Append(GetPath(match)).Append('"');
             }
@@ -1086,7 +1086,7 @@ namespace Hackerzhuli.Code.Editor
         /// </summary>
         private static FindEntry ToFindEntry(GameObject gameObject)
         {
-            return new FindEntry(gameObject.name, gameObject.GetInstanceID(),
+            return new FindEntry(gameObject.name, UnityObjectId.Get(gameObject),
                 DescribeScene(gameObject.scene), GetPath(gameObject), gameObject.activeSelf,
                 gameObject.activeInHierarchy, gameObject.GetComponents<Component>().Length);
         }
@@ -1176,7 +1176,7 @@ namespace Hackerzhuli.Code.Editor
         {
             var children = CollectChildren(gameObject);
             if (remainingDepth <= 0)
-                return new GameObjectNode(gameObject.name, gameObject.GetInstanceID(),
+                return new GameObjectNode(gameObject.name, UnityObjectId.Get(gameObject),
                     gameObject.activeSelf, children.Count, null, children.Count > 0);
 
             var outputCount = Math.Min(children.Count, ChildLimit);
@@ -1184,7 +1184,7 @@ namespace Hackerzhuli.Code.Editor
             for (var index = 0; index < outputCount; index++)
                 nodes.Add(BuildNode(children[index], remainingDepth - 1));
 
-            return new GameObjectNode(gameObject.name, gameObject.GetInstanceID(), gameObject.activeSelf,
+            return new GameObjectNode(gameObject.name, UnityObjectId.Get(gameObject), gameObject.activeSelf,
                 children.Count, nodes, false);
         }
 
@@ -1235,7 +1235,7 @@ namespace Hackerzhuli.Code.Editor
         {
             builder.Append(' ', indent * 2);
             builder.Append("- ").Append(QuoteYamlString(node.Name));
-            AppendProperty(builder, "id", node.Id.ToString(CultureInfo.InvariantCulture));
+            AppendProperty(builder, "id", QuoteYamlString(node.Id));
             if (!node.IsActive)
                 AppendProperty(builder, "active", "false");
 
@@ -1305,7 +1305,7 @@ namespace Hackerzhuli.Code.Editor
             foreach (var entry in entries)
             {
                 builder.Append("\n  - name: ").Append(QuoteYamlString(entry.Name));
-                builder.Append("\n    id: ").Append(entry.Id.ToString(CultureInfo.InvariantCulture));
+                builder.Append("\n    id: ").Append(QuoteYamlString(entry.Id));
                 builder.Append("\n    scene: ").Append(QuoteYamlString(entry.Scene));
                 builder.Append("\n    path: ").Append(QuoteYamlString(entry.Path));
                 builder.Append("\n    active: ").Append(entry.IsActive ? "true" : "false");
@@ -1332,8 +1332,7 @@ namespace Hackerzhuli.Code.Editor
         {
             var builder = new StringBuilder();
             builder.Append("name: ").Append(QuoteYamlString(gameObject.name)).Append('\n');
-            builder.Append("id: ")
-                .Append(gameObject.GetInstanceID().ToString(CultureInfo.InvariantCulture)).Append('\n');
+            builder.Append("id: ").Append(QuoteYamlString(UnityObjectId.Get(gameObject))).Append('\n');
             builder.Append("scene: ").Append(QuoteYamlString(DescribeScene(gameObject.scene))).Append('\n');
             builder.Append("path: ").Append(QuoteYamlString(GetPath(gameObject))).Append('\n');
             builder.Append("mode: ").Append(EditorApplication.isPlaying ? "Play" : "Edit").Append('\n');
@@ -1350,8 +1349,7 @@ namespace Hackerzhuli.Code.Editor
             var parent = gameObject.transform.parent;
             if (parent != null)
                 builder.Append("parentId: ")
-                    .Append(parent.gameObject.GetInstanceID().ToString(CultureInfo.InvariantCulture))
-                    .Append('\n');
+                    .Append(QuoteYamlString(UnityObjectId.Get(parent.gameObject))).Append('\n');
             builder.Append("childCount: ")
                 .Append(gameObject.transform.childCount.ToString(CultureInfo.InvariantCulture)).Append('\n');
 
@@ -1405,7 +1403,7 @@ namespace Hackerzhuli.Code.Editor
                 var common = full ? null : GetCommonMemberNames(type);
 
                 builder.Append("  - type: ").Append(QuoteYamlString(type.Name)).Append('\n');
-                AppendYamlValue(builder, 2, "id", component.GetInstanceID());
+                AppendYamlValue(builder, 2, "id", UnityObjectId.Get(component));
                 if (component is Behaviour behaviour)
                     AppendYamlValue(builder, 2, "enabled", behaviour.enabled);
                 if (full)

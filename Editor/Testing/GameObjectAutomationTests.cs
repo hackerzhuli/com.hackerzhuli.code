@@ -48,9 +48,9 @@ namespace Hackerzhuli.Code.Editor.Testing
                 2, null, 2, 0);
             var roots = new List<GameObjectAutomation.GameObjectNode>
             {
-                Leaf("Main \"Camera\"", -4312, true),
-                new("Canvas", -4320, true, 1,
-                    new List<GameObjectAutomation.GameObjectNode> { Leaf("Panel", -4330, false) }, false)
+                Leaf("Main \"Camera\"", "a1", true),
+                new("Canvas", "a2", true, 1,
+                    new List<GameObjectAutomation.GameObjectNode> { Leaf("Panel", "a3", false) }, false)
             };
 
             var yaml = GameObjectAutomation.BuildHierarchyYaml(header, roots);
@@ -61,9 +61,9 @@ namespace Hackerzhuli.Code.Editor.Testing
                 "maxDepth: 2\n" +
                 "rootCount: 2\n" +
                 "gameObjects:\n" +
-                "  - \"Main \\\"Camera\\\"\" [id=-4312]\n" +
-                "  - \"Canvas\" [id=-4320]:\n" +
-                "    - \"Panel\" [id=-4330] [active=false]"));
+                "  - \"Main \\\"Camera\\\"\" [id=\"a1\"]\n" +
+                "  - \"Canvas\" [id=\"a2\"]:\n" +
+                "    - \"Panel\" [id=\"a3\"] [active=false]"));
         }
 
         [Test]
@@ -73,13 +73,13 @@ namespace Hackerzhuli.Code.Editor.Testing
                 1, "dynamic", 2, 0);
             var roots = new List<GameObjectAutomation.GameObjectNode>
             {
-                new("A", 1, true, 1, new List<GameObjectAutomation.GameObjectNode>
+                new("A", "1", true, 1, new List<GameObjectAutomation.GameObjectNode>
                 {
-                    new("A1", 2, true, 3, null, true)
+                    new("A1", "2", true, 3, null, true)
                 }, false),
-                new("B", 3, true, 1, new List<GameObjectAutomation.GameObjectNode>
+                new("B", "3", true, 1, new List<GameObjectAutomation.GameObjectNode>
                 {
-                    new("B1", 4, true, 2, null, true)
+                    new("B1", "4", true, 2, null, true)
                 }, false)
             };
 
@@ -88,8 +88,8 @@ namespace Hackerzhuli.Code.Editor.Testing
             Assert.That(yaml, Does.Contain("depthLimit: \"dynamic\"\n"));
             Assert.That(yaml.Split('\n').Count(line => line.Contains("depthLimit")), Is.EqualTo(1));
             // A node at the depth limit carries nothing but the fact that it has children.
-            Assert.That(yaml, Does.Contain("    - \"A1\" [id=2] [omittedChildCount=3]\n"));
-            Assert.That(yaml, Does.EndWith("    - \"B1\" [id=4] [omittedChildCount=2]"));
+            Assert.That(yaml, Does.Contain("    - \"A1\" [id=\"2\"] [omittedChildCount=3]\n"));
+            Assert.That(yaml, Does.EndWith("    - \"B1\" [id=\"4\"] [omittedChildCount=2]"));
             Assert.That(yaml, Does.Not.Contain("omissionReason"));
             Assert.That(yaml, Does.Not.Contain("childrenOmitted"));
             Assert.That(yaml, Does.Not.Contain("#"));
@@ -102,16 +102,16 @@ namespace Hackerzhuli.Code.Editor.Testing
                 1, null, 1, 0);
             var children = new List<GameObjectAutomation.GameObjectNode>();
             for (var index = 0; index < 20; index++)
-                children.Add(Leaf($"Item {index:00}", 100 + index, true));
+                children.Add(Leaf($"Item {index:00}", (100 + index).ToString("x"), true));
             var roots = new List<GameObjectAutomation.GameObjectNode>
             {
-                new("List", 1, true, 63, children, false)
+                new("List", "1", true, 63, children, false)
             };
 
             var yaml = GameObjectAutomation.BuildHierarchyYaml(header, roots);
 
             // A node cut off by the child limit lists the first twenty and counts the rest.
-            Assert.That(yaml, Does.Contain("  - \"List\" [id=1] [omittedChildCount=43]:"));
+            Assert.That(yaml, Does.Contain("  - \"List\" [id=\"1\"] [omittedChildCount=43]:"));
             Assert.That(yaml, Does.Not.Contain("depthLimit"));
             Assert.That(yaml.Split('\n').Count(line => line.TrimStart().StartsWith("- ")), Is.EqualTo(21));
         }
@@ -123,7 +123,7 @@ namespace Hackerzhuli.Code.Editor.Testing
                 "Canvas/Panel", true, 0, "requested", 87, 37);
 
             var yaml = GameObjectAutomation.BuildHierarchyYaml(header,
-                new List<GameObjectAutomation.GameObjectNode> { Leaf("Panel", -1, true) });
+                new List<GameObjectAutomation.GameObjectNode> { Leaf("Panel", "f", true) });
 
             Assert.That(yaml, Does.Contain("path: \"Canvas/Panel\"\n"));
             Assert.That(yaml, Does.Contain("mode: Play\n"));
@@ -153,7 +153,7 @@ namespace Hackerzhuli.Code.Editor.Testing
         {
             var entries = new List<GameObjectAutomation.FindEntry>
             {
-                new("Button", -4312, "Assets/Scenes/Main.unity", "Canvas/Panel/Button", true, false, 4)
+                new("Button", "a1", "Assets/Scenes/Main.unity", "Canvas/Panel/Button", true, false, 4)
             };
 
             var yaml = GameObjectAutomation.BuildFindYaml("Button", "name", "exact", entries, 1);
@@ -165,7 +165,7 @@ namespace Hackerzhuli.Code.Editor.Testing
                 "count: 1\n" +
                 "gameObjects:\n" +
                 "  - name: \"Button\"\n" +
-                "    id: -4312\n" +
+                "    id: \"a1\"\n" +
                 "    scene: \"Assets/Scenes/Main.unity\"\n" +
                 "    path: \"Canvas/Panel/Button\"\n" +
                 "    active: true\n" +
@@ -178,7 +178,7 @@ namespace Hackerzhuli.Code.Editor.Testing
         {
             var entries = new List<GameObjectAutomation.FindEntry>
             {
-                new("Button", 1, "Assets/Scenes/Main.unity", "Button", true, true, 2)
+                new("Button", "1", "Assets/Scenes/Main.unity", "Button", true, true, 2)
             };
 
             Assert.That(GameObjectAutomation.BuildFindYaml("Button", "name", "contains", entries, 130),
@@ -275,14 +275,15 @@ namespace Hackerzhuli.Code.Editor.Testing
         }
 
         [Test]
-        public void GameObjectHierarchy_ResolvesByInstanceIdAndHonoursDepthZero()
+        public void GameObjectHierarchy_ResolvesByOpaqueIdAndHonoursDepthZero()
         {
             var parent = Create("UnityCodeParent");
             var child = new GameObject("UnityCodeChild");
             child.transform.SetParent(parent.transform);
 
             var response = Send(MessageType.GameObjectHierarchy,
-                $"{{\"requestId\":\"go-5\",\"id\":{parent.GetInstanceID()},\"depth\":0}}", Loopback);
+                $"{{\"requestId\":\"go-5\",\"id\":\"{UnityObjectId.Get(parent)}\",\"depth\":0}}",
+                Loopback);
 
             var hierarchy = response.Value<string>("hierarchy");
             Assert.That(hierarchy, Does.Contain("path: \"UnityCodeParent\"\n"));
@@ -303,7 +304,8 @@ namespace Hackerzhuli.Code.Editor.Testing
                 "{\"requestId\":\"go-6\",\"path\":\"UnityCodeParent\"}", Loopback);
 
             var hierarchy = response.Value<string>("hierarchy");
-            Assert.That(hierarchy, Does.Contain($"\"UnityCodeChild\" [id={child.GetInstanceID()}]"));
+            Assert.That(hierarchy,
+                Does.Contain($"\"UnityCodeChild\" [id=\"{UnityObjectId.Get(child)}\"]"));
         }
 
         [Test]
@@ -320,8 +322,8 @@ namespace Hackerzhuli.Code.Editor.Testing
 
             var text = response["error"]?["message"]?.Value<string>();
             Assert.That(text, Does.Contain("2 GameObjects match path 'UnityCodeTwin'"));
-            Assert.That(text, Does.Contain($"id={first.GetInstanceID()}"));
-            Assert.That(text, Does.Contain($"id={second.GetInstanceID()}"));
+            Assert.That(text, Does.Contain($"id=\"{UnityObjectId.Get(first)}\""));
+            Assert.That(text, Does.Contain($"id=\"{UnityObjectId.Get(second)}\""));
         }
 
         [Test]
@@ -331,18 +333,28 @@ namespace Hackerzhuli.Code.Editor.Testing
             Assert.That(neither["error"]?["code"]?.Value<string>(), Is.EqualTo("invalid_request"));
 
             var both = Send(MessageType.GameObjectHierarchy,
-                "{\"requestId\":\"go-9\",\"id\":1,\"path\":\"Whatever\"}", Loopback);
+                "{\"requestId\":\"go-9\",\"id\":\"1\",\"path\":\"Whatever\"}", Loopback);
             Assert.That(both["error"]?["code"]?.Value<string>(), Is.EqualTo("invalid_request"));
         }
 
         [Test]
-        public void GameObjectHierarchy_ReportsAnUnknownInstanceId()
+        public void GameObjectHierarchy_ReportsAnUnknownObjectId()
         {
             var response = Send(MessageType.GameObjectHierarchy,
-                "{\"requestId\":\"go-10\",\"id\":2147483646}", Loopback);
+                "{\"requestId\":\"go-10\",\"id\":\"7ffffffe\"}", Loopback);
 
             Assert.That(response["error"]?["code"]?.Value<string>(), Is.EqualTo("not_found"));
             Assert.That(response["error"]?["message"]?.Value<string>(), Does.Contain("domain reload"));
+        }
+
+        [Test]
+        public void GameObjectHierarchy_RequiresTheOpaqueIdToBeAString()
+        {
+            var response = Send(MessageType.GameObjectHierarchy,
+                "{\"requestId\":\"go-10b\",\"id\":1234}", Loopback);
+
+            Assert.That(response["error"]?["code"]?.Value<string>(), Is.EqualTo("invalid_request"));
+            Assert.That(response["error"]?["message"]?.Value<string>(), Does.Contain("string"));
         }
 
         [Test]
@@ -393,11 +405,11 @@ namespace Hackerzhuli.Code.Editor.Testing
             target.AddComponent<Camera>();
 
             var response = Send(MessageType.GameObjectInspect,
-                $"{{\"requestId\":\"go-17\",\"id\":{target.GetInstanceID()}}}", Loopback);
+                $"{{\"requestId\":\"go-17\",\"id\":\"{UnityObjectId.Get(target)}\"}}", Loopback);
 
             var inspection = response.Value<string>("gameObject");
             Assert.That(inspection, Does.StartWith("name: \"UnityCodeInspectTarget\"\n"));
-            Assert.That(inspection, Does.Contain($"id: {target.GetInstanceID()}\n"));
+            Assert.That(inspection, Does.Contain($"id: \"{UnityObjectId.Get(target)}\"\n"));
             Assert.That(inspection, Does.Contain("activeInHierarchy: true\n"));
             // The transform is a component like any other, and Unity always lists it first.
             Assert.That(inspection, Does.Contain("components:\n  - type: \"Transform\"\n"));
@@ -414,7 +426,7 @@ namespace Hackerzhuli.Code.Editor.Testing
             target.AddComponent<Camera>();
 
             var response = Send(MessageType.GameObjectInspect,
-                $"{{\"requestId\":\"go-18\",\"id\":{target.GetInstanceID()}}}", Loopback);
+                $"{{\"requestId\":\"go-18\",\"id\":\"{UnityObjectId.Get(target)}\"}}", Loopback);
 
             var inspection = response.Value<string>("gameObject");
             Assert.That(inspection, Does.Contain("    detail: \"common\"\n"));
@@ -432,7 +444,7 @@ namespace Hackerzhuli.Code.Editor.Testing
             target.AddComponent<AudioListener>();
 
             var response = Send(MessageType.GameObjectInspect,
-                $"{{\"requestId\":\"go-19\",\"id\":{target.GetInstanceID()}}}", Loopback);
+                $"{{\"requestId\":\"go-19\",\"id\":\"{UnityObjectId.Get(target)}\"}}", Loopback);
 
             var inspection = response.Value<string>("gameObject");
             var listener = inspection.Substring(inspection.IndexOf("- type: \"AudioListener\"",
@@ -447,10 +459,10 @@ namespace Hackerzhuli.Code.Editor.Testing
             target.AddComponent<Camera>();
 
             var summary = Send(MessageType.GameObjectInspect,
-                $"{{\"requestId\":\"go-20\",\"id\":{target.GetInstanceID()}}}", Loopback);
+                $"{{\"requestId\":\"go-20\",\"id\":\"{UnityObjectId.Get(target)}\"}}", Loopback);
 
             var full = Send(MessageType.GameObjectInspect,
-                $"{{\"requestId\":\"go-21\",\"id\":{target.GetInstanceID()}," +
+                $"{{\"requestId\":\"go-21\",\"id\":\"{UnityObjectId.Get(target)}\"," +
                 "\"fullDetailComponents\":[\"Camera\"]}", Loopback);
             var inspection = full.Value<string>("gameObject");
             Assert.That(inspection, Does.Contain("    detail: \"full\"\n"));
@@ -458,7 +470,7 @@ namespace Hackerzhuli.Code.Editor.Testing
             Assert.That(CountMembers(inspection), Is.GreaterThan(CountMembers(
                 summary.Value<string>("gameObject"))));
             // Naming one component does not expand the others.
-            Assert.That(inspection, Does.Contain("  - type: \"Transform\"\n    id: "));
+            Assert.That(inspection, Does.Contain("  - type: \"Transform\"\n    id: \""));
             Assert.That(inspection, Does.Contain("    detail: \"common\"\n"));
         }
 
@@ -469,7 +481,7 @@ namespace Hackerzhuli.Code.Editor.Testing
             var renderer = target.AddComponent<MeshRenderer>();
 
             var response = Send(MessageType.GameObjectInspect,
-                $"{{\"requestId\":\"go-22\",\"id\":{target.GetInstanceID()}," +
+                $"{{\"requestId\":\"go-22\",\"id\":\"{UnityObjectId.Get(target)}\"," +
                 "\"fullDetailComponents\":[\"MeshRenderer\"]}", Loopback);
 
             var inspection = response.Value<string>("gameObject");
@@ -495,14 +507,14 @@ namespace Hackerzhuli.Code.Editor.Testing
             body.excludeLayers = 5;
 
             var response = Send(MessageType.GameObjectInspect,
-                $"{{\"requestId\":\"go-24\",\"id\":{target.GetInstanceID()}," +
+                $"{{\"requestId\":\"go-24\",\"id\":\"{UnityObjectId.Get(target)}\"," +
                 "\"fullDetailComponents\":[\"Rigidbody\"]}", Loopback);
 
             var inspection = response.Value<string>("gameObject");
             // Transform enumerates its children, so testing for a collection first would turn a
             // reference to one into a list of something else entirely.
             Assert.That(inspection,
-                Does.Contain($"      rootBone: \"Transform(name=UnityCodeReferenceChild,instanceId={child.transform.GetInstanceID()})\""));
+                Does.Contain($"      rootBone: \"Transform(name=UnityCodeReferenceChild,id={UnityObjectId.Get(child.transform)})\""));
             // Items of a collection get the same treatment as a value in its own right.
             Assert.That(inspection, Does.Contain("      sharedMaterials: [\"Material(name=Probe,"));
             // LayerMask has no useful ToString, and must be reported as its numeric value.
@@ -516,7 +528,7 @@ namespace Hackerzhuli.Code.Editor.Testing
             target.AddComponent<Camera>();
 
             var response = Send(MessageType.GameObjectInspect,
-                $"{{\"requestId\":\"go-25\",\"id\":{target.GetInstanceID()}," +
+                $"{{\"requestId\":\"go-25\",\"id\":\"{UnityObjectId.Get(target)}\"," +
                 "\"fullDetailComponents\":[\"Camera\"]}", Loopback);
 
             Assert.That(response.Value<string>("gameObject"), Does.Not.Contain("k__BackingField"));
@@ -526,7 +538,8 @@ namespace Hackerzhuli.Code.Editor.Testing
         public void GameObjectInspect_RejectsAMalformedFullDetailList()
         {
             var response = Send(MessageType.GameObjectInspect,
-                "{\"requestId\":\"go-23\",\"id\":1,\"fullDetailComponents\":\"Camera\"}", Loopback);
+                "{\"requestId\":\"go-23\",\"id\":\"1\",\"fullDetailComponents\":\"Camera\"}",
+                Loopback);
 
             Assert.That(response["error"]?["code"]?.Value<string>(), Is.EqualTo("invalid_request"));
         }
@@ -535,7 +548,7 @@ namespace Hackerzhuli.Code.Editor.Testing
 
         #region Helpers
 
-        private static GameObjectAutomation.GameObjectNode Leaf(string name, int id, bool isActive)
+        private static GameObjectAutomation.GameObjectNode Leaf(string name, string id, bool isActive)
         {
             return new GameObjectAutomation.GameObjectNode(name, id, isActive, 0, null, false);
         }

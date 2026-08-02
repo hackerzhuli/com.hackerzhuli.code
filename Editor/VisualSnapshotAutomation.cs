@@ -132,7 +132,7 @@ namespace Hackerzhuli.Code.Editor
             var multipleScenes = roots.Select(root => root.Scene).Distinct(StringComparer.Ordinal).Count() > 1;
 
             var header = new VisualSnapshotHeader(Screen.width, Screen.height, camera.name,
-                camera.GetInstanceID(), camera.orthographic, camera.depth, ComputePixelsPerUnit(camera),
+                UnityObjectId.Get(camera), camera.orthographic, camera.depth, ComputePixelsPerUnit(camera),
                 totalCount, totalCount - visible.Count, multipleScenes);
             Reply(answer, message,
                 AutomationProtocol.Success(requestId, "visualSnapshot", BuildSnapshotYaml(header, roots)));
@@ -367,7 +367,7 @@ namespace Hackerzhuli.Code.Editor
         {
             var renderer = group[0];
             var transform = owner.transform;
-            var node = new VisualNode(owner.name, owner.GetInstanceID())
+            var node = new VisualNode(owner.name, UnityObjectId.Get(owner))
             {
                 Owner = transform,
                 SiblingIndex = transform.GetSiblingIndex(),
@@ -575,7 +575,7 @@ namespace Hackerzhuli.Code.Editor
         /// <returns>The roots of the resulting tree, in hierarchy order.</returns>
         private static List<VisualNode> BuildTree(IReadOnlyList<VisualNode> visible)
         {
-            var byId = new Dictionary<int, VisualNode>();
+            var byId = new Dictionary<string, VisualNode>(StringComparer.Ordinal);
             foreach (var node in visible)
                 byId[node.Id] = node;
 
@@ -594,7 +594,8 @@ namespace Hackerzhuli.Code.Editor
         ///     Walking stops at the first node that is already linked, because everything above it was
         ///     linked in the same pass.
         /// </remarks>
-        private static void Attach(VisualNode node, Dictionary<int, VisualNode> byId, List<VisualNode> roots)
+        private static void Attach(VisualNode node, Dictionary<string, VisualNode> byId,
+            List<VisualNode> roots)
         {
             for (var current = node; !current.Attached;)
             {
@@ -607,7 +608,7 @@ namespace Hackerzhuli.Code.Editor
                     return;
                 }
 
-                var parentId = parentTransform.gameObject.GetInstanceID();
+                var parentId = UnityObjectId.Get(parentTransform.gameObject);
                 if (!byId.TryGetValue(parentId, out var parent))
                 {
                     parent = new VisualNode(parentTransform.name, parentId)
@@ -684,7 +685,7 @@ namespace Hackerzhuli.Code.Editor
                 .Append(Integer(header.ScreenHeight)).Append("]\n");
 
             builder.Append("camera: ").Append(QuoteYamlString(header.CameraName));
-            AppendProperty(builder, "id", Integer(header.CameraId));
+            AppendProperty(builder, "id", QuoteYamlString(header.CameraId));
             AppendProperty(builder, "projection", header.IsOrthographic ? "Orthographic" : "Perspective");
             AppendProperty(builder, "depth", header.CameraDepth.ToString("0.##", CultureInfo.InvariantCulture));
             AppendProperty(builder, "pxPerUnit",
@@ -714,7 +715,7 @@ namespace Hackerzhuli.Code.Editor
         {
             builder.Append(' ', indent * 2);
             builder.Append("- ").Append(QuoteYamlString(node.Name));
-            AppendProperty(builder, "id", Integer(node.Id));
+            AppendProperty(builder, "id", QuoteYamlString(node.Id));
 
             // Which scene a root belongs to only needs saying when more than one is open, and never on a
             // child, which cannot be in a different scene than its parent.
@@ -785,7 +786,7 @@ namespace Hackerzhuli.Code.Editor
         /// </summary>
         internal sealed class VisualNode
         {
-            internal VisualNode(string name, int id)
+            internal VisualNode(string name, string id)
             {
                 Name = name;
                 Id = id;
@@ -794,9 +795,9 @@ namespace Hackerzhuli.Code.Editor
             internal string Name { get; }
 
             /// <summary>
-            ///     The instance id, usable to address this object in a later request.
+            ///     The opaque id, usable to address this object in a later request.
             /// </summary>
-            internal int Id { get; }
+            internal string Id { get; }
 
             /// <summary>
             ///     The object's transform, used to walk to its parent. Null in a hand built tree.
@@ -870,7 +871,8 @@ namespace Hackerzhuli.Code.Editor
         /// </summary>
         internal readonly struct VisualSnapshotHeader
         {
-            internal VisualSnapshotHeader(int screenWidth, int screenHeight, string cameraName, int cameraId,
+            internal VisualSnapshotHeader(int screenWidth, int screenHeight, string cameraName,
+                string cameraId,
                 bool isOrthographic, float cameraDepth, float pixelsPerUnit, int totalCount, int omitted,
                 bool multipleScenes)
             {
@@ -892,7 +894,7 @@ namespace Hackerzhuli.Code.Editor
 
             internal string CameraName { get; }
 
-            internal int CameraId { get; }
+            internal string CameraId { get; }
 
             internal bool IsOrthographic { get; }
 

@@ -545,10 +545,10 @@ namespace Hackerzhuli.Code.Editor
                     ? document.panelSettings.sortingOrder
                     : 0f)
                 .ThenBy(document => document.panelSettings != null
-                    ? document.panelSettings.GetInstanceID()
-                    : 0)
+                    ? UnityObjectId.Get(document.panelSettings)
+                    : string.Empty, StringComparer.Ordinal)
                 .ThenBy(document => document.sortingOrder)
-                .ThenBy(document => document.GetInstanceID())
+                .ThenBy(UnityObjectId.Get, StringComparer.Ordinal)
                 .ToArray();
 
             var liveElements = new HashSet<VisualElement>();

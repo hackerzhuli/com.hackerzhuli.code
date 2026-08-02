@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Globalization;
 using System.Net;
 using Hackerzhuli.Code.Editor.Messaging;
 using Newtonsoft.Json.Linq;
@@ -161,12 +162,12 @@ namespace Hackerzhuli.Code.Editor.Testing
 
             Assert.That(yaml, Is.EqualTo(
                 "screen: [1920,1080]\n" +
-                "camera: \"Main \\\"Camera\\\"\" [id=-14562] [projection=Perspective] [depth=0] " +
+                "camera: \"Main \\\"Camera\\\"\" [id=\"ffffc71e\"] [projection=Perspective] [depth=0] " +
                 "[pxPerUnit=1039.23]\n" +
                 "count: 1\n" +
                 "gameObjects:\n" +
-                "  - \"Level\" [id=100]:\n" +
-                "    - \"Ground\" [id=101] [rect=[-40,700,2000,400]] [z=[648,702]] [renderer=MeshRenderer]" +
+                "  - \"Level\" [id=\"64\"]:\n" +
+                "    - \"Ground\" [id=\"65\"] [rect=[-40,700,2000,400]] [z=[648,702]] [renderer=MeshRenderer]" +
                 " [clipped=true]"));
         }
 
@@ -185,12 +186,12 @@ namespace Hackerzhuli.Code.Editor.Testing
 
             Assert.That(yaml, Is.EqualTo(
                 "screen: [1920,1080]\n" +
-                "camera: \"Main Camera\" [id=7] [projection=Orthographic] [depth=0] [pxPerUnit=108]\n" +
+                "camera: \"Main Camera\" [id=\"7\"] [projection=Orthographic] [depth=0] [pxPerUnit=108]\n" +
                 "count: 2\n" +
                 "gameObjects:\n" +
-                "  - \"Player\" [id=1234] [rect=[820,410,180,240]] [z=[540,594]] [renderer=SpriteRenderer]" +
+                "  - \"Player\" [id=\"4d2\"] [rect=[820,410,180,240]] [z=[540,594]] [renderer=SpriteRenderer]" +
                 " [sortingLayer=\"Characters\"] [sortingOrder=3]:\n" +
-                "    - \"Weapon\" [id=1235] [rect=[960,470,60,40]] [z=[538,545]] [renderer=SpriteRenderer]" +
+                "    - \"Weapon\" [id=\"4d3\"] [rect=[960,470,60,40]] [z=[538,545]] [renderer=SpriteRenderer]" +
                 " [sortingLayer=\"Characters\"] [sortingOrder=3]"));
         }
 
@@ -203,7 +204,7 @@ namespace Hackerzhuli.Code.Editor.Testing
 
             Assert.That(yaml, Is.EqualTo(
                 "screen: [800,600]\n" +
-                "camera: \"Cam\" [id=1] [projection=Orthographic] [depth=-1] [pxPerUnit=60]\n" +
+                "camera: \"Cam\" [id=\"1\"] [projection=Orthographic] [depth=-1] [pxPerUnit=60]\n" +
                 "count: 250\n" +
                 "omitted: 50\n" +
                 "gameObjects: []"));
@@ -226,14 +227,14 @@ namespace Hackerzhuli.Code.Editor.Testing
 
             Assert.That(yaml, Is.EqualTo(
                 "screen: [800,600]\n" +
-                "camera: \"Cam\" [id=1] [projection=Orthographic] [depth=0] [pxPerUnit=60]\n" +
+                "camera: \"Cam\" [id=\"1\"] [projection=Orthographic] [depth=0] [pxPerUnit=60]\n" +
                 "count: 3\n" +
                 "gameObjects:\n" +
-                "  - \"Prop\" [id=1] [scene=\"Assets/Scenes/Main.unity\"] [rect=[0,0,10,10]] [z=[5,6]]" +
+                "  - \"Prop\" [id=\"1\"] [scene=\"Assets/Scenes/Main.unity\"] [rect=[0,0,10,10]] [z=[5,6]]" +
                 " [renderer=MeshRenderer]\n" +
-                "  - \"Extra\" [id=2] [scene=\"Assets/Scenes/Additive.unity\"] [rect=[20,20,10,10]]" +
+                "  - \"Extra\" [id=\"2\"] [scene=\"Assets/Scenes/Additive.unity\"] [rect=[20,20,10,10]]" +
                 " [z=[7,8]] [renderer=MeshRenderer]:\n" +
-                "    - \"Detail\" [id=3] [rect=[21,21,4,4]] [z=[7,8]] [renderer=MeshRenderer]"));
+                "    - \"Detail\" [id=\"3\"] [rect=[21,21,4,4]] [z=[7,8]] [renderer=MeshRenderer]"));
         }
 
         [Test]
@@ -247,7 +248,7 @@ namespace Hackerzhuli.Code.Editor.Testing
                 new List<VisualSnapshotAutomation.VisualNode> { node });
 
             Assert.That(yaml, Does.EndWith(
-                "  - \"Combo\" [id=9] [rect=[1,2,3,4]] [z=[10,11]] [renderer=MeshRenderer]" +
+                "  - \"Combo\" [id=\"9\"] [rect=[1,2,3,4]] [z=[10,11]] [renderer=MeshRenderer]" +
                 " [rendererCount=3]"));
         }
 
@@ -260,13 +261,15 @@ namespace Hackerzhuli.Code.Editor.Testing
             int totalCount, int omitted, bool multipleScenes)
         {
             return new VisualSnapshotAutomation.VisualSnapshotHeader(screenWidth, screenHeight, cameraName,
-                cameraId, isOrthographic, cameraDepth, pixelsPerUnit, totalCount, omitted, multipleScenes);
+                unchecked((uint)cameraId).ToString("x", CultureInfo.InvariantCulture), isOrthographic,
+                cameraDepth, pixelsPerUnit, totalCount, omitted, multipleScenes);
         }
 
         private static VisualSnapshotAutomation.VisualNode Visible(string name, int id, RectInt rect,
             int zNear, int zFar, string rendererType)
         {
-            return new VisualSnapshotAutomation.VisualNode(name, id)
+            return new VisualSnapshotAutomation.VisualNode(name,
+                unchecked((uint)id).ToString("x", CultureInfo.InvariantCulture))
             {
                 IsVisible = true,
                 Rect = rect,
@@ -281,7 +284,8 @@ namespace Hackerzhuli.Code.Editor.Testing
 
         private static VisualSnapshotAutomation.VisualNode Ancestor(string name, int id)
         {
-            return new VisualSnapshotAutomation.VisualNode(name, id);
+            return new VisualSnapshotAutomation.VisualNode(name,
+                unchecked((uint)id).ToString("x", CultureInfo.InvariantCulture));
         }
 
         private static JObject Send(string value, IPEndPoint origin)

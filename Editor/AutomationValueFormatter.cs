@@ -17,7 +17,7 @@ namespace Hackerzhuli.Code.Editor
     ///     Shared by UI Toolkit inspections and GameObject inspections, which both reflect over types the
     ///     package knows nothing about and therefore need the same defensive formatting rules:
     ///     invariant culture everywhere, round-trip <c>"R"</c> floats, and a single line per value.
-    ///     A <see cref="Object" /> is never expanded, it is reduced to its type, name and instance id, so a
+    ///     A <see cref="Object" /> is never expanded, it is reduced to its type, name and opaque id, so a
     ///     value can reference another object without the formatter ever recursing into an object graph.
     /// </remarks>
     internal static class AutomationValueFormatter
@@ -95,7 +95,7 @@ namespace Hackerzhuli.Code.Editor
                         $"{visualElement.GetType().Name}(name={visualElement.name})");
                 case Object unityObject:
                     return QuoteYamlString(
-                        $"{unityObject.GetType().Name}(name={unityObject.name},instanceId={unityObject.GetInstanceID()})");
+                        $"{unityObject.GetType().Name}(name={unityObject.name},id={UnityObjectId.Get(unityObject)})");
                 case IEnumerable enumerable:
                     // A collection of collections is summarized rather than expanded, because the
                     // result has to stay on one line.

@@ -255,12 +255,12 @@ namespace Hackerzhuli.Code.Editor.Messaging
         LocaleSelect = 117,
 
         /// <summary>
-        ///     Request a name/instance id GameObject tree for one open scene. Available in Edit and Play Mode.
+        ///     Request a name/opaque id GameObject tree for one open scene. Available in Edit and Play Mode.
         /// </summary>
         SceneHierarchy = 118,
 
         /// <summary>
-        ///     Request a name/instance id descendant tree for one GameObject. Available in Edit and Play Mode.
+        ///     Request a name/opaque id descendant tree for one GameObject. Available in Edit and Play Mode.
         /// </summary>
         GameObjectHierarchy = 119,
 

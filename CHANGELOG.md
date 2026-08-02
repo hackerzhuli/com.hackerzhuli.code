@@ -1,5 +1,10 @@
 # Code Editor Package for Visual Studio
 
+## [1.5.1] - 2026-08-02
+Fix:
+- Added Unity 6.5 compatibility for scene inspection by using the new object identifier APIs on Unity 6.5 and later while retaining the compatible APIs on older Unity versions
+- Object ids in the scene inspection protocol are now opaque hexadecimal strings, so clients no longer depend on Unity's internal identifier type or representation
+
 ## [1.5.0] - 2026-08-01
 Feature:
 - Added an invoke message that calls a public static method of the project by name, in both edit and play mode, so a client can trigger game logic instead of only observing it; arguments are passed as strings and converted to the parameter types the same way a UI field value is, and a return value comes back as a string in the invariant culture
