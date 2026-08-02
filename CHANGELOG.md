@@ -1,5 +1,9 @@
 # Code Editor Package for Visual Studio
 
+## [1.5.2] - 2026-08-02
+Fix:
+- Fixed the Unity 6.5 object id conversion to call `EntityId.ToULong` with its required `EntityId` argument
+
 ## [1.5.1] - 2026-08-02
 Fix:
 - Added Unity 6.5 compatibility for scene inspection by using the new object identifier APIs on Unity 6.5 and later while retaining the compatible APIs on older Unity versions

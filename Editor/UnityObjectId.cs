@@ -19,7 +19,7 @@ namespace Hackerzhuli.Code.Editor
         internal static string Get(Object value)
         {
 #if UNITY_6000_5_OR_NEWER
-            return value.GetEntityId().ToULong().ToString("x", CultureInfo.InvariantCulture);
+            return EntityId.ToULong(value.GetEntityId()).ToString("x", CultureInfo.InvariantCulture);
 #else
             return unchecked((uint)value.GetInstanceID()).ToString("x", CultureInfo.InvariantCulture);
 #endif
