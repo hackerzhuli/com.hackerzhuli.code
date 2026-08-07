@@ -57,6 +57,15 @@ namespace Hackerzhuli.Code.Editor.Code
             },
             new()
             {
+                Name = "Devin",
+                WindowsDefaultDirName = "Devin",
+                WindowsExeName = "Devin.exe",
+                MacAppName = "Devin.app",
+                LinuxExeName = "Devin",
+                UserDataDirName = ".devin"
+            },
+            new()
+            {
                 Name = "Windsurf Next",
                 WindowsDefaultDirName = "Windsurf Next",
                 WindowsExeName = "Windsurf - Next.exe",
@@ -108,7 +117,7 @@ namespace Hackerzhuli.Code.Editor.Code
                 MacAppName = "VSCodium.app",
                 LinuxExeName = "codium",
                 UserDataDirName = ".vscodium",
-				        LatestLanguageVersion = new Version(13, 0)
+				LatestLanguageVersion = new Version(13, 0)
             }
         };
 

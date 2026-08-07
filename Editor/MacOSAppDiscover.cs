@@ -40,6 +40,8 @@ namespace Hackerzhuli.Code.Editor
             var candidateDirs = new[]
             {
                 "/Applications",
+                "/Applications/IDE",
+                "/Applications/Others",
                 "/System/Applications",
                 "/usr/local/bin",
                 "/opt/homebrew/bin",
